@@ -1,4 +1,4 @@
-# NN-Stack
+# Saasflare Starter
 
 Monorepo: pnpm workspaces · Hono backend · oRPC + TanStack Query · Tailwind V4 + Shadcn/ui · Cloudflare Workers
 

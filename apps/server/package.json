@@ -1,5 +1,5 @@
 {
-  "name": "@nn-stack/server",
+  "name": "@saasflare-dev/server",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
@@ -15,7 +15,7 @@
     "format": "biome format --write"
   },
   "dependencies": {
-    "@nn-stack/api": "workspace:*",
+    "@saasflare-dev/api": "workspace:*",
     "@orpc/server": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
@@ -25,7 +25,7 @@
     "@biomejs/biome": "catalog:",
     "@cloudflare/vitest-pool-workers": "catalog:",
     "@cloudflare/workers-types": "catalog:",
-    "@nn-stack/config": "workspace:*",
+    "@saasflare-dev/config": "workspace:*",
     "@types/node": "catalog:",
     "alchemy": "catalog:",
     "drizzle-kit": "catalog:",

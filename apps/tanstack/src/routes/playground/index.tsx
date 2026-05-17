@@ -1,4 +1,4 @@
-import { cn } from '@nn-stack/ui/lib/utils';
+import { cn } from '@saasflare-dev/ui/lib/utils';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import type { LucideIcon } from 'lucide-react';
 import {

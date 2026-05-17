@@ -1,8 +1,8 @@
-# NN-Stack ⚡️
+# Saasflare Starter ⚡️
 
-[中文](#nn-stack-中文)
+[中文](#saasflare-starter-中文)
 
-NN-Stack is an opinionated **Full Stack Starter Kit** built for **Cloudflare's Edge Network**. It runs **TanStack Start** (Frontend) and **Hono** (Backend) as independent Workers connected by **End-to-End Type Safety**. Forget complex configuration, **deploy globally with a single command. Runs for $0/month.**
+Saasflare Starter is an opinionated **Full Stack Starter Kit** built for **Cloudflare's Edge Network**. It runs **TanStack Start** (Frontend) and **Hono** (Backend) as independent Workers connected by **End-to-End Type Safety**. Forget complex configuration, **deploy globally with a single command. Runs for $0/month.**
 
 ---
 
@@ -34,7 +34,7 @@ NN-Stack is an opinionated **Full Stack Starter Kit** built for **Cloudflare's E
 ## Project Structure
 
 ```text
-nn-stack/
+starter/
 ├── apps/
 │   ├── server/    # Hono Server Worker
 │   └── tanstack/  # TanStack Start Frontend Worker (port 3000)
@@ -60,8 +60,8 @@ nn-stack/
 Clone the repo and install dependencies.
 
 ```bash
-git clone https://github.com/your-username/nn-stack.git
-cd nn-stack
+git clone https://github.com/saasflare-dev/starter.git
+cd starter
 pnpm install
 ```
 
@@ -116,8 +116,8 @@ pnpm run deploy:prod
 
 This project includes a fully configured GitHub Actions workflow (`.github/workflows/deploy.yml`) for automated CI/CD. It supports two completely isolated environments, providing a safe and professional deployment strategy:
 
-- **`dev` branch** automatically deploys to the **Development** environment (e.g., [https://nn-stack-tanstack-dev.nshen.workers.dev](https://nn-stack-tanstack-dev.nshen.workers.dev)). Use this for testing and staging.
-- **`main` branch** automatically deploys to the **Production** environment (e.g., [https://nn-stack-tanstack-prod.nshen.workers.dev](https://nn-stack-tanstack-prod.nshen.workers.dev)). Use this for your live, user-facing application.
+- **`dev` branch** automatically deploys to the **Development** environment (e.g., [https://starter-tanstack-dev.<your-account>.workers.dev](https://starter-tanstack-dev.<your-account>.workers.dev)). Use this for testing and staging.
+- **`main` branch** automatically deploys to the **Production** environment (e.g., [https://starter-tanstack-prod.<your-account>.workers.dev](https://starter-tanstack-prod.<your-account>.workers.dev)). Use this for your live, user-facing application.
 
 ##### Required Secrets
 
@@ -150,13 +150,13 @@ gh secret set ENV_WEB_PROD < apps/tanstack/.prod.env
 
 ## 📄 License
 
-MIT © Nshen.net
+MIT © Saasflare
 
 ---
 
-# NN-Stack 中文
+# Saasflare Starter 中文
 
-NN-Stack 是一套**有主见（Opinionated）的全栈 Starter Kit**，专为 **Cloudflare 边缘网络**打造。它将 **TanStack Start**（前端）和 **Hono**（后端）作为独立的 Worker 运行，并通过**端到端（End-to-End）类型安全**进行连接。告别繁琐配置，**一条命令全球部署。运行成本 $0/月。**
+Saasflare Starter 是一套**有主见（Opinionated）的全栈 Starter Kit**，专为 **Cloudflare 边缘网络**打造。它将 **TanStack Start**（前端）和 **Hono**（后端）作为独立的 Worker 运行，并通过**端到端（End-to-End）类型安全**进行连接。告别繁琐配置，**一条命令全球部署。运行成本 $0/月。**
 
 ---
 
@@ -188,7 +188,7 @@ NN-Stack 是一套**有主见（Opinionated）的全栈 Starter Kit**，专为 *
 ## 项目结构
 
 ```text
-nn-stack/
+starter/
 ├── apps/
 │   ├── server/    # Hono 后端 Worker
 │   └── tanstack/  # TanStack Start 前端 Worker（端口 3000）
@@ -214,8 +214,8 @@ nn-stack/
 克隆仓库并安装依赖。
 
 ```bash
-git clone https://github.com/your-username/nn-stack.git
-cd nn-stack
+git clone https://github.com/saasflare-dev/starter.git
+cd starter
 pnpm install
 ```
 
@@ -270,8 +270,8 @@ pnpm run deploy:prod
 
 本项目包含一个配置完整的 GitHub Actions 工作流 (`.github/workflows/deploy.yml`) 用于自动 CI/CD。它支持两个完全隔离的环境，提供了安全、专业的部署策略优势：
 
-- **`dev` 分支** 自动部署到 **开发环境 (Development)**（例如：[https://nn-stack-tanstack-dev.nshen.workers.dev](https://nn-stack-tanstack-dev.nshen.workers.dev)）。用于测试和预发布。
-- **`main` 分支** 自动部署到 **生产环境 (Production)**（例如：[https://nn-stack-tanstack-prod.nshen.workers.dev](https://nn-stack-tanstack-prod.nshen.workers.dev)）。用于正式的线上应用。
+- **`dev` 分支** 自动部署到 **开发环境 (Development)**（例如：[https://starter-tanstack-dev.<your-account>.workers.dev](https://starter-tanstack-dev.<your-account>.workers.dev)）。用于测试和预发布。
+- **`main` 分支** 自动部署到 **生产环境 (Production)**（例如：[https://starter-tanstack-prod.<your-account>.workers.dev](https://starter-tanstack-prod.<your-account>.workers.dev)）。用于正式的线上应用。
 
 ##### 所需 Secrets
 
@@ -304,4 +304,4 @@ gh secret set ENV_WEB_PROD < apps/tanstack/.prod.env
 
 ## 📄 License
 
-MIT © Nshen.net
+MIT © Saasflare

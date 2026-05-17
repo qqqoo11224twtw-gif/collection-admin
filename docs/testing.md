@@ -166,8 +166,8 @@ PLAYWRIGHT_BASE_URL unset (local) → playwright auto-starts `pnpm run dev`,
 
 PLAYWRIGHT_BASE_URL set (CI)     → playwright skips webServer, hits the
                                      deployed stage URL
-                                     (https://dev.nn.nshen.net for dev,
-                                      https://nn.nshen.net for prod)
+                                     (https://<dev-frontend-url> for dev,
+                                      https://<prod-frontend-url> for prod)
 ```
 
 So locally just run `pnpm test:e2e` — the dev server is bootstrapped automatically. In CI the deploy job runs first and passes its URL to the e2e job.
@@ -228,8 +228,8 @@ pnpm exec playwright test --debug    # step through
 
 ```
 PR (any branch)         →  test                                  (lint/typecheck/unit)
-push dev                →  test  →  deploy(dev)  →  e2e          (against dev.nn.nshen.net)
-push main               →  test  →  deploy(prod) →  e2e          (against nn.nshen.net)
+push dev                →  test  →  deploy(dev)  →  e2e          (against <dev-frontend-url>)
+push main               →  test  →  deploy(prod) →  e2e          (against <prod-frontend-url>)
 ```
 
 - A failing `test` job blocks deploy

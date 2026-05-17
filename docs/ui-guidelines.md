@@ -1,28 +1,28 @@
 # UI Guidelines
 
-## `@nn-stack/ui` Package Rules
+## `@saasflare-dev/ui` Package Rules
 
 - Install shadcn components with: `pnpm dlx shadcn@latest add <component> -c packages/ui` (run from root folder)
 - Note: use `shadcn@latest`, not `shadcn-ui@latest`
-- Never modify code in `@nn-stack/ui`
+- Never modify code in `@saasflare-dev/ui`
 
 ### Imports
 
 ```ts
 // Correct
-import { Button } from '@nn-stack/ui/components/button'
+import { Button } from '@saasflare-dev/ui/components/button'
 
 // Incorrect
-import { Button } from '@nn-stack/ui/button'
+import { Button } from '@saasflare-dev/ui/button'
 ```
 
-The `tsconfig.json` path mapping `@nn-stack/ui/*` points to `packages/ui/src/*`.
+The `tsconfig.json` path mapping `@saasflare-dev/ui/*` points to `packages/ui/src/*`.
 
 ### Adding a New Component
 
-1. Check if it exists in `@nn-stack/ui`
+1. Check if it exists in `@saasflare-dev/ui`
 2. If not, install it: `pnpm dlx shadcn@latest add <component> -c packages/ui`
-3. Import and use it from `@nn-stack/ui`
+3. Import and use it from `@saasflare-dev/ui`
 
 ### Component Specific Rules
 
@@ -32,7 +32,7 @@ The `tsconfig.json` path mapping `@nn-stack/ui/*` points to `packages/ui/src/*`.
 
 - Only use Tailwind CSS V4. No CSS inline styles.
 - Follow mobile-first responsive design principles.
-- The `cn` utility must be imported from `@nn-stack/ui/lib/utils`. Do not create a local `lib/utils.ts`.
+- The `cn` utility must be imported from `@saasflare-dev/ui/lib/utils`. Do not create a local `lib/utils.ts`.
 - Icons: only use `lucide-react`, no SVG allowed.
 
 ## Design Principles (Refactoring UI)

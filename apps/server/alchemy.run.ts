@@ -20,7 +20,7 @@ const stateStore = process.env.CLOUDFLARE_API_TOKEN
     (scope: any) => new CloudflareStateStore(scope, { forceUpdate: true })
   : undefined;
 
-const PROJECT_NAME = 'nn-stack';
+const PROJECT_NAME = 'starter';
 
 const app = await alchemy(`${PROJECT_NAME}-server`, {
   stateStore,
@@ -79,19 +79,11 @@ if (hasR2Keys) {
   console.log(`Your Bucket dev domain: ${BUCKET.devDomain}`); // [random-id].r2.dev
 }
 
-const serverDomain =
-  app.stage === 'prod'
-    ? 'nn-server.nshen.net'
-    : app.stage === 'dev'
-      ? 'dev.nn-server.nshen.net'
-      : undefined;
-
 export const server = await Worker('server', {
   name: `${app.name}-${app.stage}`,
   entrypoint: 'src/index.ts',
   compatibility: 'node',
   compatibilityFlags: ['enable_request_signal'],
-  ...(serverDomain ? { domains: [serverDomain] } : {}),
   bindings: {
     CORS_ORIGIN: process.env.CORS_ORIGIN || '',
     R2_PUBLIC_DOMAIN: BUCKET.devDomain || '',

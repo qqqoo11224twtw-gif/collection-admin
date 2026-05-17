@@ -1,6 +1,6 @@
-import { Button } from '@nn-stack/ui/components/button';
-import { Checkbox } from '@nn-stack/ui/components/checkbox';
-import { Input } from '@nn-stack/ui/components/input';
+import { Button } from '@saasflare-dev/ui/components/button';
+import { Checkbox } from '@saasflare-dev/ui/components/checkbox';
+import { Input } from '@saasflare-dev/ui/components/input';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';

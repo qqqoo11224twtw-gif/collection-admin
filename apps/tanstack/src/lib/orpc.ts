@@ -1,4 +1,4 @@
-import type { AppRouterClient } from '@nn-stack/api';
+import type { AppRouterClient } from '@saasflare-dev/api';
 import { createORPCClient, onError } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import { createTanstackQueryUtils } from '@orpc/tanstack-query';

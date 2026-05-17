@@ -1,5 +1,5 @@
-import { Button } from '@nn-stack/ui/components/button';
-import { Card, CardContent } from '@nn-stack/ui/components/card';
+import { Button } from '@saasflare-dev/ui/components/button';
+import { Card, CardContent } from '@saasflare-dev/ui/components/card';
 import {
   Dialog,
   DialogContent,
@@ -7,9 +7,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@nn-stack/ui/components/dialog';
-import { Input } from '@nn-stack/ui/components/input';
-import { Label } from '@nn-stack/ui/components/label';
+} from '@saasflare-dev/ui/components/dialog';
+import { Input } from '@saasflare-dev/ui/components/input';
+import { Label } from '@saasflare-dev/ui/components/label';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';

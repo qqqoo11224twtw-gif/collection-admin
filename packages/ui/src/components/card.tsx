@@ -1,6 +1,6 @@
 import * as React from "react"
 
-import { cn } from "@nn-stack/ui/lib/utils"
+import { cn } from "@saasflare-dev/ui/lib/utils"
 
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (

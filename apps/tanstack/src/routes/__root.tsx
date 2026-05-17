@@ -1,6 +1,6 @@
-import { Toaster } from '@nn-stack/ui/components/sonner';
-import { TooltipProvider } from '@nn-stack/ui/components/tooltip';
-import uiGlobalsCss from '@nn-stack/ui/styles/globals.css?url';
+import { Toaster } from '@saasflare-dev/ui/components/sonner';
+import { TooltipProvider } from '@saasflare-dev/ui/components/tooltip';
+import uiGlobalsCss from '@saasflare-dev/ui/styles/globals.css?url';
 import type { QueryClient } from '@tanstack/react-query';
 import {
   createRootRouteWithContext,

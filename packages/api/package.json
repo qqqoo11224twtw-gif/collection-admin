@@ -1,5 +1,5 @@
 {
-  "name": "@nn-stack/api",
+  "name": "@saasflare-dev/api",
   "version": "1.0.0",
   "description": "",
   "exports": {
@@ -20,12 +20,12 @@
     "format": "biome format --write"
   },
   "keywords": [],
-  "author": "nshen<nshen121@gmail.com>",
+  "author": "Saasflare",
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.956.0",
     "@aws-sdk/s3-request-presigner": "^3.956.0",
-    "@nn-stack/db": "workspace:*",
+    "@saasflare-dev/db": "workspace:*",
     "@orpc/server": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
@@ -34,7 +34,7 @@
   "devDependencies": {
     "@biomejs/biome": "catalog:",
     "@cloudflare/workers-types": "catalog:",
-    "@nn-stack/config": "workspace:*",
+    "@saasflare-dev/config": "workspace:*",
     "alchemy": "catalog:",
     "typescript": "catalog:"
   }

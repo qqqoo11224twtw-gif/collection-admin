@@ -2,8 +2,8 @@ name: CI / Deploy
 
 # Pipeline:
 #   PR (any branch)         -> test
-#   push dev                -> test -> deploy(dev)  -> e2e against https://dev.nn.nshen.net
-#   push main               -> test -> deploy(prod) -> e2e against https://nn.nshen.net (smoke)
+#   push dev                -> test -> deploy(dev)  -> e2e against dev deployment URL
+#   push main               -> test -> deploy(prod) -> e2e against prod deployment URL (smoke)
 #
 # A failed test job blocks deploy. A failed e2e job runs after deploy is
 # already live (dev/prod env contract: dev tolerates broken code, prod
@@ -116,11 +116,12 @@ jobs:
 
       - name: Resolve frontend URL
         id: url
+        # TODO: set your deployed frontend URLs (custom domain or *.workers.dev).
         run: |
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "base_url=https://nn.nshen.net" >> $GITHUB_OUTPUT
+            echo "base_url=${{ vars.PROD_BASE_URL }}" >> $GITHUB_OUTPUT
           else
-            echo "base_url=https://dev.nn.nshen.net" >> $GITHUB_OUTPUT
+            echo "base_url=${{ vars.DEV_BASE_URL }}" >> $GITHUB_OUTPUT
           fi
 
   e2e:

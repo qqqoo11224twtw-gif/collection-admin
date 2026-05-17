@@ -1,4 +1,4 @@
-import { todos } from '@nn-stack/db';
+import { todos } from '@saasflare-dev/db';
 import { ORPCError, os } from '@orpc/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';

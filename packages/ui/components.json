@@ -12,11 +12,11 @@
   },
   "iconLibrary": "lucide",
   "aliases": {
-    "components": "@nn-stack/ui/components",
-    "lib": "@nn-stack/ui/lib",
-    "hooks": "@nn-stack/ui/hooks",
-    "utils": "@nn-stack/ui/lib/utils",
-    "ui": "@nn-stack/ui/components"
+    "components": "@saasflare-dev/ui/components",
+    "lib": "@saasflare-dev/ui/lib",
+    "hooks": "@saasflare-dev/ui/hooks",
+    "utils": "@saasflare-dev/ui/lib/utils",
+    "ui": "@saasflare-dev/ui/components"
   },
   "registries": {}
 }

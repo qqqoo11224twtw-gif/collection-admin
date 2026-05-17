@@ -1,5 +1,5 @@
 {
-  "extends": "@nn-stack/config/tsconfig.base.json",
+  "extends": "@saasflare-dev/config/tsconfig.base.json",
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
@@ -8,7 +8,7 @@
     "noEmit": true,
     "paths": {
       "@/*": ["./*"],
-      "@nn-stack/ui/*": ["./src/*"]
+      "@saasflare-dev/ui/*": ["./src/*"]
     }
   },
   "include": [

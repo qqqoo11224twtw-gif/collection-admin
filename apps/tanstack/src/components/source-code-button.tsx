@@ -1,4 +1,4 @@
-import { Button } from '@nn-stack/ui/components/button';
+import { Button } from '@saasflare-dev/ui/components/button';
 import { Github } from 'lucide-react';
 
 interface SourceCodeButtonProps {
@@ -6,7 +6,7 @@ interface SourceCodeButtonProps {
 }
 
 export function SourceCodeButton({ path }: SourceCodeButtonProps) {
-  const githubUrl = `https://github.com/nshen/nn-stack/blob/main/${path}`;
+  const githubUrl = `https://github.com/saasflare-dev/starter/blob/main/${path}`;
 
   return (
     <Button variant="outline" size="sm" asChild className="gap-2">

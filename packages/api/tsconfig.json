@@ -1,5 +1,5 @@
 {
-  "extends": "@nn-stack/config/tsconfig.base.json",
+  "extends": "@saasflare-dev/config/tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
     "paths": {

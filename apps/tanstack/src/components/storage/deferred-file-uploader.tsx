@@ -2,7 +2,7 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
-} from '@nn-stack/ui/components/alert';
+} from '@saasflare-dev/ui/components/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,12 +12,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@nn-stack/ui/components/alert-dialog';
-import { Button } from '@nn-stack/ui/components/button';
-import { Card, CardContent } from '@nn-stack/ui/components/card';
-import { Progress } from '@nn-stack/ui/components/progress';
-import { toast } from '@nn-stack/ui/components/sonner';
-import { cn } from '@nn-stack/ui/lib/utils';
+} from '@saasflare-dev/ui/components/alert-dialog';
+import { Button } from '@saasflare-dev/ui/components/button';
+import { Card, CardContent } from '@saasflare-dev/ui/components/card';
+import { Progress } from '@saasflare-dev/ui/components/progress';
+import { toast } from '@saasflare-dev/ui/components/sonner';
+import { cn } from '@saasflare-dev/ui/lib/utils';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,

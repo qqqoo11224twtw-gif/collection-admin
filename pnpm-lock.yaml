@@ -92,7 +92,7 @@ importers:
 
   apps/server:
     dependencies:
-      '@nn-stack/api':
+      '@saasflare-dev/api':
         specifier: workspace:*
         version: link:../../packages/api
       '@orpc/server':
@@ -117,7 +117,7 @@ importers:
       '@cloudflare/workers-types':
         specifier: 'catalog:'
         version: 4.20260317.1
-      '@nn-stack/config':
+      '@saasflare-dev/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@types/node':
@@ -144,10 +144,10 @@ importers:
       '@fontsource-variable/geist-mono':
         specifier: ^5.2.7
         version: 5.2.7
-      '@nn-stack/api':
+      '@saasflare-dev/api':
         specifier: workspace:*
         version: link:../../packages/api
-      '@nn-stack/ui':
+      '@saasflare-dev/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@orpc/client':
@@ -193,7 +193,7 @@ importers:
       '@cloudflare/workers-types':
         specifier: 'catalog:'
         version: 4.20260317.1
-      '@nn-stack/config':
+      '@saasflare-dev/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@playwright/test':
@@ -235,7 +235,7 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.956.0
         version: 3.958.0
-      '@nn-stack/db':
+      '@saasflare-dev/db':
         specifier: workspace:*
         version: link:../db
       '@orpc/server':
@@ -257,7 +257,7 @@ importers:
       '@cloudflare/workers-types':
         specifier: 'catalog:'
         version: 4.20260317.1
-      '@nn-stack/config':
+      '@saasflare-dev/config':
         specifier: workspace:*
         version: link:../config
       alchemy:
@@ -336,7 +336,7 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
     devDependencies:
-      '@nn-stack/config':
+      '@saasflare-dev/config':
         specifier: workspace:*
         version: link:../config
       '@types/react':

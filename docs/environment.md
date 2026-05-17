@@ -34,7 +34,7 @@ Every env variable used by this project. **If you add a variable, add a row here
 
 | Variable | Required? | Goes in | Purpose | How to obtain |
 |---|---|---|---|---|
-| `CORS_ORIGIN` | ✅ Required | `.local.env` / `.dev.env` / `.prod.env` | Comma-separated allow-list for Hono CORS middleware. Bound to the worker as a `vars` binding. Local dev: `http://localhost:3000`. Stage dev: `https://dev.nn.nshen.net`. Prod: `https://nn.nshen.net`. | Decide based on deployed frontend URL. |
+| `CORS_ORIGIN` | ✅ Required | `.local.env` / `.dev.env` / `.prod.env` | Comma-separated allow-list for Hono CORS middleware. Bound to the worker as a `vars` binding. Local dev: `http://localhost:3000`. Stage dev: `https://<dev-frontend-url>`. Prod: `https://<prod-frontend-url>`. | Decide based on deployed frontend URL. |
 | `R2_ACCESS_KEY_ID` | ⚠️ Optional | `.local.env` / `.dev.env` / `.prod.env` | Enables R2 storage routes (presigned uploads, listing, delete). Without it, R2 bindings are skipped and storage routes return errors. | Cloudflare dashboard → R2 → **Manage R2 API tokens** → **Create API token** with **Object Read & Write** scope on your buckets. Copy `Access Key ID`. |
 | `R2_SECRET_ACCESS_KEY` | ⚠️ Optional | `.local.env` / `.dev.env` / `.prod.env` | Pair of `R2_ACCESS_KEY_ID`. Required together. | Same dialog as above — copy `Secret Access Key` (shown only once at creation). |
 
@@ -48,7 +48,7 @@ R2 also relies on these **derived bindings** that the server does NOT need in en
 
 | Variable | Required? | Goes in | Purpose | How to obtain |
 |---|---|---|---|---|
-| `NEXT_PUBLIC_SERVER_URL` | ✅ Required | `.local.env` / `.dev.env` / `.prod.env` | Backend ORPC URL. **Inlined into the client bundle at build time** by `vite-plugin-environment` — the browser calls `${URL}/rpc`. | Local: `http://localhost:4000`. Dev stage: `https://dev.nn-server.nshen.net`. Prod: `https://nn-server.nshen.net`. |
+| `NEXT_PUBLIC_SERVER_URL` | ✅ Required | `.local.env` / `.dev.env` / `.prod.env` | Backend ORPC URL. **Inlined into the client bundle at build time** by `vite-plugin-environment` — the browser calls `${URL}/rpc`. | Local: `http://localhost:4000`. Dev stage: `https://<dev-server-url>`. Prod: `https://<prod-server-url>`. |
 
 > ⚠️ **`NEXT_PUBLIC_*` is visible in the browser bundle.** Never put secrets behind this prefix.
 

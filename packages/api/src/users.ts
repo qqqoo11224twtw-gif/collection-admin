@@ -1,4 +1,4 @@
-import { users } from '@nn-stack/db';
+import { users } from '@saasflare-dev/db';
 import { ORPCError, os } from '@orpc/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';

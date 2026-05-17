@@ -1,10 +1,10 @@
-import { Badge } from '@nn-stack/ui/components/badge';
+import { Badge } from '@saasflare-dev/ui/components/badge';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from '@nn-stack/ui/components/card';
+} from '@saasflare-dev/ui/components/card';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { SourceCodeButton } from '~/components/source-code-button';

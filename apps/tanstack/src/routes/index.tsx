@@ -2,8 +2,8 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@nn-stack/ui/components/tooltip';
-import { cn } from '@nn-stack/ui/lib/utils';
+} from '@saasflare-dev/ui/components/tooltip';
+import { cn } from '@saasflare-dev/ui/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
@@ -34,7 +34,7 @@ function Home() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Terminal className="w-6 h-6" />
-            NN-Stack Console
+            Saasflare Starter Console
           </h1>
           <p className="text-muted-foreground">
             System operational.{' '}
@@ -61,7 +61,7 @@ function Home() {
             API Server
           </a>
           <a
-            href="https://github.com/nshen/nn-stack"
+            href="https://github.com/saasflare-dev/starter"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-muted"

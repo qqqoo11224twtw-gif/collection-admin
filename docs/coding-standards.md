@@ -34,7 +34,7 @@ try {
 
 ## Monorepo Conventions
 
-- **`@nn-stack/api`**: Shared API contracts (oRPC + Zod).
-- **`@nn-stack/db`**: Database schema definitions.
-- **`@nn-stack/ui`**: Shared Shadcn UI components (never modify directly).
-- **`@nn-stack/config`**: Shared TypeScript configs.
+- **`@saasflare-dev/api`**: Shared API contracts (oRPC + Zod).
+- **`@saasflare-dev/db`**: Database schema definitions.
+- **`@saasflare-dev/ui`**: Shared Shadcn UI components (never modify directly).
+- **`@saasflare-dev/config`**: Shared TypeScript configs.
