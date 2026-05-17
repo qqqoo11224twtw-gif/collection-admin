@@ -2,6 +2,25 @@
 
 Runbook for deploying saasflare starter to Cloudflare via alchemy.
 
+## Can this be auto-run?
+
+Mostly. An agent (or you with a script) can drive every step **except A2**,
+which needs three human-provided secrets:
+
+| Step | Auto-runnable? | Why / why not |
+|---|---|---|
+| A1 preflight | ✅ | scripted checks |
+| A2 fill `.alchemy.env` | ❌ | needs human to log in to CF (browser OAuth) and decide whether to reuse an existing `ALCHEMY_STATE_TOKEN` |
+| A3 per-app `.env` | ❌ if domains/R2 desired | needs human choices |
+| A4 sync secrets | ✅ | `pnpm sync:secrets` |
+| A5 push | ✅ | `git push` |
+| A6 verify | ✅ | curl + jq |
+| A7 PR preview | ✅ | happens automatically on PR |
+| A8 promote prod | ✅ except typed confirmation | requires literal `deploy prod` for safety |
+
+So a `/deploy` agent should pause at A2/A3 to collect input, then drive
+the rest end-to-end.
+
 ## Mental model
 
 - **Two Workers**: `server` (Hono backend, port 4000 locally) and `web`
@@ -65,12 +84,52 @@ test -d node_modules || pnpm install
 
 ```bash
 cp .alchemy.env.example .alchemy.env
-# then fill in the three values:
-#   CLOUDFLARE_API_TOKEN — pnpm dlx alchemy util create-cloudflare-token
+# fill in the three values:
+#   CLOUDFLARE_API_TOKEN — see "Getting the CF token" below
 #   CLOUDFLARE_EMAIL     — your CF account email
 #   ALCHEMY_STATE_TOKEN  — openssl rand -hex 32 (or reuse from another
 #                          saasflare project on this CF account — MUST match)
 ```
+
+#### Getting the CF token
+
+Two ways. Pick whichever is more convenient.
+
+**Option 1 — alchemy helper** (interactive, OAuth via browser):
+
+```bash
+pnpm dlx alchemy util create-cloudflare-token
+```
+
+If you have **multiple CF accounts** logged into alchemy, use the
+`--profile` flag to pick one:
+
+```bash
+# One-time per account
+pnpm dlx alchemy login -p saasflare      # opens browser, lets you pick the account
+pnpm dlx alchemy login -p personal       # different account, different profile
+
+# Then mint the token from the chosen profile
+pnpm dlx alchemy util create-cloudflare-token -p saasflare
+```
+
+Profiles are stored under `~/.config/.alchemy/credentials/<profile>/`.
+`pnpm dlx alchemy whoami -p <profile>` shows who's logged in there.
+
+**Option 2 — CF dashboard** (manual, no profile juggling):
+
+1. https://dash.cloudflare.com → make sure the right account is selected
+2. Profile (top-right) → **API Tokens** → **Create Token**
+3. Use the **Edit Cloudflare Workers** template (or replicate its scopes)
+4. Copy the token into `.alchemy.env`
+
+This bypasses alchemy's OAuth entirely — useful when you don't want to
+log in via alchemy at all (e.g., a CI-only setup).
+
+> **Note**: profile selection only matters for the **token generation**
+> step. Once the token is in `.alchemy.env`, deploys read
+> `CLOUDFLARE_API_TOKEN` from env directly and don't touch profile
+> credentials — so you never need to pass `--profile` to `deploy:*`.
 
 ### A3. (Optional) Create per-app `.{stage}.env` files
 
