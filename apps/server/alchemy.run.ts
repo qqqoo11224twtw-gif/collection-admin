@@ -11,15 +11,16 @@ import {
 import { Exec } from 'alchemy/os';
 
 import { CloudflareStateStore } from 'alchemy/state';
-import { domainsFor, PROJECT_NAME } from '../../config.ts';
+
+const PROJECT_NAME = 'starter';
 
 const accountId = await AccountId();
 console.log('Your Cloudflare Account ID is:', accountId);
 
 const api = await createCloudflareApi();
 
-// Use CloudflareStateStore only if CLOUDFLARE_API_TOKEN is present (e.g., in CI/CD)
-// This allows the template to work out-of-the-box for local users.
+// Use CloudflareStateStore only if CLOUDFLARE_API_TOKEN is present.
+// Without it, state stays local in `.alchemy/` (alchemy login OAuth flow).
 const stateStore = process.env.CLOUDFLARE_API_TOKEN
   ? // biome-ignore lint/suspicious/noExplicitAny: alchemy scope type is internal
     (scope: any) => new CloudflareStateStore(scope, { forceUpdate: true })
@@ -29,20 +30,20 @@ const app = await alchemy(`${PROJECT_NAME}-server`, {
   stateStore,
 });
 
-// Resolve CORS origin (frontend URL).
-//   local stage -> http://localhost:3000..:3009 (vite may shift ports)
-//   deploy stages -> config.ts domain, else workers.dev fallback
+// Resolve cross-app URLs.
+//   local stage       -> http://localhost:3000..:3009 (vite may shift ports)
+//   pr-* stage        -> always workers.dev (PR previews never reuse stage domains)
+//   dev/prod stage    -> WEB_DOMAIN / SERVER_DOMAIN env if set, else workers.dev
 const serverScriptName = `${PROJECT_NAME}-server-${app.stage}`;
-const { web: webDomainConfig, server: serverDomain } = domainsFor(app.stage);
+const isPRStage = app.stage.startsWith('pr-');
+const serverDomain = isPRStage ? undefined : process.env.SERVER_DOMAIN;
 
 let corsOrigin: string;
 if (app.stage === 'local') {
-  // vite shifts to :3001/:3002/... when :3000 is taken — allow a small range
-  // so CORS doesn't fail just because the user has another dev server up
   corsOrigin = Array.from({ length: 10 }, (_, i) => `http://localhost:${3000 + i}`).join(',');
 } else {
   const webDomain =
-    webDomainConfig ||
+    (!isPRStage && process.env.WEB_DOMAIN) ||
     (await computeWorkerDevDomain(
       api,
       `${PROJECT_NAME}-web-${app.stage}`,

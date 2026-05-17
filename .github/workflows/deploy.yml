@@ -5,13 +5,12 @@ name: CI / Deploy
 #   push dev                -> test -> deploy(dev)  -> e2e against dev deployment URL
 #   push main               -> test -> deploy(prod) -> e2e against prod deployment URL (smoke)
 #
-# A failed test job blocks deploy. A failed e2e job runs after deploy is
-# already live (dev/prod env contract: dev tolerates broken code, prod
-# alarms on regression).
-#
-# Required secrets (see README "Required Secrets"):
-#   CLOUDFLARE_API_TOKEN, ALCHEMY_STATE_TOKEN, CLOUDFLARE_EMAIL,
-#   ENV_SERVER_DEV / ENV_SERVER_PROD, ENV_WEB_DEV / ENV_WEB_PROD
+# Required secrets (see docs/deploy.md):
+#   ENV_SERVER_DEV / ENV_SERVER_PROD — full apps/server/.{dev,prod}.env contents
+#   ENV_WEB_DEV    / ENV_WEB_PROD    — full apps/web/.{dev,prod}.env contents
+# Each of those env files contains CLOUDFLARE_API_TOKEN, CLOUDFLARE_EMAIL,
+# ALCHEMY_STATE_TOKEN (control plane) plus app secrets — alchemy's
+# --env-file flag injects them into process.env at deploy time.
 
 on:
   push:
@@ -65,6 +64,7 @@ jobs:
       contents: read
     outputs:
       base_url: ${{ steps.url.outputs.base_url }}
+      stage: ${{ steps.url.outputs.stage }}
     steps:
       - uses: actions/checkout@v4
 
@@ -92,37 +92,21 @@ jobs:
           echo "${{ secrets.ENV_SERVER_PROD }}" > apps/server/.prod.env
           echo "${{ secrets.ENV_WEB_PROD }}" > apps/web/.prod.env
 
-      - name: Deploy dev
-        if: github.ref == 'refs/heads/dev'
-        run: |
-          pnpm --filter server deploy:dev
-          pnpm --filter web deploy:dev
+      - name: Deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
-          ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
-
-      - name: Deploy prod
-        if: github.ref == 'refs/heads/main'
         run: |
-          pnpm --filter server deploy:prod
-          pnpm --filter web deploy:prod
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
-          ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
+          STAGE=$([ "${{ github.ref }}" = "refs/heads/main" ] && echo prod || echo dev)
+          pnpm --filter server "deploy:$STAGE"
+          pnpm --filter web "deploy:$STAGE"
 
       - name: Resolve frontend URL
         id: url
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
         run: |
           STAGE=$([ "${{ github.ref }}" = "refs/heads/main" ] && echo prod || echo dev)
-          URLS=$(node scripts/resolve-urls.ts --stage "$STAGE")
+          URLS=$(node --env-file "apps/server/.$STAGE.env" scripts/resolve-urls.ts --stage "$STAGE")
           echo "base_url=$(echo "$URLS" | jq -r .web)" >> "$GITHUB_OUTPUT"
+          echo "stage=$STAGE" >> "$GITHUB_OUTPUT"
 
   e2e:
     name: E2E (deployed)
