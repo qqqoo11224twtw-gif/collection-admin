@@ -67,11 +67,12 @@ pnpm install
 
 ### 2. Development
 
-Create a local env file for each app (gitignored), then start the stack:
+No env file needed for the default local stack — `alchemy dev --stage local`
+hardcodes `http://localhost:3000` / `:4000` for CORS and the client bundle.
+Copy the example only if you want R2 locally:
 
 ```bash
 cp apps/server/.local.env.example apps/server/.local.env
-# create apps/web/.local.env (NEXT_PUBLIC_SERVER_URL=http://localhost:4000)
 
 pnpm dev
 ```
@@ -219,11 +220,10 @@ pnpm install
 
 ### 2. 开发
 
-为每个 app 创建一份本地 env 文件（已 gitignore），然后启动：
+本地默认无需 env 文件 — `alchemy dev --stage local` 把 CORS 和客户端 bundle 都写死成 `http://localhost:3000` / `:4000`。只在需要本地用 R2 时复制 example：
 
 ```bash
 cp apps/server/.local.env.example apps/server/.local.env
-# 创建 apps/web/.local.env（NEXT_PUBLIC_SERVER_URL=http://localhost:4000）
 
 pnpm dev
 ```

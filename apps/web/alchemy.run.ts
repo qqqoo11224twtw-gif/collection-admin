@@ -19,9 +19,11 @@ const app = await alchemy(`${PROJECT_NAME}-web`, {
 const { web: webDomain, server: serverDomainConfig } = domainsFor(app.stage);
 
 // Resolve backend URL for NEXT_PUBLIC_SERVER_URL (baked into bundle at build time).
-// NEXT_PUBLIC_SERVER_URL env wins so local dev can pin http://localhost:4000
-// without needing CF auth.
-if (!process.env.NEXT_PUBLIC_SERVER_URL) {
+//   local stage -> http://localhost:4000 (server's alchemy dev port)
+//   deploy stages -> config.ts domain, else workers.dev fallback
+if (app.stage === 'local') {
+  process.env.NEXT_PUBLIC_SERVER_URL = 'http://localhost:4000';
+} else {
   const serverDomain =
     serverDomainConfig ||
     (await computeWorkerDevDomain(

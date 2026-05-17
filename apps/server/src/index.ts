@@ -48,7 +48,7 @@ app.use('/rpc/*', async (c, next) => {
 });
 
 app.get('/', (c) => {
-  return c.text('Hello nn stack server!');
+  return c.text('Hello saasflare starter server!');
 });
 
 export default app;

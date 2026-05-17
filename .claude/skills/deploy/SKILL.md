@@ -92,9 +92,6 @@ If missing, gather + set them:
    - If y: ask for `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` (Cloudflare dashboard → R2 → Manage R2 API tokens → **Object Read & Write** scope).
    - Write to `apps/server/.{stage}.env` (R2 keys are secrets, NOT in config.ts).
 
-3. "Pin a non-default `CORS_ORIGIN` or `NEXT_PUBLIC_SERVER_URL` for `<stage>`? (rare — only for staging/preview overrides)"
-   - If y: write to `apps/server/.{stage}.env` and/or `apps/web/.{stage}.env`.
-
 After env files exist, sync to GitHub Secrets:
 
 ```bash

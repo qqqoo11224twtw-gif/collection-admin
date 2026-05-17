@@ -29,15 +29,16 @@ const app = await alchemy(`${PROJECT_NAME}-server`, {
   stateStore,
 });
 
-// Resolve cross-app URLs. Custom domains come from config.ts; otherwise
-// fall back to the auto-generated workers.dev URL via the CF API.
-// CORS_ORIGIN env wins (used by .local.env to pin http://localhost:3000) so
-// local dev doesn't need CF auth.
+// Resolve CORS origin (frontend URL).
+//   local stage -> http://localhost:3000 (web's vite dev server)
+//   deploy stages -> config.ts domain, else workers.dev fallback
 const serverScriptName = `${PROJECT_NAME}-server-${app.stage}`;
 const { web: webDomainConfig, server: serverDomain } = domainsFor(app.stage);
 
-let corsOrigin = process.env.CORS_ORIGIN;
-if (!corsOrigin) {
+let corsOrigin: string;
+if (app.stage === 'local') {
+  corsOrigin = 'http://localhost:3000';
+} else {
   const webDomain =
     webDomainConfig ||
     (await computeWorkerDevDomain(
