@@ -17,6 +17,19 @@ clone; thereafter, jump to the section you need.
   - `pr-<N>` — auto-created on PR open, destroyed on PR close.
 - **Topology in `config.ts`** (custom domains per stage), **secrets in env
   files** (R2 keys, etc.), **URLs auto-derived** in `alchemy.run.ts`.
+- **Env file layout** — control-plane is flat (one CF account auths every
+  stage); app secrets are per-stage (R2 keys differ between dev/prod):
+
+  | File | Used by | Goes to GitHub as |
+  |---|---|---|
+  | `.env` (root) | Path B local + every CI job (CF auth + state token) | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_EMAIL`, `ALCHEMY_STATE_TOKEN` |
+  | `apps/{server,web}/.local.env` | `pnpm dev` only | — (local-only) |
+  | `apps/{server,web}/.dev.env` | `dev` stage + every `pr-<N>` preview | `ENV_{SERVER,WEB}_DEV` |
+  | `apps/{server,web}/.prod.env` | `prod` stage | `ENV_{SERVER,WEB}_PROD` |
+
+  PR previews reuse dev's app secrets so you don't have to mint new
+  tokens per PR. Each PR still gets its own isolated KV / D1 / R2
+  bucket (named by stage), so data is sandboxed.
 - **State store**: alchemy uses `CloudflareStateStore` (remote KV) **only
   when `CLOUDFLARE_API_TOKEN` is in the env**. Without it, state stays
   local in `.alchemy/`. This means **local-only deploys and CI deploys can
@@ -123,23 +136,40 @@ registered elsewhere, add an NS delegation in your registrar first.
 
 ### A4. (Optional) Per-app secrets
 
-Only if you need R2 file uploads (or you've added other secret env vars).
+Only if you need R2 file uploads (or have added other secret env vars
+the workers consume at runtime). Create one file per stage you plan to
+deploy — `.dev.env` covers both `dev` and PR previews; `.prod.env` is
+prod-only.
 
 ```bash
-# Create the file with R2 keys (CF dashboard → R2 → Manage R2 API tokens
-# → Object Read & Write scope)
+# Create the file(s) with R2 keys (CF dashboard → R2 → Manage R2 API
+# tokens → Object Read & Write scope). Same keys can go in both files,
+# or you can isolate prod by minting separate ones.
 cat > apps/server/.dev.env <<EOF
 R2_ACCESS_KEY_ID=...
 R2_SECRET_ACCESS_KEY=...
 EOF
 
-# Upload to GitHub Secrets as ENV_SERVER_DEV
+cat > apps/server/.prod.env <<EOF
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+EOF
+
+# Upload all *.{dev,prod}.env files at once as ENV_{SERVER,WEB}_{DEV,PROD}
 pnpm sync:secrets
 ```
 
-Skip this step entirely if no R2. CI tolerates an empty/missing
-`ENV_SERVER_DEV` secret — it just writes an empty `.dev.env` in the
+Skip this step entirely if no R2. CI tolerates missing
+`ENV_*_{DEV,PROD}` secrets — it just writes empty env files in the
 runner, which is fine.
+
+**Local dev** uses a separate `.local.env` per app (gitignored, never
+uploaded to GitHub). Copy from `.local.env.example` if you want R2
+locally:
+```bash
+cp apps/server/.local.env.example apps/server/.local.env
+# edit in R2 keys
+```
 
 ### A5. Push and watch
 
@@ -187,15 +217,17 @@ preview URLs.
 
 ### A8. Promoting to prod
 
+Before the first prod deploy, make sure `apps/{server,web}/.prod.env`
+exist locally (even if empty — `pnpm sync:secrets` skips missing files
+and CI writes an empty file from an empty secret, which is fine for the
+no-R2 case). See A4 for the prod variants.
+
 ```bash
 # Same Path A flow but on main branch
 git checkout main
 git merge dev
 git push origin main
 ```
-
-CI uses `ENV_*_PROD` secrets (you may want to populate them separately
-via step A4 with `.prod.env`).
 
 ---
 
