@@ -18,13 +18,13 @@ There are **two test types** with very different costs and guarantees:
 | Workspace | Tests? | Why |
 |---|---|---|
 | `apps/server` | ✅ Vitest integration | Runs the Hono app in miniflare with real D1/KV |
-| `apps/tanstack` | ✅ Playwright E2E | Browser-driven tests against built app |
+| `apps/web` | ✅ Playwright E2E | Browser-driven tests against built app |
 | `packages/api` | ❌ | All handlers need Cloudflare bindings — covered transitively by `apps/server` tests |
 | `packages/db` | ❌ | Schema only, no runtime logic |
 | `packages/ui` | ❌ | Vendored shadcn — covered transitively by E2E |
 | `packages/config` | ❌ | tsconfig only |
 
-This means: **add backend tests in `apps/server/tests/`, frontend tests in `apps/tanstack/e2e/`**. You won't normally touch other workspaces' test config.
+This means: **add backend tests in `apps/server/tests/`, frontend tests in `apps/web/e2e/`**. You won't normally touch other workspaces' test config.
 
 ## Commands
 
@@ -145,7 +145,7 @@ The current todos test does the random-data approach implicitly — no cleanup n
 ### Anatomy of a smoke test
 
 ```ts
-// apps/tanstack/e2e/smoke.spec.ts
+// apps/web/e2e/smoke.spec.ts
 import { expect, test } from '@playwright/test';
 
 test.describe('Smoke tests', () => {
@@ -158,7 +158,7 @@ test.describe('Smoke tests', () => {
 
 ### Local vs CI mode
 
-`apps/tanstack/playwright.config.ts` has two behaviors driven by `PLAYWRIGHT_BASE_URL`:
+`apps/web/playwright.config.ts` has two behaviors driven by `PLAYWRIGHT_BASE_URL`:
 
 ```
 PLAYWRIGHT_BASE_URL unset (local) → playwright auto-starts `pnpm run dev`,
@@ -207,15 +207,15 @@ E2E tests run against the **deployed** app, so all RPC calls go to the real back
 
 ### Adding a new E2E test
 
-1. Create `apps/tanstack/e2e/<feature>.spec.ts`
+1. Create `apps/web/e2e/<feature>.spec.ts`
 2. Use `test.describe('<feature>', () => { ... })` to group
-3. Locally: `pnpm test:e2e` (or `pnpm exec playwright test e2e/<feature>.spec.ts` from `apps/tanstack/`)
-4. Inspect failures via the auto-saved `apps/tanstack/playwright-report/` (also uploaded as a CI artifact on failure)
+3. Locally: `pnpm test:e2e` (or `pnpm exec playwright test e2e/<feature>.spec.ts` from `apps/web/`)
+4. Inspect failures via the auto-saved `apps/web/playwright-report/` (also uploaded as a CI artifact on failure)
 
 ### Running a single test
 
 ```bash
-cd apps/tanstack
+cd apps/web
 pnpm exec playwright test e2e/smoke.spec.ts
 pnpm exec playwright test --grep "homepage loads"
 pnpm exec playwright test --headed   # see the browser
@@ -246,8 +246,8 @@ Three Claude sub-agents in `.claude/agents/` drive a real browser via the `playw
 
 | Agent | What it does | What you give it | What you get |
 |---|---|---|---|
-| `playwright-test-planner` | Open the running app, click around, capture flows | A goal like "test the todo creation flow" | Markdown plan in `apps/tanstack/e2e/specs/<feature>.md` |
-| `playwright-test-generator` | Replay each plan step in a browser, learn real selectors, emit code | Path to a spec markdown file | `.spec.ts` in `apps/tanstack/e2e/<feature>.spec.ts` |
+| `playwright-test-planner` | Open the running app, click around, capture flows | A goal like "test the todo creation flow" | Markdown plan in `apps/web/e2e/specs/<feature>.md` |
+| `playwright-test-generator` | Replay each plan step in a browser, learn real selectors, emit code | Path to a spec markdown file | `.spec.ts` in `apps/web/e2e/<feature>.spec.ts` |
 | `playwright-test-healer` | Run failing tests, snapshot DOM, fix selectors/assertions | "tests are failing, fix them" | Edited `.spec.ts` files |
 
 These run **only when you ask Claude Code** (or another agent harness) — generated tests run as plain Playwright in CI, no AI in the hot path.
@@ -256,7 +256,7 @@ These run **only when you ask Claude Code** (or another agent harness) — gener
 
 1. **Local dev server up**: `pnpm dev` (planner/generator drive a live browser at `http://localhost:3000`)
 2. **MCP server**: `.mcp.json` already declares `playwright-test`. Approve it in Claude Code on first use.
-3. **Seed file**: `apps/tanstack/e2e/seed.spec.ts` exists — agents reference it for shared setup. Edit it if your tests need login or seeded data.
+3. **Seed file**: `apps/web/e2e/seed.spec.ts` exists — agents reference it for shared setup. Edit it if your tests need login or seeded data.
 
 ### Step 1 — Plan: "test feature X"
 
@@ -269,7 +269,7 @@ The planner will:
 1. Open the page in a browser
 2. Inspect the DOM (via `browser_snapshot` — no screenshots, just accessibility tree)
 3. Click through the flows to verify they work
-4. Save a markdown plan to `apps/tanstack/e2e/specs/<feature>.md`
+4. Save a markdown plan to `apps/web/e2e/specs/<feature>.md`
 
 The plan is **human-readable**, structured as `### Scenario` blocks with numbered steps. Review and edit it — this is your source of truth, not the generated code.
 
@@ -349,7 +349,7 @@ This replaces the "spend 20 minutes hunting for the right CSS selector" loop.
 # Add a backend test → apps/server/tests/<name>.test.ts, then:
 pnpm test
 
-# Add a frontend test → apps/tanstack/e2e/<name>.spec.ts, then:
+# Add a frontend test → apps/web/e2e/<name>.spec.ts, then:
 pnpm test:e2e
 
 # See type errors → pnpm typecheck

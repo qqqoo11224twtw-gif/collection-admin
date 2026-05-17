@@ -30,7 +30,7 @@ function SSRDemoPage() {
             HTML.
           </p>
         </div>
-        <SourceCodeButton path="apps/tanstack/src/routes/playground/ssr.tsx" />
+        <SourceCodeButton path="apps/web/src/routes/playground/ssr.tsx" />
       </div>
 
       <div className="p-6 bg-muted/50 border rounded-lg">

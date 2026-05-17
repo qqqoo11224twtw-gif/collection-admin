@@ -70,7 +70,7 @@ function PlaygroundLayout() {
         <p className="text-xs text-muted-foreground font-mono">
           Add new examples in{' '}
           <span className="bg-muted px-1 py-0.5 rounded text-foreground">
-            apps/tanstack/src/routes/playground/
+            apps/web/src/routes/playground/
           </span>
         </p>
       </div>

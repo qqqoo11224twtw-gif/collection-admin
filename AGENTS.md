@@ -5,7 +5,7 @@ Monorepo: pnpm workspaces · Hono backend · oRPC + TanStack Query · Tailwind V
 ## Active Stack
 
 ```
-FRONTEND=tanstack
+FRONTEND=web
 DATABASE=d1
 ```
 
@@ -14,7 +14,7 @@ DATABASE=d1
 ```
 apps/
   server/     Hono backend (port 4000)
-  tanstack/   TanStack Start frontend (port 3000)
+  web/        TanStack Start frontend (port 3000)
 packages/
   api/        oRPC API definitions + Zod schemas
   db/         Drizzle schema + migrations
@@ -25,7 +25,7 @@ packages/
 ## Quick Commands
 
 ```bash
-pnpm dev                   # server + tanstack
+pnpm dev                   # server + web
 pnpm typecheck             # tsc --noEmit across all workspaces
 pnpm test                  # vitest (server integration tests)
 pnpm test:e2e              # playwright E2E (auto-starts dev server)

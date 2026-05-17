@@ -37,7 +37,7 @@ Saasflare Starter is an opinionated **Full Stack Starter Kit** built for **Cloud
 starter/
 ├── apps/
 │   ├── server/    # Hono Server Worker
-│   └── tanstack/  # TanStack Start Frontend Worker (port 3000)
+│   └── web/       # TanStack Start Frontend Worker (port 3000)
 └── packages/
     ├── api/       # Shared ORPC API definitions & Zod schemas
     ├── db/        # Drizzle Schema & Migrations
@@ -71,7 +71,7 @@ Create a local env file for each app (gitignored), then start the stack:
 
 ```bash
 cp apps/server/.local.env.example apps/server/.local.env
-# create apps/tanstack/.local.env (NEXT_PUBLIC_SERVER_URL=http://localhost:4000)
+# create apps/web/.local.env (NEXT_PUBLIC_SERVER_URL=http://localhost:4000)
 
 pnpm dev
 ```
@@ -107,7 +107,7 @@ pnpm run deploy:prod
 > **First-Time Setup:**
 > For the first deploy, link the services by updating their stage env files (`.dev.env` for dev, `.prod.env` for prod):
 >
-> - `apps/tanstack/.dev.env` / `.prod.env`: Set `NEXT_PUBLIC_SERVER_URL` to your Backend URL.
+> - `apps/web/.dev.env` / `.prod.env`: Set `NEXT_PUBLIC_SERVER_URL` to your Backend URL.
 > - `apps/server/.dev.env` / `.prod.env`: Set `CORS_ORIGIN` to your Frontend URL.
 >
 > Then redeploy once to apply the changes.
@@ -116,8 +116,8 @@ pnpm run deploy:prod
 
 This project includes a fully configured GitHub Actions workflow (`.github/workflows/deploy.yml`) for automated CI/CD. It supports two completely isolated environments, providing a safe and professional deployment strategy:
 
-- **`dev` branch** automatically deploys to the **Development** environment (e.g., [https://starter-tanstack-dev.<your-account>.workers.dev](https://starter-tanstack-dev.<your-account>.workers.dev)). Use this for testing and staging.
-- **`main` branch** automatically deploys to the **Production** environment (e.g., [https://starter-tanstack-prod.<your-account>.workers.dev](https://starter-tanstack-prod.<your-account>.workers.dev)). Use this for your live, user-facing application.
+- **`dev` branch** automatically deploys to the **Development** environment (e.g., [https://starter-web-dev.<your-account>.workers.dev](https://starter-web-dev.<your-account>.workers.dev)). Use this for testing and staging.
+- **`main` branch** automatically deploys to the **Production** environment (e.g., [https://starter-web-prod.<your-account>.workers.dev](https://starter-web-prod.<your-account>.workers.dev)). Use this for your live, user-facing application.
 
 ##### Required Secrets
 
@@ -127,7 +127,7 @@ To enable automated deployment, add the following **Repository Secrets** in your
 2. **`ALCHEMY_STATE_TOKEN`**: A random 32-character hex string for Alchemy state management. Generate via: `openssl rand -hex 32`. Must be the same across all projects under the same Cloudflare account.
 3. **`CLOUDFLARE_EMAIL`**: Your Cloudflare account login email.
 4. **`ENV_SERVER_DEV` / `ENV_SERVER_PROD`**: The full content of `apps/server/.dev.env` / `apps/server/.prod.env`.
-5. **`ENV_WEB_DEV` / `ENV_WEB_PROD`**: The full content of `apps/tanstack/.dev.env` / `apps/tanstack/.prod.env`.
+5. **`ENV_WEB_DEV` / `ENV_WEB_PROD`**: The full content of `apps/web/.dev.env` / `apps/web/.prod.env`.
 
 ##### Upload env files to GitHub Secrets
 
@@ -142,8 +142,8 @@ Manual equivalent:
 ```bash
 gh secret set ENV_SERVER_DEV < apps/server/.dev.env
 gh secret set ENV_SERVER_PROD < apps/server/.prod.env
-gh secret set ENV_WEB_DEV < apps/tanstack/.dev.env
-gh secret set ENV_WEB_PROD < apps/tanstack/.prod.env
+gh secret set ENV_WEB_DEV < apps/web/.dev.env
+gh secret set ENV_WEB_PROD < apps/web/.prod.env
 ```
 
 ---
@@ -191,7 +191,7 @@ Saasflare Starter 是一套**有主见（Opinionated）的全栈 Starter Kit**�
 starter/
 ├── apps/
 │   ├── server/    # Hono 后端 Worker
-│   └── tanstack/  # TanStack Start 前端 Worker（端口 3000）
+│   └── web/       # TanStack Start 前端 Worker（端口 3000）
 └── packages/
     ├── api/       # 共享 ORPC API 定义 & Zod Schemas
     ├── db/        # Drizzle Schema & Migrations
@@ -225,7 +225,7 @@ pnpm install
 
 ```bash
 cp apps/server/.local.env.example apps/server/.local.env
-# 创建 apps/tanstack/.local.env（NEXT_PUBLIC_SERVER_URL=http://localhost:4000）
+# 创建 apps/web/.local.env（NEXT_PUBLIC_SERVER_URL=http://localhost:4000）
 
 pnpm dev
 ```
@@ -261,7 +261,7 @@ pnpm run deploy:prod
 > **首次设置:**
 > 第一次部署时，通过更新对应 stage 的 env 文件（dev 用 `.dev.env`，prod 用 `.prod.env`）来连接前后端服务：
 >
-> - `apps/tanstack/.dev.env` / `.prod.env`: 设置 `NEXT_PUBLIC_SERVER_URL` 为你的后端 URL。
+> - `apps/web/.dev.env` / `.prod.env`: 设置 `NEXT_PUBLIC_SERVER_URL` 为你的后端 URL。
 > - `apps/server/.dev.env` / `.prod.env`: 设置 `CORS_ORIGIN` 为你的前端 URL。
 >
 > 然后重新运行一次部署命令以应用更改。
@@ -270,8 +270,8 @@ pnpm run deploy:prod
 
 本项目包含一个配置完整的 GitHub Actions 工作流 (`.github/workflows/deploy.yml`) 用于自动 CI/CD。它支持两个完全隔离的环境，提供了安全、专业的部署策略优势：
 
-- **`dev` 分支** 自动部署到 **开发环境 (Development)**（例如：[https://starter-tanstack-dev.<your-account>.workers.dev](https://starter-tanstack-dev.<your-account>.workers.dev)）。用于测试和预发布。
-- **`main` 分支** 自动部署到 **生产环境 (Production)**（例如：[https://starter-tanstack-prod.<your-account>.workers.dev](https://starter-tanstack-prod.<your-account>.workers.dev)）。用于正式的线上应用。
+- **`dev` 分支** 自动部署到 **开发环境 (Development)**（例如：[https://starter-web-dev.<your-account>.workers.dev](https://starter-web-dev.<your-account>.workers.dev)）。用于测试和预发布。
+- **`main` 分支** 自动部署到 **生产环境 (Production)**（例如：[https://starter-web-prod.<your-account>.workers.dev](https://starter-web-prod.<your-account>.workers.dev)）。用于正式的线上应用。
 
 ##### 所需 Secrets
 
@@ -281,7 +281,7 @@ pnpm run deploy:prod
 2. **`ALCHEMY_STATE_TOKEN`**: 用于 Alchemy 状态管理的随机字符串。可通过 `openssl rand -hex 32` 生成, 如果 cloudflare 下有多个项目必须相同。
 3. **`CLOUDFLARE_EMAIL`**: 您的 Cloudflare 账号登录邮箱。
 4. **`ENV_SERVER_DEV` / `ENV_SERVER_PROD`**: 分别对应 `apps/server/.dev.env` / `apps/server/.prod.env` 的完整内容。
-5. **`ENV_WEB_DEV` / `ENV_WEB_PROD`**: 分别对应 `apps/tanstack/.dev.env` / `apps/tanstack/.prod.env` 的完整内容。
+5. **`ENV_WEB_DEV` / `ENV_WEB_PROD`**: 分别对应 `apps/web/.dev.env` / `apps/web/.prod.env` 的完整内容。
 
 ##### 上传 env 文件到 GitHub Secrets
 
@@ -296,8 +296,8 @@ pnpm sync:secrets
 ```bash
 gh secret set ENV_SERVER_DEV < apps/server/.dev.env
 gh secret set ENV_SERVER_PROD < apps/server/.prod.env
-gh secret set ENV_WEB_DEV < apps/tanstack/.dev.env
-gh secret set ENV_WEB_PROD < apps/tanstack/.prod.env
+gh secret set ENV_WEB_DEV < apps/web/.dev.env
+gh secret set ENV_WEB_PROD < apps/web/.prod.env
 ```
 
 ---

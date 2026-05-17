@@ -18,7 +18,7 @@ function R2UploadPage() {
             Direct S3-compatible file uploads with progress tracking.
           </p>
         </div>
-        <SourceCodeButton path="apps/tanstack/src/components/storage/deferred-file-uploader.tsx" />
+        <SourceCodeButton path="apps/web/src/components/storage/deferred-file-uploader.tsx" />
       </div>
       <DeferredFileUploader />
     </div>

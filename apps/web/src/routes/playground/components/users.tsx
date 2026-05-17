@@ -108,7 +108,7 @@ function UsersPlayground() {
             CRUD operations with Zod validation and ORPC.
           </p>
         </div>
-        <SourceCodeButton path="apps/tanstack/src/routes/playground/components/users.tsx" />
+        <SourceCodeButton path="apps/web/src/routes/playground/components/users.tsx" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">

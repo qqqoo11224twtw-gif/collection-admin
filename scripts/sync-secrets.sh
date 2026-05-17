@@ -45,8 +45,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 pairs=(
   "ENV_SERVER_DEV:apps/server/.dev.env"
   "ENV_SERVER_PROD:apps/server/.prod.env"
-  "ENV_WEB_DEV:apps/tanstack/.dev.env"
-  "ENV_WEB_PROD:apps/tanstack/.prod.env"
+  "ENV_WEB_DEV:apps/web/.dev.env"
+  "ENV_WEB_PROD:apps/web/.prod.env"
 )
 
 synced=0

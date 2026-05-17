@@ -139,7 +139,7 @@ function Home() {
         <p className="text-xs text-muted-foreground font-mono">
           Edit{' '}
           <span className="bg-muted px-1 py-0.5 rounded text-foreground">
-            apps/tanstack/src/routes/index.tsx
+            apps/web/src/routes/index.tsx
           </span>{' '}
           to start building your app.
         </p>

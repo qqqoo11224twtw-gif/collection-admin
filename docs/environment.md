@@ -6,7 +6,7 @@
 >
 > - `bindings: { ... }` in any `apps/*/alchemy.run.ts` (added / removed / renamed key)
 > - Any `.local.env`, `.dev.env`, `.prod.env`, or `*.env.example` file (added / removed / renamed variable)
-> - The `vite-plugin-environment` prefix or `define` in `apps/tanstack/vite.config.ts`
+> - The `vite-plugin-environment` prefix or `define` in `apps/web/vite.config.ts`
 > - The injection steps in `.github/workflows/deploy.yml`
 > - The `scripts/sync-secrets.sh` mapping table
 >
@@ -44,7 +44,7 @@ R2 also relies on these **derived bindings** that the server does NOT need in en
 - `R2_BUCKET_NAME` — `${app.name}-bucket-${app.stage}`
 - `R2_PUBLIC_DOMAIN` — `BUCKET.devDomain` (the auto-issued `*.r2.dev` domain)
 
-### Frontend — `apps/tanstack`
+### Frontend — `apps/web`
 
 | Variable | Required? | Goes in | Purpose | How to obtain |
 |---|---|---|---|---|
@@ -83,10 +83,10 @@ Copy each example and fill values:
 
 ```bash
 cp apps/server/.local.env.example  apps/server/.local.env
-cp apps/tanstack/.local.env.example apps/tanstack/.local.env
+cp apps/web/.local.env.example apps/web/.local.env
 ```
 
-The defaults already work for `pnpm dev` (server on `:4000`, tanstack on `:3000`). Add your `R2_*` keys to `apps/server/.local.env` if you want to test R2 features locally.
+The defaults already work for `pnpm dev` (server on `:4000`, web on `:3000`). Add your `R2_*` keys to `apps/server/.local.env` if you want to test R2 features locally.
 
 ---
 
@@ -119,8 +119,8 @@ This calls `scripts/sync-secrets.sh`, which uploads four files via `gh secret se
 |---|---|
 | `apps/server/.dev.env`    | `ENV_SERVER_DEV` |
 | `apps/server/.prod.env`   | `ENV_SERVER_PROD` |
-| `apps/tanstack/.dev.env`  | `ENV_WEB_DEV` |
-| `apps/tanstack/.prod.env` | `ENV_WEB_PROD` |
+| `apps/web/.dev.env`  | `ENV_WEB_DEV` |
+| `apps/web/.prod.env` | `ENV_WEB_PROD` |
 
 Missing files are skipped with a warning (so you can sync only dev secrets if prod isn't set up yet).
 
@@ -130,7 +130,7 @@ Missing files are skipped with a warning (so you can sync only dev secrets if pr
 local working tree                GitHub Secrets               CI runner
 ──────────────────                ──────────────               ─────────
 apps/server/.dev.env  ──[sync]──> ENV_SERVER_DEV  ──[inject]─> apps/server/.dev.env
-apps/tanstack/.dev.env──[sync]──> ENV_WEB_DEV     ──[inject]─> apps/tanstack/.dev.env
+apps/web/.dev.env──[sync]──> ENV_WEB_DEV     ──[inject]─> apps/web/.dev.env
                                                                │
                                                                ▼
                                                    alchemy deploy --stage dev
@@ -140,7 +140,7 @@ apps/tanstack/.dev.env──[sync]──> ENV_WEB_DEV     ──[inject]─> app
 1. Locally, edit `.dev.env` and run `pnpm sync:secrets`
 2. CI checks out a fresh tree (no `.dev.env` present), then `Inject env files (Dev)` step writes the secret content back to the exact path
 3. `pnpm --filter server deploy:dev` runs `alchemy deploy --env-file .dev.env`, which pushes those values as Cloudflare Worker bindings
-4. At runtime, the worker reads them via `env.X` (server) or `import.meta.env.NEXT_PUBLIC_X` (tanstack — bridged at build time by `vite-plugin-environment`)
+4. At runtime, the worker reads them via `env.X` (server) or `import.meta.env.NEXT_PUBLIC_X` (web — bridged at build time by `vite-plugin-environment`)
 
 `.prod.env` follows the identical path with `ENV_*_PROD` and the `prod` stage.
 
@@ -165,7 +165,7 @@ apps/tanstack/.dev.env──[sync]──> ENV_WEB_DEV     ──[inject]─> app
 6. **Deploy**: push your branch — CI redeploys with the new binding
 7. **Restart `pnpm dev`**: `env.d.ts` regenerates so TS knows about `env.MY_VAR`
 
-For frontend (`apps/tanstack`), step 1 is different: the variable must be prefixed `NEXT_PUBLIC_` to be inlined into the client bundle (no alchemy binding needed for client-bundled values).
+For frontend (`apps/web`), step 1 is different: the variable must be prefixed `NEXT_PUBLIC_` to be inlined into the client bundle (no alchemy binding needed for client-bundled values).
 
 ---
 
@@ -189,7 +189,7 @@ gh secret set ALCHEMY_STATE_TOKEN       # paste from step 3
 
 # 5. Create stage env files
 cp apps/server/.local.env.example  apps/server/.dev.env
-cp apps/tanstack/.local.env.example apps/tanstack/.dev.env
+cp apps/web/.local.env.example apps/web/.dev.env
 # Edit them — change URLs, add R2 keys if needed
 # Repeat for .prod.env
 

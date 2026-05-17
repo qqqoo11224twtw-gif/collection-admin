@@ -1,6 +1,6 @@
 # TanStack Start Frontend Rules
 
-This file contains rules specific to `apps/tanstack/` (TanStack Start). Read `GEMINI.md` first for shared project conventions.
+This file contains rules specific to `apps/web/` (TanStack Start). Read `GEMINI.md` first for shared project conventions.
 
 ## Framework Basics
 
@@ -95,7 +95,7 @@ No `HydrationBoundary` or `dehydrate()` needed — TanStack Start handles this a
 ## File Structure
 
 ```
-apps/tanstack/
+apps/web/
 ├── src/
 │   ├── routes/           # Pages & layouts
 │   │   ├── __root.tsx    # Root layout (HTML shell, providers)
@@ -111,10 +111,10 @@ apps/tanstack/
 
 ## Output Requirements
 
-- Save components in `apps/tanstack/src/components/`
-- Save page routes in `apps/tanstack/src/routes/`
-  - Example: `Login` component → `apps/tanstack/src/components/login/index.tsx`
-  - Example: `Login` page → `apps/tanstack/src/routes/playground/components/login.tsx`
+- Save components in `apps/web/src/components/`
+- Save page routes in `apps/web/src/routes/`
+  - Example: `Login` component → `apps/web/src/components/login/index.tsx`
+  - Example: `Login` page → `apps/web/src/routes/playground/components/login.tsx`
 
 ## Images
 
