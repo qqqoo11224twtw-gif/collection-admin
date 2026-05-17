@@ -30,14 +30,16 @@ const app = await alchemy(`${PROJECT_NAME}-server`, {
 });
 
 // Resolve CORS origin (frontend URL).
-//   local stage -> http://localhost:3000 (web's vite dev server)
+//   local stage -> http://localhost:3000..:3009 (vite may shift ports)
 //   deploy stages -> config.ts domain, else workers.dev fallback
 const serverScriptName = `${PROJECT_NAME}-server-${app.stage}`;
 const { web: webDomainConfig, server: serverDomain } = domainsFor(app.stage);
 
 let corsOrigin: string;
 if (app.stage === 'local') {
-  corsOrigin = 'http://localhost:3000';
+  // vite shifts to :3001/:3002/... when :3000 is taken — allow a small range
+  // so CORS doesn't fail just because the user has another dev server up
+  corsOrigin = Array.from({ length: 10 }, (_, i) => `http://localhost:${3000 + i}`).join(',');
 } else {
   const webDomain =
     webDomainConfig ||
