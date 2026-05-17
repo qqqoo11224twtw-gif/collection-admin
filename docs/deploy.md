@@ -1,0 +1,297 @@
+# Deploy
+
+Runbook for deploying saasflare starter to Cloudflare via alchemy. Covers
+first-time setup and routine deploys. Read this top-to-bottom on a fresh
+clone; thereafter, jump to the section you need.
+
+## Mental model
+
+- **Two Workers**: `server` (Hono backend, port 4000 locally) and `web`
+  (TanStack Start frontend, port 3000 locally). Each is independently
+  deployed by its own `alchemy.run.ts`.
+- **Stages** (`app.stage`):
+  - `local` — `pnpm dev` (alchemy dev with `--stage local`). Uses local
+    state in `.alchemy/`.
+  - `dev` — auto-deploys on push to `dev` branch.
+  - `prod` — auto-deploys on push to `main`.
+  - `pr-<N>` — auto-created on PR open, destroyed on PR close.
+- **Topology in `config.ts`** (custom domains per stage), **secrets in env
+  files** (R2 keys, etc.), **URLs auto-derived** in `alchemy.run.ts`.
+- **State store**: alchemy uses `CloudflareStateStore` (remote KV) **only
+  when `CLOUDFLARE_API_TOKEN` is in the env**. Without it, state stays
+  local in `.alchemy/`. This means **local-only deploys and CI deploys can
+  diverge** — see [State store gotcha](#state-store-gotcha) below.
+
+## Picking a path
+
+Two flows, pick based on the situation:
+
+| Path | When | What runs the deploy |
+|---|---|---|
+| **A. CI-first** | Fresh clone, first deploy, normal workflow | GitHub Actions |
+| **B. Local** | Debugging deploy failures, iterating on `alchemy.run.ts` | Your machine |
+
+**Default to Path A.** It avoids local-vs-remote state divergence and is
+how the team will deploy day-to-day. Use Path B only when you need to
+inspect what alchemy is doing.
+
+## Detecting first-time deploy
+
+There is no single reliable signal. Use multi-signal detection and ask
+the user if ambiguous:
+
+```bash
+# Signal 1: GitHub Secrets configured?
+gh secret list 2>/dev/null | grep -q '^CLOUDFLARE_API_TOKEN'
+
+# Signal 2: local alchemy auth present?
+test -f ~/.alchemy/auth.json || test -n "$CLOUDFLARE_API_TOKEN"
+
+# Signal 3: local state exists?
+test -d .alchemy && test -n "$(ls -A .alchemy 2>/dev/null)"
+```
+
+| GH secret | Local auth | Local state | Verdict |
+|:-:|:-:|:-:|---|
+| ✗ | ✗ | ✗ | **Truly first time** — full setup |
+| ✓ | ✗ | ✗ | CI configured, nobody deployed locally — Path A push will deploy |
+| ✓ | ✓ | ✓ | Already deployed — incremental, just `pnpm run deploy:dev` |
+| ✓ | ✓ | ✗ | Ambiguous — ask user: "Has this project been deployed before (from any machine or CI)?" |
+| any | any | any | Once you have local auth, run `pnpm dlx wrangler deployments list starter-server-dev 2>/dev/null` — non-empty = deployed |
+
+---
+
+## Path A — CI-first (recommended)
+
+### A1. Preflight
+
+```bash
+node -v              # >= 20 (CI uses 24, project parses .ts directly so 23+ is safest)
+pnpm -v              # >= 9
+gh auth status       # else: gh auth login
+gh repo set-default  # one-time, picks the current repo
+git remote get-url origin   # should be saasflare-dev/<repo>.git
+test -d node_modules || pnpm install
+```
+
+### A2. Configure GitHub Secrets
+
+Required for CI to deploy:
+
+| Secret | Source |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | `pnpm dlx alchemy util create-cloudflare-token` (interactive; pipe output to `gh secret set CLOUDFLARE_API_TOKEN`) |
+| `CLOUDFLARE_EMAIL` | Ask user for Cloudflare account email → `gh secret set CLOUDFLARE_EMAIL --body "<email>"` |
+| `ALCHEMY_STATE_TOKEN` | First saasflare project: `openssl rand -hex 32`. Otherwise: paste the existing token from another project (must match across all projects on this CF account). `gh secret set ALCHEMY_STATE_TOKEN --body "<hex>"` |
+
+Check status:
+```bash
+gh secret list
+```
+
+### A3. (Optional) Custom domains in `config.ts`
+
+Skip if you're fine with `*.workers.dev` URLs.
+
+Otherwise, edit `config.ts`:
+```ts
+export const domains: Record<string, StageDomains> = {
+  dev:  { web: 'dev.example.com', server: 'api-dev.example.com' },
+  prod: { web: 'example.com',     server: 'api.example.com' },
+};
+```
+
+**Constraint**: zones must already be on Cloudflare DNS. If domain is
+registered elsewhere, add an NS delegation in your registrar first.
+
+### A4. (Optional) Per-app secrets
+
+Only if you need R2 file uploads (or you've added other secret env vars).
+
+```bash
+# Create the file with R2 keys (CF dashboard → R2 → Manage R2 API tokens
+# → Object Read & Write scope)
+cat > apps/server/.dev.env <<EOF
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+EOF
+
+# Upload to GitHub Secrets as ENV_SERVER_DEV
+pnpm sync:secrets
+```
+
+Skip this step entirely if no R2. CI tolerates an empty/missing
+`ENV_SERVER_DEV` secret — it just writes an empty `.dev.env` in the
+runner, which is fine.
+
+### A5. Push and watch
+
+```bash
+git push origin dev
+gh run watch     # follow the latest Actions run live
+```
+
+The `deploy.yml` workflow runs: test → deploy dev → resolve URL → e2e.
+
+### A6. Verify
+
+```bash
+# Get the deployed URL (uses CF API to compute the workers.dev URL or
+# read from config.ts custom domain)
+URLS=$(node scripts/resolve-urls.ts --stage dev)
+echo "$URLS" | jq
+
+# Smoke test
+SERVER=$(echo "$URLS" | jq -r .server)
+WEB=$(echo "$URLS" | jq -r .web)
+curl -fsS "$SERVER/health"   # → {"status":"ok"}
+curl -fsSI "$WEB" | head -1  # → HTTP/2 200
+```
+
+Report URLs to the user:
+```
+✅ Deployed to dev
+  Web:    https://...
+  Server: https://...
+```
+
+### A7. (Optional) Enable PR previews
+
+Already enabled by `.github/workflows/preview.yml`. Verify Actions is
+turned on:
+```bash
+gh api "repos/$(gh repo view --json nameWithOwner -q .nameWithOwner)" --jq .has_issues
+# (has_issues is a sanity check the repo metadata is reachable; Actions
+# enablement is shown in the web UI — Settings → Actions → General)
+```
+
+Open a PR against `dev`. Within ~2min the preview-bot should comment
+preview URLs.
+
+### A8. Promoting to prod
+
+```bash
+# Same Path A flow but on main branch
+git checkout main
+git merge dev
+git push origin main
+```
+
+CI uses `ENV_*_PROD` secrets (you may want to populate them separately
+via step A4 with `.prod.env`).
+
+---
+
+## Path B — Local deploy
+
+### B1. Preflight
+
+Same as A1.
+
+### B2. Authenticate alchemy locally
+
+```bash
+pnpm dlx alchemy login    # OAuth flow, opens browser, writes ~/.alchemy/auth.json
+```
+
+Confirm:
+```bash
+pnpm dlx alchemy whoami   # should print your CF account
+```
+
+Alternative (CI-style): set `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_EMAIL`
+in your shell env. This **changes the state store** — see
+[State store gotcha](#state-store-gotcha).
+
+### B3. (Optional) config.ts + per-app secrets
+
+Same as A3 / A4 (you don't need to sync to GitHub if you only deploy
+locally — env files stay local).
+
+### B4. Deploy
+
+```bash
+pnpm run deploy:dev
+```
+
+Watch stdout for `{ server: '<url>' }` and `{ web: '<url>' }`.
+
+For **prod**: require the user to type literally `deploy prod` before
+proceeding. Only then:
+```bash
+pnpm run deploy:prod
+```
+
+### B5. Verify
+
+Same as A6.
+
+---
+
+## State store gotcha
+
+`apps/{server,web}/alchemy.run.ts` checks `process.env.CLOUDFLARE_API_TOKEN`:
+- **set** → uses `CloudflareStateStore` (state lives in a CF KV namespace, encrypted with `ALCHEMY_STATE_TOKEN`).
+- **unset** → state lives in local `.alchemy/` directory.
+
+This means:
+- `alchemy login` alone → **local state** (file-based).
+- `export CLOUDFLARE_API_TOKEN=...` → **remote state** (KV-based).
+- CI always sets the env → **remote state**.
+
+**Risk**: if you do your first deploy via `alchemy login` (local state),
+then push to dev (CI remote state), CI sees no prior state and tries to
+create resources from scratch. Because `adopt: true` is set on every
+resource, CI will silently re-adopt them — but you end up with state in
+two places, and any future `alchemy destroy --stage dev` may miss
+resources tracked in the other store.
+
+**Recommendation**: from day one, export `CLOUDFLARE_API_TOKEN` in your
+shell before any `pnpm run deploy:*`, so local and CI share the same
+remote state store:
+
+```bash
+# Add to ~/.zshrc or per-project direnv:
+export CLOUDFLARE_API_TOKEN="$(gh secret get CLOUDFLARE_API_TOKEN 2>/dev/null)"  # if you can extract it
+# or just paste it from the same source as the GH secret
+```
+
+Or, accept the divergence and **only deploy via CI** after the first
+local experiment.
+
+---
+
+## Common issues
+
+- **`computeWorkerDevDomain` errors / wrong URL**: alchemy hits
+  `GET /accounts/{id}/workers/subdomain`. New CF accounts don't have a
+  workers.dev subdomain until the first Worker is deployed. Workaround:
+  `pnpm dlx wrangler deploy --name throwaway` once to provision the
+  subdomain, then `wrangler delete throwaway`.
+
+- **`gh secret set` fails with "no default repository"**: run
+  `gh repo set-default` once.
+
+- **Custom domain stuck "pending"**: zone must be on Cloudflare DNS. If
+  registered elsewhere, change nameservers at the registrar or transfer
+  to CF.
+
+- **`adopt: true` not adopting** (alchemy says "resource already exists"
+  loudly instead of silently adopting): the existing resource name
+  doesn't match `${PROJECT_NAME}-{kind}-${stage}`. Inspect with
+  `pnpm dlx wrangler kv namespace list` / `wrangler d1 list`, rename or
+  `alchemy destroy --stage <stage>` to start clean.
+
+- **CORS error after deploy**: `CORS_ORIGIN` is computed in
+  `apps/server/alchemy.run.ts` from `config.ts` domains or the
+  workers.dev URL fallback. If web URL changed (added custom domain mid-
+  deploy), redeploy server so it picks up the new value.
+
+- **PR preview empty `.dev.env`**: by design — PR previews use the same
+  `ENV_SERVER_DEV` / `ENV_WEB_DEV` secrets as dev stage. If you have no
+  R2 / no app secrets for dev, those secrets don't exist, and CI writes
+  an empty file. Alchemy reads it as "no extra vars". Not an error.
+
+- **`pnpm sync:secrets` skips files**: by design — missing `.{stage}.env`
+  files emit a warning, not an error. Create the file if you wanted it
+  synced.

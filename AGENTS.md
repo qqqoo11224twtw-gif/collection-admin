@@ -48,7 +48,7 @@ Read these docs based on the task at hand:
 | **Frontend: TanStack Start** | [docs/rules-tanstack.md](docs/rules-tanstack.md) |
 | Writing or running tests | [docs/testing.md](docs/testing.md) |
 | Debugging UI issues | [docs/debugging.md](docs/debugging.md) |
-| Deploying or setting up CI | invoke `/deploy` skill (`.claude/skills/deploy/SKILL.md`) |
+| Deploying, first-time setup, or CI | [docs/deploy.md](docs/deploy.md) |
 
 **Always read the frontend rules file before writing frontend code.**
 

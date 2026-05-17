@@ -51,4 +51,6 @@ app.get('/', (c) => {
   return c.text('Hello saasflare starter server!');
 });
 
+app.get('/health', (c) => c.json({ status: 'ok' }));
+
 export default app;

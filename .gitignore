@@ -75,11 +75,10 @@ Thumbs.db
 # JetBrains IDEs (WebStorm, IntelliJ etc.)
 .idea/
 
-# Claude Code (whitelist: keep shared agents/commands/skills, ignore personal cache/settings)
+# Claude Code (whitelist: keep shared agents/commands, ignore personal cache/settings)
 .claude/*
 !.claude/agents/
 !.claude/commands/
-!.claude/skills/
 
 
 .vercel
