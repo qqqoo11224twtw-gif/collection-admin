@@ -40,14 +40,14 @@ const serverDomain = isPRStage ? undefined : process.env.SERVER_DOMAIN;
 
 let corsOrigin: string;
 if (app.stage === 'local') {
-  corsOrigin = Array.from({ length: 10 }, (_, i) => `http://localhost:${3000 + i}`).join(',');
+  corsOrigin = Array.from(
+    { length: 10 },
+    (_, i) => `http://localhost:${3000 + i}`,
+  ).join(',');
 } else {
   const webDomain =
     (!isPRStage && process.env.WEB_DOMAIN) ||
-    (await computeWorkerDevDomain(
-      api,
-      `${PROJECT_NAME}-web-${app.stage}`,
-    ));
+    (await computeWorkerDevDomain(api, `${PROJECT_NAME}-web-${app.stage}`));
   corsOrigin = `https://${webDomain}`;
 }
 

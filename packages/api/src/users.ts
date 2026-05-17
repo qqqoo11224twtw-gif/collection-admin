@@ -1,5 +1,5 @@
-import { users } from '@saasflare-dev/db';
 import { ORPCError, os } from '@orpc/server';
+import { users } from '@saasflare-dev/db';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Context } from './context';

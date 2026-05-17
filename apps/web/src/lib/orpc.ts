@@ -1,7 +1,7 @@
-import type { AppRouterClient } from '@saasflare-dev/api';
 import { createORPCClient, onError } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import { createTanstackQueryUtils } from '@orpc/tanstack-query';
+import type { AppRouterClient } from '@saasflare-dev/api';
 
 export const link = new RPCLink({
   url: `${import.meta.env.NEXT_PUBLIC_SERVER_URL}/rpc`,

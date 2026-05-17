@@ -29,10 +29,7 @@ if (app.stage === 'local') {
 } else {
   const serverDomain =
     (!isPRStage && process.env.SERVER_DOMAIN) ||
-    (await computeWorkerDevDomain(
-      api,
-      `${PROJECT_NAME}-server-${app.stage}`,
-    ));
+    (await computeWorkerDevDomain(api, `${PROJECT_NAME}-server-${app.stage}`));
   process.env.NEXT_PUBLIC_SERVER_URL = `https://${serverDomain}`;
 }
 
