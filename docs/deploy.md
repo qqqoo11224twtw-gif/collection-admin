@@ -76,17 +76,32 @@ test -d node_modules || pnpm install
 
 ### A2. Configure GitHub Secrets
 
-Required for CI to deploy:
+Required for CI to deploy.
 
-| Secret | Source |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | `pnpm dlx alchemy util create-cloudflare-token` (interactive; pipe output to `gh secret set CLOUDFLARE_API_TOKEN`) |
-| `CLOUDFLARE_EMAIL` | Ask user for Cloudflare account email → `gh secret set CLOUDFLARE_EMAIL --body "<email>"` |
-| `ALCHEMY_STATE_TOKEN` | First saasflare project: `openssl rand -hex 32`. Otherwise: paste the existing token from another project (must match across all projects on this CF account). `gh secret set ALCHEMY_STATE_TOKEN --body "<hex>"` |
+> **⚠️ Back up secrets BEFORE setting them.** GitHub Secrets are write-only
+> — once set, you cannot read the value back. Store both tokens in a
+> password manager (1Password / Bitwarden / etc.) **before** the `gh
+> secret set` step. Losing `ALCHEMY_STATE_TOKEN` is especially painful:
+> it's the encryption key for alchemy state across all projects sharing
+> this CF account; recovering means coordinated rotation across every
+> repo + a full redeploy to re-adopt resources.
+>
+> A reasonable local backup pattern: keep a gitignored
+> `~/.secrets/saasflare.env` with `CLOUDFLARE_API_TOKEN`,
+> `CLOUDFLARE_EMAIL`, `ALCHEMY_STATE_TOKEN`. Source it for local Path B
+> deploys (`source ~/.secrets/saasflare.env`) — solves "backup" and
+> "shell env for Path B" in one move.
 
-Check status:
+| Secret | Generate | Set |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | `pnpm dlx alchemy util create-cloudflare-token` (interactive). **Copy the token to your password manager and `~/.secrets/saasflare.env`** before continuing. | `gh secret set CLOUDFLARE_API_TOKEN < <(echo "$CLOUDFLARE_API_TOKEN")` (after sourcing) |
+| `CLOUDFLARE_EMAIL` | Your CF account email (not a secret, but CI needs it). | `gh secret set CLOUDFLARE_EMAIL --body "<email>"` |
+| `ALCHEMY_STATE_TOKEN` | First saasflare project: `openssl rand -hex 32`. Otherwise: reuse the existing token from another project (MUST match across all projects on this CF account). **Save before setting.** | `gh secret set ALCHEMY_STATE_TOKEN --body "<hex>"` |
+
+Verify:
 ```bash
-gh secret list
+gh secret list                   # should show all three
+test -f ~/.secrets/saasflare.env # local backup exists
 ```
 
 ### A3. (Optional) Custom domains in `config.ts`
@@ -190,18 +205,21 @@ Same as A1.
 
 ### B2. Authenticate alchemy locally
 
+**Recommended** (matches CI state store — see
+[State store gotcha](#state-store-gotcha)):
+
+```bash
+source ~/.secrets/saasflare.env   # the backup file from A2
+# confirms CLOUDFLARE_API_TOKEN, CLOUDFLARE_EMAIL, ALCHEMY_STATE_TOKEN
+# are in your shell
+```
+
+**Alternative** (OAuth, uses local file state — diverges from CI):
+
 ```bash
 pnpm dlx alchemy login    # OAuth flow, opens browser, writes ~/.alchemy/auth.json
-```
-
-Confirm:
-```bash
 pnpm dlx alchemy whoami   # should print your CF account
 ```
-
-Alternative (CI-style): set `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_EMAIL`
-in your shell env. This **changes the state store** — see
-[State store gotcha](#state-store-gotcha).
 
 ### B3. (Optional) config.ts + per-app secrets
 
@@ -246,15 +264,18 @@ resource, CI will silently re-adopt them — but you end up with state in
 two places, and any future `alchemy destroy --stage dev` may miss
 resources tracked in the other store.
 
-**Recommendation**: from day one, export `CLOUDFLARE_API_TOKEN` in your
-shell before any `pnpm run deploy:*`, so local and CI share the same
-remote state store:
+**Recommendation**: from day one, source the backup env file from A2
+before any `pnpm run deploy:*`, so local and CI share the same remote
+state store:
 
 ```bash
-# Add to ~/.zshrc or per-project direnv:
-export CLOUDFLARE_API_TOKEN="$(gh secret get CLOUDFLARE_API_TOKEN 2>/dev/null)"  # if you can extract it
-# or just paste it from the same source as the GH secret
+source ~/.secrets/saasflare.env
+pnpm run deploy:dev
 ```
+
+(GitHub Secrets cannot be read back via API, which is why we kept the
+local copy in A2 — same value, two consumers: `gh secret set` for CI,
+`source` for local.)
 
 Or, accept the divergence and **only deploy via CI** after the first
 local experiment.
