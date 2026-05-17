@@ -2,9 +2,8 @@ name: PR Preview
 
 # Each PR gets an isolated alchemy stage (pr-<PR_NUMBER>) with its own
 # Worker, KV, D1, etc. Closing the PR destroys the stage. PR previews
-# reuse the dev stage's env file (ENV_{SERVER,WEB}_DEV) — alchemy.run.ts
-# auto-skips custom-domain env vars for pr-* stages and always uses
-# workers.dev URLs.
+# reuse the dev stage's env files — alchemy.run.ts auto-skips custom
+# domain env vars for pr-* stages and always uses workers.dev URLs.
 
 on:
   pull_request:
@@ -38,8 +37,9 @@ jobs:
 
       - run: pnpm install
 
-      - name: Inject env files (dev base)
+      - name: Inject env files
         run: |
+          echo "${{ secrets.ENV_ALCHEMY }}" > .alchemy.env
           echo "${{ secrets.ENV_SERVER_DEV }}" > apps/server/.dev.env
           echo "${{ secrets.ENV_WEB_DEV }}" > apps/web/.dev.env
 
@@ -52,7 +52,10 @@ jobs:
       - name: Resolve preview URLs
         id: urls
         run: |
-          URLS=$(node --env-file apps/server/.dev.env scripts/resolve-urls.ts --stage "$PR_STAGE")
+          URLS=$(node \
+            --env-file=.alchemy.env \
+            --env-file=apps/server/.dev.env \
+            scripts/resolve-urls.ts --stage "$PR_STAGE")
           echo "web=$(echo "$URLS" | jq -r .web)" >> "$GITHUB_OUTPUT"
           echo "server=$(echo "$URLS" | jq -r .server)" >> "$GITHUB_OUTPUT"
 
@@ -114,8 +117,9 @@ jobs:
 
       - run: pnpm install
 
-      - name: Inject env files (dev base)
+      - name: Inject env files
         run: |
+          echo "${{ secrets.ENV_ALCHEMY }}" > .alchemy.env
           echo "${{ secrets.ENV_SERVER_DEV }}" > apps/server/.dev.env
           echo "${{ secrets.ENV_WEB_DEV }}" > apps/web/.dev.env
 

@@ -13,47 +13,30 @@ Runbook for deploying saasflare starter to Cloudflare via alchemy.
   - `prod` — auto-deploys on push to `main`.
   - `pr-<N>` — auto-created on PR open, destroyed on PR close. Always uses
     `*.workers.dev` URLs (custom domain env vars are ignored for pr-*).
-- **Single source of truth per stage**: each app's `.{stage}.env` file
-  holds **everything** that stage needs — Cloudflare auth tokens, alchemy
-  state token, optional custom domains, optional R2 keys. No separate
-  config file, no machine-wide dotfile.
+- **Split env**: control plane (`.alchemy.env` at root, shared by all
+  stages and both apps) + per-app/per-stage extras
+  (`apps/{server,web}/.{stage}.env`). The root-level `pnpm run deploy:*`
+  scripts wrap deploys with `scripts/deploy.sh`, which auto-sources
+  `.alchemy.env` so child alchemy processes inherit the control-plane
+  env. Per-app `--env-file .{stage}.env` adds domain + R2 keys on top.
 - **State store**: alchemy uses `CloudflareStateStore` (remote KV) when
-  `CLOUDFLARE_API_TOKEN` is present in the env (it always is, via the
-  app's `.{stage}.env` file). Without it, state stays local in `.alchemy/`.
+  `CLOUDFLARE_API_TOKEN` is in the env (it always is, since
+  `.alchemy.env` is sourced).
 
 ## Env files
 
-| File | Loaded for | Synced to GitHub as |
-|---|---|---|
-| `apps/server/.local.env` | `pnpm dev` (server) | — (local-only) |
-| `apps/web/.local.env`    | `pnpm dev` (web)    | — (local-only) |
-| `apps/server/.dev.env`   | `dev` + every `pr-<N>` | `ENV_SERVER_DEV` |
-| `apps/web/.dev.env`      | `dev` + every `pr-<N>` | `ENV_WEB_DEV`    |
-| `apps/server/.prod.env`  | `prod` | `ENV_SERVER_PROD` |
-| `apps/web/.prod.env`     | `prod` | `ENV_WEB_PROD`    |
+| File | Scope | Contents | Synced to GitHub as |
+|---|---|---|---|
+| `.alchemy.env` | root, all stages, both apps | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_EMAIL`, `ALCHEMY_STATE_TOKEN` | `ENV_ALCHEMY` |
+| `apps/server/.local.env` | server, local stage | R2 keys for local testing | — (local-only) |
+| `apps/web/.local.env`    | web, local stage    | future `NEXT_PUBLIC_*` for local | — (local-only) |
+| `apps/server/.dev.env`   | server, dev + every `pr-<N>` | `WEB_DOMAIN`, `SERVER_DOMAIN`, R2 keys | `ENV_SERVER_DEV` |
+| `apps/web/.dev.env`      | web, dev + every `pr-<N>`    | `WEB_DOMAIN`, `SERVER_DOMAIN`, `NEXT_PUBLIC_*` | `ENV_WEB_DEV` |
+| `apps/server/.prod.env`  | server, prod | same as dev | `ENV_SERVER_PROD` |
+| `apps/web/.prod.env`     | web, prod    | same as dev | `ENV_WEB_PROD` |
 
-Each stage env file can contain:
-
-```bash
-# Control plane (required for any non-local deploy)
-CLOUDFLARE_API_TOKEN=...        # pnpm dlx alchemy util create-cloudflare-token
-CLOUDFLARE_EMAIL=...            # your CF account email
-ALCHEMY_STATE_TOKEN=...         # openssl rand -hex 32 — MUST match across
-                                # all saasflare projects on this CF account
-
-# Custom domains (optional; only honored for dev/prod, ignored for pr-*)
-WEB_DOMAIN=app.example.com      # zone must be on Cloudflare DNS
-SERVER_DOMAIN=api.example.com
-
-# R2 storage (server only, optional)
-R2_ACCESS_KEY_ID=...
-R2_SECRET_ACCESS_KEY=...
-```
-
-Both `apps/server/.{stage}.env` and `apps/web/.{stage}.env` need the
-control-plane vars (each app's `alchemy.run.ts` calls Cloudflare's API
-to resolve URLs). Same values, just copied — the duplication is the
-trade-off for "all secrets live next to the app that uses them".
+All files are gitignored. Examples: `.alchemy.env.example`,
+`apps/{server,web}/.local.env.example`.
 
 ## Deploy flows
 
@@ -71,39 +54,31 @@ trade-off for "all secrets live next to the app that uses them".
 ### A1. Preflight
 
 ```bash
-node -v              # >= 23.6 (project parses .ts directly via Node --experimental-strip-types)
+node -v              # >= 23.6 (project parses .ts directly via Node)
 pnpm -v              # >= 9
 gh auth status       # else: gh auth login
-gh repo set-default  # else gh secret set fails
+gh repo set-default  # else `gh secret set` fails
 test -d node_modules || pnpm install
 ```
 
-### A2. Create env files
-
-For each stage you want to deploy (`dev`, then later `prod`), create
-both apps' env files with at least the control-plane vars:
+### A2. Create `.alchemy.env`
 
 ```bash
-# Generate once, paste into all four files (or use the helper below)
-CF_TOKEN=$(pnpm dlx alchemy util create-cloudflare-token)
-CF_EMAIL="your-email@example.com"
-ALCHEMY_TOKEN=$(openssl rand -hex 32)   # or paste from another saasflare project
-
-# Helper: write the same control-plane block to all four files
-for f in apps/server/.dev.env apps/web/.dev.env \
-         apps/server/.prod.env apps/web/.prod.env; do
-  cat > "$f" <<EOF
-CLOUDFLARE_API_TOKEN=$CF_TOKEN
-CLOUDFLARE_EMAIL=$CF_EMAIL
-ALCHEMY_STATE_TOKEN=$ALCHEMY_TOKEN
-EOF
-done
+cp .alchemy.env.example .alchemy.env
+# then fill in the three values:
+#   CLOUDFLARE_API_TOKEN — pnpm dlx alchemy util create-cloudflare-token
+#   CLOUDFLARE_EMAIL     — your CF account email
+#   ALCHEMY_STATE_TOKEN  — openssl rand -hex 32 (or reuse from another
+#                          saasflare project on this CF account — MUST match)
 ```
 
-Then add per-stage extras to the relevant file(s):
+### A3. (Optional) Create per-app `.{stage}.env` files
+
+Only if you need custom domains or R2. Skip otherwise — the apps deploy
+fine with just `.alchemy.env`.
 
 ```bash
-# Custom domains for dev (optional)
+# Custom domains (zone must be on Cloudflare DNS)
 cat >> apps/server/.dev.env <<EOF
 WEB_DOMAIN=dev.example.com
 SERVER_DOMAIN=api-dev.example.com
@@ -113,24 +88,29 @@ WEB_DOMAIN=dev.example.com
 SERVER_DOMAIN=api-dev.example.com
 EOF
 
-# R2 keys for dev (optional, server only)
+# R2 (server only)
 cat >> apps/server/.dev.env <<EOF
 R2_ACCESS_KEY_ID=...
 R2_SECRET_ACCESS_KEY=...
 EOF
+
+# Same pattern for .prod.env when you're ready to deploy prod
 ```
 
-### A3. Sync to GitHub Secrets
+(Domains need to live in both apps' files because each app's
+`alchemy.run.ts` resolves the other side's URL independently.)
+
+### A4. Sync to GitHub Secrets
 
 ```bash
 pnpm sync:secrets
 ```
 
-Uploads `apps/{server,web}/.{dev,prod}.env` as `ENV_{SERVER,WEB}_{DEV,PROD}`.
-Missing files are skipped with a warning (e.g., if you haven't set up
-prod yet).
+Uploads `.alchemy.env` (as `ENV_ALCHEMY`) and the four
+`apps/{server,web}/.{dev,prod}.env` files (as `ENV_{SERVER,WEB}_{DEV,PROD}`).
+Missing files are skipped with a warning.
 
-### A4. Push and watch
+### A5. Push and watch
 
 ```bash
 git push origin dev
@@ -139,10 +119,13 @@ gh run watch
 
 `deploy.yml` runs test → deploy dev → resolve URL → e2e.
 
-### A5. Verify
+### A6. Verify
 
 ```bash
-URLS=$(node --env-file apps/server/.dev.env scripts/resolve-urls.ts --stage dev)
+URLS=$(node \
+  --env-file=.alchemy.env \
+  --env-file=apps/server/.dev.env \
+  scripts/resolve-urls.ts --stage dev)
 echo "$URLS" | jq
 
 SERVER=$(echo "$URLS" | jq -r .server)
@@ -151,15 +134,13 @@ curl -fsS "$SERVER/health"     # → {"status":"ok"}
 curl -fsSI "$WEB" | head -1    # → HTTP/2 200
 ```
 
-### A6. PR previews
+### A7. PR previews
 
 Already enabled by `.github/workflows/preview.yml`. Open a PR against
 `dev` and within ~2 min the bot posts preview URLs as a PR comment.
 Each PR gets isolated stage `pr-<N>` with its own KV/D1/R2/Workers.
 
-### A7. Promoting to prod
-
-Same flow, different branch:
+### A8. Promoting to prod
 
 ```bash
 git checkout main
@@ -167,8 +148,8 @@ git merge dev
 git push origin main
 ```
 
-Make sure `apps/{server,web}/.prod.env` exists locally and you've run
-`pnpm sync:secrets` so the prod GH secrets are populated.
+Make sure `apps/{server,web}/.prod.env` exist locally (if you have prod
+domains or R2 keys) and you've run `pnpm sync:secrets`.
 
 ---
 
@@ -178,29 +159,24 @@ For debugging when CI is broken or you're iterating on `alchemy.run.ts`.
 
 ### B1. Preflight + env files
 
-Same as A1 / A2. Make sure `apps/{server,web}/.dev.env` exists locally
-with at least the control-plane vars.
+Same as A1–A3. Make sure `.alchemy.env` exists.
 
 ### B2. Deploy
 
 ```bash
-pnpm run deploy:dev    # alchemy --env-file injects everything into process.env
+pnpm run deploy:dev    # or deploy:prod (after typed `deploy prod` confirmation)
 ```
 
-No `source`, no manual env export — alchemy CLI uses Node's `--env-file`
-flag to load the env file before `alchemy.run.ts` runs. Custom domains
-in `.dev.env` are honored; PR-stage env vars are ignored automatically
-by `alchemy.run.ts` (`isPRStage` check).
+`scripts/deploy.sh` auto-sources `.alchemy.env` before invoking pnpm,
+so the alchemy child processes inherit `CLOUDFLARE_API_TOKEN` etc.
+Each app additionally loads its `.{stage}.env` via alchemy's
+`--env-file` flag (which forwards to Node's `--env-file`).
 
-For **prod**: require typed confirmation (`deploy prod`), then:
-
-```bash
-pnpm run deploy:prod
-```
+No `source` step required.
 
 ### B3. Verify
 
-Same as A5.
+Same as A6.
 
 ---
 
@@ -214,6 +190,10 @@ Same as A5.
 
 - **`gh secret set` fails with "no default repository"**: run
   `gh repo set-default` once.
+
+- **`pnpm run deploy:dev` says CF auth missing locally**: confirm
+  `.alchemy.env` exists at the repo root and has all three keys filled
+  in. The wrapper sources it but doesn't validate contents.
 
 - **Custom domain stuck "pending"**: zone must be on Cloudflare DNS. If
   registered elsewhere, change nameservers at the registrar or transfer
@@ -234,7 +214,7 @@ Same as A5.
   and skips `WEB_DOMAIN` / `SERVER_DOMAIN` env vars for those stages, so
   each PR gets a clean isolated `*.workers.dev` URL.
 
-- **`ALCHEMY_STATE_TOKEN` rotation**: if lost or compromised, generate a
-  new one, update all `.{stage}.env` files for **every** saasflare
-  project on this CF account, re-sync secrets, and redeploy each
-  project (alchemy's `adopt: true` re-claims existing resources).
+- **`ALCHEMY_STATE_TOKEN` rotation**: if lost or compromised, update
+  `.alchemy.env` in **every** saasflare project on this CF account,
+  re-sync secrets (`pnpm sync:secrets`), and redeploy each project
+  (alchemy's `adopt: true` re-claims existing resources).

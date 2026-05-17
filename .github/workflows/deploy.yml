@@ -6,11 +6,9 @@ name: CI / Deploy
 #   push main               -> test -> deploy(prod) -> e2e against prod deployment URL (smoke)
 #
 # Required secrets (see docs/deploy.md):
-#   ENV_SERVER_DEV / ENV_SERVER_PROD — full apps/server/.{dev,prod}.env contents
-#   ENV_WEB_DEV    / ENV_WEB_PROD    — full apps/web/.{dev,prod}.env contents
-# Each of those env files contains CLOUDFLARE_API_TOKEN, CLOUDFLARE_EMAIL,
-# ALCHEMY_STATE_TOKEN (control plane) plus app secrets — alchemy's
-# --env-file flag injects them into process.env at deploy time.
+#   ENV_ALCHEMY                       — CF auth + alchemy state token (control plane)
+#   ENV_SERVER_DEV / ENV_SERVER_PROD  — server-specific (R2 keys, domains)
+#   ENV_WEB_DEV    / ENV_WEB_PROD     — web-specific (domains, NEXT_PUBLIC_*)
 
 on:
   push:
@@ -80,13 +78,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Inject env files (dev)
+      - name: Inject .alchemy.env (control plane)
+        run: echo "${{ secrets.ENV_ALCHEMY }}" > .alchemy.env
+
+      - name: Inject app env files (dev)
         if: github.ref == 'refs/heads/dev'
         run: |
           echo "${{ secrets.ENV_SERVER_DEV }}" > apps/server/.dev.env
           echo "${{ secrets.ENV_WEB_DEV }}" > apps/web/.dev.env
 
-      - name: Inject env files (prod)
+      - name: Inject app env files (prod)
         if: github.ref == 'refs/heads/main'
         run: |
           echo "${{ secrets.ENV_SERVER_PROD }}" > apps/server/.prod.env
@@ -97,14 +98,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           STAGE=$([ "${{ github.ref }}" = "refs/heads/main" ] && echo prod || echo dev)
-          pnpm --filter server "deploy:$STAGE"
-          pnpm --filter web "deploy:$STAGE"
+          pnpm run "deploy:$STAGE"
 
       - name: Resolve frontend URL
         id: url
         run: |
           STAGE=$([ "${{ github.ref }}" = "refs/heads/main" ] && echo prod || echo dev)
-          URLS=$(node --env-file "apps/server/.$STAGE.env" scripts/resolve-urls.ts --stage "$STAGE")
+          URLS=$(node \
+            --env-file=.alchemy.env \
+            --env-file="apps/server/.$STAGE.env" \
+            scripts/resolve-urls.ts --stage "$STAGE")
           echo "base_url=$(echo "$URLS" | jq -r .web)" >> "$GITHUB_OUTPUT"
           echo "stage=$STAGE" >> "$GITHUB_OUTPUT"
 

@@ -43,6 +43,7 @@ echo
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 pairs=(
+  "ENV_ALCHEMY:.alchemy.env"
   "ENV_SERVER_DEV:apps/server/.dev.env"
   "ENV_SERVER_PROD:apps/server/.prod.env"
   "ENV_WEB_DEV:apps/web/.dev.env"
