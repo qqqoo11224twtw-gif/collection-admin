@@ -10,7 +10,7 @@ which needs three human-provided secrets:
 | Step | Auto-runnable? | Why / why not |
 |---|---|---|
 | A1 preflight | ✅ | scripted checks |
-| A2 fill `.alchemy.env` | ❌ | CF token step is interactive (browser OAuth) — user must run `pnpm dlx alchemy util create-cloudflare-token` themselves and paste the token back. Agent cannot drive it. |
+| A2 fill `.alchemy.env` | ❌ | CF token **must** be minted via `pnpm dlx alchemy util create-cloudflare-token` (interactive browser OAuth). The dashboard "Edit Cloudflare Workers" template lacks D1, R2 Data, and other scopes alchemy needs — using it will fail at the first D1/R2 resource. Agent cannot drive the OAuth flow, so the user runs the helper and pastes the token back. |
 | A3 per-app `.env` | ❌ if domains/R2 desired | needs human choices |
 | A4 sync secrets | ✅ | `pnpm sync:secrets` |
 | A5 push | ✅ | `git push` |
@@ -105,9 +105,13 @@ cp .alchemy.env.example .alchemy.env
 >    ```
 >
 >    *It opens a browser, you log in, and it prints a token. Paste the
->    token back here. (Or create one manually at
->    https://dash.cloudflare.com → My Profile → API Tokens → Create Token
->    → **Edit Cloudflare Workers** template.)"*
+>    token back here."*
+>
+>    **Do not** offer the dashboard "Edit Cloudflare Workers" template as
+>    a fallback — it omits D1, Workers R2 Data, and other scopes alchemy
+>    needs, and the deploy will fail at the first D1/R2 resource with
+>    `401 Authentication error`. The helper mints a token with the full
+>    scope set; insist on it.
 >    Wait for the token before continuing.
 > 2. **CF email.** Ask: *"What email is your Cloudflare account under?"*
 > 3. **State token.** Ask: *"Is this your first saasflare project on this
@@ -120,13 +124,17 @@ cp .alchemy.env.example .alchemy.env
 
 #### Getting the CF token
 
-Two ways. Pick whichever is more convenient.
-
-**Option 1 — alchemy helper** (interactive, OAuth via browser):
+**Always use the alchemy helper.** Do not mint the token from the
+dashboard — see the warning below.
 
 ```bash
 pnpm dlx alchemy util create-cloudflare-token
 ```
+
+Interactive OAuth: opens a browser, you log in, it prints a token. The
+helper requests the full scope set alchemy needs (Workers Scripts, KV,
+**D1**, R2, **Workers R2 Data**, Account Settings, DNS, Workers Routes,
+User Details, Memberships).
 
 If you have **multiple CF accounts** logged into alchemy, use the
 `--profile` flag to pick one. A profile needs two steps: `configure`
@@ -149,15 +157,11 @@ pnpm dlx alchemy util create-cloudflare-token -p saasflare
 Profiles are stored under `~/.config/.alchemy/credentials/<profile>/`.
 `pnpm dlx alchemy whoami -p <profile>` shows who's logged in there.
 
-**Option 2 — CF dashboard** (manual, no profile juggling):
-
-1. https://dash.cloudflare.com → make sure the right account is selected
-2. Profile (top-right) → **API Tokens** → **Create Token**
-3. Use the **Edit Cloudflare Workers** template (or replicate its scopes)
-4. Copy the token into `.alchemy.env`
-
-This bypasses alchemy's OAuth entirely — useful when you don't want to
-log in via alchemy at all (e.g., a CI-only setup).
+> **Why not the dashboard "Edit Cloudflare Workers" template?** It looks
+> close but omits D1, Workers R2 Data, and a few other scopes alchemy
+> uses. KV creation will succeed, then the deploy fails on the first D1
+> binding with `CloudflareApiError: 401 Authentication error`. The
+> helper is the only supported path.
 
 > **Note**: profile selection only matters for the **token generation**
 > step. Once the token is in `.alchemy.env`, deploys read
@@ -330,6 +334,14 @@ Same as A6.
 
 - **`gh secret set` fails with "no default repository"**: run
   `gh repo set-default` once.
+
+- **Deploy fails on D1 with `CloudflareApiError: 401 Authentication
+  error`** (KV created fine, then 401 on the first D1 resource): the
+  `CLOUDFLARE_API_TOKEN` was minted from the dashboard "Edit Cloudflare
+  Workers" template instead of `pnpm dlx alchemy util
+  create-cloudflare-token`. That template is missing D1 (and a few
+  others). Re-mint with the helper, update `.alchemy.env`, re-run
+  `pnpm sync:secrets`, and re-push.
 
 - **`pnpm run deploy:dev` says CF auth missing locally**: confirm
   `.alchemy.env` exists at the repo root and has all three keys filled
