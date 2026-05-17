@@ -104,20 +104,18 @@ pnpm run deploy:dev
 pnpm run deploy:prod
 ```
 
-> **First-Time Setup:**
-> For the first deploy, link the services by updating their stage env files (`.dev.env` for dev, `.prod.env` for prod):
->
-> - `apps/web/.dev.env` / `.prod.env`: Set `NEXT_PUBLIC_SERVER_URL` to your Backend URL.
-> - `apps/server/.dev.env` / `.prod.env`: Set `CORS_ORIGIN` to your Frontend URL.
->
-> Then redeploy once to apply the changes.
+> **One-shot deploy.** URLs are resolved automatically inside `alchemy.run.ts`
+> (via `computeWorkerDevDomain`), so `NEXT_PUBLIC_SERVER_URL` and `CORS_ORIGIN`
+> no longer need to be filled in by hand — `deploy:dev` / `deploy:prod` work
+> first time. To use custom domains, set `WEB_DOMAIN` and/or `SERVER_DOMAIN` in
+> the stage's env file (the zone must be hosted on Cloudflare DNS).
 
 #### Automated CI/CD Deployment
 
-This project includes a fully configured GitHub Actions workflow (`.github/workflows/deploy.yml`) for automated CI/CD. It supports two completely isolated environments, providing a safe and professional deployment strategy:
+This project ships two GitHub Actions workflows:
 
-- **`dev` branch** automatically deploys to the **Development** environment (e.g., [https://starter-web-dev.<your-account>.workers.dev](https://starter-web-dev.<your-account>.workers.dev)). Use this for testing and staging.
-- **`main` branch** automatically deploys to the **Production** environment (e.g., [https://starter-web-prod.<your-account>.workers.dev](https://starter-web-prod.<your-account>.workers.dev)). Use this for your live, user-facing application.
+- **`deploy.yml`** — push to `dev` → deploys to the **Development** environment (`starter-web-dev.<account>.workers.dev`); push to `main` → deploys to **Production** (`starter-web-prod.<account>.workers.dev`).
+- **`preview.yml`** — every PR opened against `dev` or `main` gets its own isolated stage (`pr-<N>`) with its own Worker, KV, D1, R2. A bot comment on the PR posts the preview URLs. Closing the PR auto-destroys the stage.
 
 ##### Required Secrets
 
@@ -258,20 +256,14 @@ pnpm run deploy:dev
 pnpm run deploy:prod
 ```
 
-> **首次设置:**
-> 第一次部署时，通过更新对应 stage 的 env 文件（dev 用 `.dev.env`，prod 用 `.prod.env`）来连接前后端服务：
->
-> - `apps/web/.dev.env` / `.prod.env`: 设置 `NEXT_PUBLIC_SERVER_URL` 为你的后端 URL。
-> - `apps/server/.dev.env` / `.prod.env`: 设置 `CORS_ORIGIN` 为你的前端 URL。
->
-> 然后重新运行一次部署命令以应用更改。
+> **一次部署即可。** `alchemy.run.ts` 通过 `computeWorkerDevDomain` 自动解析 URL，`NEXT_PUBLIC_SERVER_URL` 和 `CORS_ORIGIN` 不需要手填，`deploy:dev` / `deploy:prod` 首次运行就能跑通。要用自定义域名，在 stage 的 env 文件里设 `WEB_DOMAIN` / `SERVER_DOMAIN`（域名必须托管在 Cloudflare DNS）。
 
 #### 自动化 CI/CD 部署
 
-本项目包含一个配置完整的 GitHub Actions 工作流 (`.github/workflows/deploy.yml`) 用于自动 CI/CD。它支持两个完全隔离的环境，提供了安全、专业的部署策略优势：
+本项目提供两个 GitHub Actions 工作流：
 
-- **`dev` 分支** 自动部署到 **开发环境 (Development)**（例如：[https://starter-web-dev.<your-account>.workers.dev](https://starter-web-dev.<your-account>.workers.dev)）。用于测试和预发布。
-- **`main` 分支** 自动部署到 **生产环境 (Production)**（例如：[https://starter-web-prod.<your-account>.workers.dev](https://starter-web-prod.<your-account>.workers.dev)）。用于正式的线上应用。
+- **`deploy.yml`** — push 到 `dev` → 部署到 **开发环境** (`starter-web-dev.<account>.workers.dev`)；push 到 `main` → 部署到 **生产环境** (`starter-web-prod.<account>.workers.dev`)。
+- **`preview.yml`** — 每个针对 `dev` / `main` 的 PR 自动创建独立 stage (`pr-<N>`)，独占 Worker / KV / D1 / R2。bot 会在 PR 评论里贴预览 URL；PR 关闭时自动销毁该 stage。
 
 ##### 所需 Secrets
 

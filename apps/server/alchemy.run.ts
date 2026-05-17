@@ -1,6 +1,8 @@
 import alchemy from 'alchemy';
 import {
   AccountId,
+  computeWorkerDevDomain,
+  createCloudflareApi,
   D1Database,
   KVNamespace,
   R2Bucket,
@@ -12,6 +14,8 @@ import { CloudflareStateStore } from 'alchemy/state';
 
 const accountId = await AccountId();
 console.log('Your Cloudflare Account ID is:', accountId);
+
+const api = await createCloudflareApi();
 
 // Use CloudflareStateStore only if CLOUDFLARE_API_TOKEN is present (e.g., in CI/CD)
 // This allows the template to work out-of-the-box for local users.
@@ -25,6 +29,25 @@ const PROJECT_NAME = 'starter';
 const app = await alchemy(`${PROJECT_NAME}-server`, {
   stateStore,
 });
+
+// Resolve frontend URL for CORS. Priority:
+//   1. CORS_ORIGIN env (used by .local.env to pin localhost:3000)
+//   2. WEB_DOMAIN env -> https://${WEB_DOMAIN}
+//   3. workers.dev fallback via computeWorkerDevDomain
+// Skip the CF API call in cases 1 and 2 so local dev works without CF auth.
+const serverScriptName = `${PROJECT_NAME}-server-${app.stage}`;
+const serverDomain = process.env.SERVER_DOMAIN;
+
+let corsOrigin = process.env.CORS_ORIGIN;
+if (!corsOrigin) {
+  const webDomain =
+    process.env.WEB_DOMAIN ||
+    (await computeWorkerDevDomain(
+      api,
+      `${PROJECT_NAME}-web-${app.stage}`,
+    ));
+  corsOrigin = `https://${webDomain}`;
+}
 
 // Create a KV namespace
 const KV = await KVNamespace('KV', {
@@ -61,9 +84,7 @@ const BUCKET = await R2Bucket('BUCKET', {
   cors: [
     {
       allowed: {
-        origins: (process.env.CORS_ORIGIN || 'http://localhost:3000')
-          .split(',')
-          .map((o) => o.trim()),
+        origins: corsOrigin.split(',').map((o) => o.trim()),
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'HEAD'],
         headers: ['*'],
       },
@@ -80,12 +101,13 @@ if (hasR2Keys) {
 }
 
 export const server = await Worker('server', {
-  name: `${app.name}-${app.stage}`,
+  name: serverScriptName,
   entrypoint: 'src/index.ts',
   compatibility: 'node',
   compatibilityFlags: ['enable_request_signal'],
+  ...(serverDomain ? { domains: [serverDomain] } : {}),
   bindings: {
-    CORS_ORIGIN: process.env.CORS_ORIGIN || '',
+    CORS_ORIGIN: corsOrigin,
     R2_PUBLIC_DOMAIN: BUCKET.devDomain || '',
     KV,
     DB,
