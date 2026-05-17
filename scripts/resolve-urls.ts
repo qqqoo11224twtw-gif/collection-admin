@@ -1,29 +1,29 @@
 #!/usr/bin/env node
 // Resolve deployed URLs for a given stage.
 // Output: JSON { web, server } to stdout.
-// Used by CI to compute PR preview URLs without re-running alchemy.
+// Used by CI to compute PR preview / deploy URLs without re-running alchemy.
 //
-// Usage: node scripts/resolve-urls.mjs --stage <stage>
-// Env: WEB_DOMAIN, SERVER_DOMAIN (optional overrides — same semantics as alchemy.run.ts)
+// Usage: node scripts/resolve-urls.ts --stage <stage>
+// Requires Node 23.6+ for unflagged TypeScript stripping.
 
 import {
   computeWorkerDevDomain,
   createCloudflareApi,
 } from 'alchemy/cloudflare';
-
-const PROJECT_NAME = 'starter';
+import { domainsFor, PROJECT_NAME } from '../config.ts';
 
 const stageIdx = process.argv.indexOf('--stage');
 const stage = stageIdx >= 0 ? process.argv[stageIdx + 1] : null;
 if (!stage) {
-  console.error('Usage: resolve-urls.mjs --stage <stage>');
+  console.error('Usage: resolve-urls.ts --stage <stage>');
   process.exit(1);
 }
 
 const api = await createCloudflareApi();
+const { web: webDomain, server: serverDomain } = domainsFor(stage);
 
-async function urlFor(app, domainEnv) {
-  if (process.env[domainEnv]) return `https://${process.env[domainEnv]}`;
+async function urlFor(app: string, custom?: string) {
+  if (custom) return `https://${custom}`;
   const subdomain = await computeWorkerDevDomain(
     api,
     `${PROJECT_NAME}-${app}-${stage}`,
@@ -32,8 +32,8 @@ async function urlFor(app, domainEnv) {
 }
 
 const [web, server] = await Promise.all([
-  urlFor('web', 'WEB_DOMAIN'),
-  urlFor('server', 'SERVER_DOMAIN'),
+  urlFor('web', webDomain),
+  urlFor('server', serverDomain),
 ]);
 
 console.log(JSON.stringify({ web, server }));

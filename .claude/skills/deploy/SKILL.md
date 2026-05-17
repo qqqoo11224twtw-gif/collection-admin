@@ -20,11 +20,11 @@ stage (`dev`, `prod`, `pr-<N>`) gets its own isolated KV, D1, R2, Workers.
 
 - **Stages**: `dev` (auto-deployed from `dev` branch), `prod` (from `main`),
   `pr-<N>` (per PR, auto-created/destroyed by `.github/workflows/preview.yml`).
-- **URLs are auto-resolved**: `apps/{server,web}/alchemy.run.ts` calls
-  `computeWorkerDevDomain()` to derive workers.dev URLs from the stage name.
-  User only sets `WEB_DOMAIN` / `SERVER_DOMAIN` env vars if they want custom
-  domains. Cross-app references (`CORS_ORIGIN`, `NEXT_PUBLIC_SERVER_URL`) are
-  derived automatically — never ask the user to fill them in.
+- **URLs are auto-resolved**: `apps/{server,web}/alchemy.run.ts` reads custom
+  domains from `config.ts` (per-stage), or falls back to workers.dev via
+  `computeWorkerDevDomain()`. Cross-app references (`CORS_ORIGIN`,
+  `NEXT_PUBLIC_SERVER_URL`) are derived automatically — never ask the user to
+  fill them in.
 - **State**: alchemy writes per-stage state to a Cloudflare KV namespace
   encrypted with `ALCHEMY_STATE_TOKEN`. This token MUST be the same across all
   projects under the same CF account.
@@ -78,29 +78,30 @@ If missing, gather + set them:
 - Yes → generate: `openssl rand -hex 32` and set as secret.
 - No → ask user to paste the existing token from another project (must match).
 
-### 4. Configure env files (per stage)
+### 4. Configure domains (config.ts) + secrets (env files)
 
-For the chosen stage, ensure `apps/server/.{stage}.env` and `apps/web/.{stage}.env` exist locally. If missing, create them by asking only what's needed.
+**Custom domains live in `config.ts` at the repo root.** This is non-secret deploy topology, checked into git. Ask the user one block at a time:
 
-**`apps/server/.{stage}.env`** — required keys:
-- (none mandatory if no custom domain)
+1. "Use custom domains for `<stage>`? (y/N)"
+   - If y: ask for web domain (e.g., `app.example.com`) and server domain (e.g., `api.example.com`).
+   - Both zones must already be hosted on Cloudflare DNS.
+   - Edit `config.ts` → fill in `domains.{stage}.web` and `domains.{stage}.server`. Don't touch other stages.
+   - If only one is provided, leave the other commented out — alchemy will fall back to workers.dev for that side.
 
-Optional:
-- `WEB_DOMAIN=app.example.com` — frontend custom domain. Must already be on Cloudflare (zone hosted on CF DNS). If skipped, web URL = `starter-web-{stage}.<account>.workers.dev`.
-- `SERVER_DOMAIN=api.example.com` — backend custom domain. Same constraint.
-- `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY` — only if user wants R2 uploads. Generate at Cloudflare dashboard → R2 → Manage R2 API tokens → Object Read & Write scope.
+2. "Enable R2 file uploads for `<stage>`? (y/N)"
+   - If y: ask for `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` (Cloudflare dashboard → R2 → Manage R2 API tokens → **Object Read & Write** scope).
+   - Write to `apps/server/.{stage}.env` (R2 keys are secrets, NOT in config.ts).
 
-**`apps/web/.{stage}.env`** — same `WEB_DOMAIN` / `SERVER_DOMAIN` if used (web's `alchemy.run.ts` reads `SERVER_DOMAIN` to bake `NEXT_PUBLIC_SERVER_URL` into the bundle at build time).
+3. "Pin a non-default `CORS_ORIGIN` or `NEXT_PUBLIC_SERVER_URL` for `<stage>`? (rare — only for staging/preview overrides)"
+   - If y: write to `apps/server/.{stage}.env` and/or `apps/web/.{stage}.env`.
 
-Ask the user one block at a time:
-1. "Use custom domains for this stage? (y/N)" — if y, ask for WEB_DOMAIN and SERVER_DOMAIN.
-2. "Enable R2 file uploads? (y/N)" — if y, ask for both R2 keys.
-
-After answers, write env files. Then sync to GitHub:
+After env files exist, sync to GitHub Secrets:
 
 ```bash
-pnpm sync:secrets        # uploads .{stage}.env files as ENV_*_{STAGE} secrets
+pnpm sync:secrets        # uploads .{stage}.env files as ENV_{SERVER|WEB}_{STAGE} secrets
 ```
+
+(If neither app has app-specific keys for this stage, the env files can be empty — the secrets just won't exist, and CI's `echo "${{ secrets.ENV_SERVER_DEV }}"` writes an empty file, which is fine.)
 
 ### 5. Verify alchemy can authenticate
 
@@ -137,13 +138,13 @@ Watch stdout for `{ server: '<url>' }` and `{ web: '<url>' }` lines.
 
 Resolve URLs:
 ```bash
-node scripts/resolve-urls.mjs --stage <stage>
+node scripts/resolve-urls.ts --stage <stage>
 ```
 
 Smoke test:
 ```bash
-curl -fsSI "$(node scripts/resolve-urls.mjs --stage <stage> | jq -r .server)/health" | head -1
-curl -fsSI "$(node scripts/resolve-urls.mjs --stage <stage> | jq -r .web)" | head -1
+curl -fsSI "$(node scripts/resolve-urls.ts --stage <stage> | jq -r .server)/health" | head -1
+curl -fsSI "$(node scripts/resolve-urls.ts --stage <stage> | jq -r .web)" | head -1
 ```
 
 Report URLs back to the user in a small table:
@@ -177,9 +178,9 @@ If `Actions` is disabled (`gh api repos/{owner}/{repo} --jq .has_workflows` retu
   pattern. Inspect with `wrangler kv namespace list` / `wrangler d1 list`,
   rename to `${PROJECT_NAME}-{kind}-${stage}`, or `alchemy destroy --stage <stage>`
   to start clean.
-- **CORS error after deploy**: `CORS_ORIGIN` is derived from `WEB_DOMAIN` or
-  workers.dev URL inside `apps/server/alchemy.run.ts`. If web URL changed
-  (e.g., user added a custom domain mid-deploy), redeploy server.
+- **CORS error after deploy**: `CORS_ORIGIN` is derived from `config.ts`
+  domain entry for this stage, or workers.dev URL fallback. If the web URL
+  changed (e.g., user added a custom domain mid-deploy), redeploy server.
 - **`pnpm sync:secrets` fails on missing file**: that env file simply doesn't
   exist for the stage. Either create it or it's expected (e.g., no prod env
   yet) — sync skips missing files with a warning, not a fatal error.

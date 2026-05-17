@@ -11,6 +11,7 @@ import {
 import { Exec } from 'alchemy/os';
 
 import { CloudflareStateStore } from 'alchemy/state';
+import { domainsFor, PROJECT_NAME } from '../../config.ts';
 
 const accountId = await AccountId();
 console.log('Your Cloudflare Account ID is:', accountId);
@@ -24,24 +25,21 @@ const stateStore = process.env.CLOUDFLARE_API_TOKEN
     (scope: any) => new CloudflareStateStore(scope, { forceUpdate: true })
   : undefined;
 
-const PROJECT_NAME = 'starter';
-
 const app = await alchemy(`${PROJECT_NAME}-server`, {
   stateStore,
 });
 
-// Resolve frontend URL for CORS. Priority:
-//   1. CORS_ORIGIN env (used by .local.env to pin localhost:3000)
-//   2. WEB_DOMAIN env -> https://${WEB_DOMAIN}
-//   3. workers.dev fallback via computeWorkerDevDomain
-// Skip the CF API call in cases 1 and 2 so local dev works without CF auth.
+// Resolve cross-app URLs. Custom domains come from config.ts; otherwise
+// fall back to the auto-generated workers.dev URL via the CF API.
+// CORS_ORIGIN env wins (used by .local.env to pin http://localhost:3000) so
+// local dev doesn't need CF auth.
 const serverScriptName = `${PROJECT_NAME}-server-${app.stage}`;
-const serverDomain = process.env.SERVER_DOMAIN;
+const { web: webDomainConfig, server: serverDomain } = domainsFor(app.stage);
 
 let corsOrigin = process.env.CORS_ORIGIN;
 if (!corsOrigin) {
   const webDomain =
-    process.env.WEB_DOMAIN ||
+    webDomainConfig ||
     (await computeWorkerDevDomain(
       api,
       `${PROJECT_NAME}-web-${app.stage}`,

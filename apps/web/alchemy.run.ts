@@ -5,8 +5,7 @@ import {
   TanStackStart,
 } from 'alchemy/cloudflare';
 import { CloudflareStateStore } from 'alchemy/state';
-
-const PROJECT_NAME = 'starter';
+import { domainsFor, PROJECT_NAME } from '../../config.ts';
 
 const api = await createCloudflareApi();
 
@@ -17,20 +16,20 @@ const app = await alchemy(`${PROJECT_NAME}-web`, {
     : undefined,
 });
 
+const { web: webDomain, server: serverDomainConfig } = domainsFor(app.stage);
+
 // Resolve backend URL for NEXT_PUBLIC_SERVER_URL (baked into bundle at build time).
-// Priority: NEXT_PUBLIC_SERVER_URL > SERVER_DOMAIN > workers.dev fallback.
-// Skip the CF API call when an explicit value is provided (e.g., local dev).
+// NEXT_PUBLIC_SERVER_URL env wins so local dev can pin http://localhost:4000
+// without needing CF auth.
 if (!process.env.NEXT_PUBLIC_SERVER_URL) {
   const serverDomain =
-    process.env.SERVER_DOMAIN ||
+    serverDomainConfig ||
     (await computeWorkerDevDomain(
       api,
       `${PROJECT_NAME}-server-${app.stage}`,
     ));
   process.env.NEXT_PUBLIC_SERVER_URL = `https://${serverDomain}`;
 }
-
-const webDomain = process.env.WEB_DOMAIN;
 
 export const web = await TanStackStart('web', {
   name: `${app.name}-${app.stage}`,

@@ -121,7 +121,7 @@ jobs:
           CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
         run: |
           STAGE=$([ "${{ github.ref }}" = "refs/heads/main" ] && echo prod || echo dev)
-          URLS=$(node scripts/resolve-urls.mjs --stage "$STAGE")
+          URLS=$(node scripts/resolve-urls.ts --stage "$STAGE")
           echo "base_url=$(echo "$URLS" | jq -r .web)" >> "$GITHUB_OUTPUT"
 
   e2e:

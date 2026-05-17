@@ -107,8 +107,8 @@ pnpm run deploy:prod
 > **One-shot deploy.** URLs are resolved automatically inside `alchemy.run.ts`
 > (via `computeWorkerDevDomain`), so `NEXT_PUBLIC_SERVER_URL` and `CORS_ORIGIN`
 > no longer need to be filled in by hand — `deploy:dev` / `deploy:prod` work
-> first time. To use custom domains, set `WEB_DOMAIN` and/or `SERVER_DOMAIN` in
-> the stage's env file (the zone must be hosted on Cloudflare DNS).
+> first time. To use custom domains, edit `config.ts` at the repo root (the
+> zone must be hosted on Cloudflare DNS).
 
 #### Automated CI/CD Deployment
 
@@ -256,7 +256,7 @@ pnpm run deploy:dev
 pnpm run deploy:prod
 ```
 
-> **一次部署即可。** `alchemy.run.ts` 通过 `computeWorkerDevDomain` 自动解析 URL，`NEXT_PUBLIC_SERVER_URL` 和 `CORS_ORIGIN` 不需要手填，`deploy:dev` / `deploy:prod` 首次运行就能跑通。要用自定义域名，在 stage 的 env 文件里设 `WEB_DOMAIN` / `SERVER_DOMAIN`（域名必须托管在 Cloudflare DNS）。
+> **一次部署即可。** `alchemy.run.ts` 通过 `computeWorkerDevDomain` 自动解析 URL，`NEXT_PUBLIC_SERVER_URL` 和 `CORS_ORIGIN` 不需要手填，`deploy:dev` / `deploy:prod` 首次运行就能跑通。要用自定义域名，编辑 repo 根目录的 `config.ts`（域名必须托管在 Cloudflare DNS）。
 
 #### 自动化 CI/CD 部署
 

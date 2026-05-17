@@ -32,11 +32,12 @@ Every env variable used by this project. **If you add a variable, add a row here
 
 ### Backend — `apps/server`
 
+**Custom domains live in `config.ts` at the repo root**, NOT in env files
+(they're non-secret deploy topology — see `config.ts → domains.{dev,prod}`).
+
 | Variable | Required? | Goes in | Purpose | How to obtain |
 |---|---|---|---|---|
-| `CORS_ORIGIN` | 🟡 Local only | `.local.env` | Comma-separated allow-list for Hono CORS middleware. **For deploy stages (`.dev.env` / `.prod.env`) this is auto-derived** from `WEB_DOMAIN` or the workers.dev URL inside `apps/server/alchemy.run.ts` — only set it manually for local dev or to override. | Local dev: `http://localhost:3000`. |
-| `WEB_DOMAIN` | ⚠️ Optional | `.dev.env` / `.prod.env` | Custom domain for the frontend Worker. Zone must be hosted on Cloudflare DNS. If unset, falls back to `starter-web-{stage}.<account>.workers.dev`. | Pick a hostname you own + manage in Cloudflare. |
-| `SERVER_DOMAIN` | ⚠️ Optional | `.dev.env` / `.prod.env` | Custom domain for the backend Worker. Same rules as `WEB_DOMAIN`. | Pick a hostname you own + manage in Cloudflare. |
+| `CORS_ORIGIN` | 🟡 Local only | `.local.env` | Comma-separated allow-list for Hono CORS middleware. **For deploy stages this is auto-derived** from `config.ts` domains or the workers.dev URL inside `apps/server/alchemy.run.ts` — only set it manually to override. | Local dev: `http://localhost:3000`. |
 | `R2_ACCESS_KEY_ID` | ⚠️ Optional | `.local.env` / `.dev.env` / `.prod.env` | Enables R2 storage routes (presigned uploads, listing, delete). Without it, R2 bindings are skipped and storage routes return errors. | Cloudflare dashboard → R2 → **Manage R2 API tokens** → **Create API token** with **Object Read & Write** scope on your buckets. Copy `Access Key ID`. |
 | `R2_SECRET_ACCESS_KEY` | ⚠️ Optional | `.local.env` / `.dev.env` / `.prod.env` | Pair of `R2_ACCESS_KEY_ID`. Required together. | Same dialog as above — copy `Secret Access Key` (shown only once at creation). |
 
@@ -50,9 +51,7 @@ R2 also relies on these **derived bindings** that the server does NOT need in en
 
 | Variable | Required? | Goes in | Purpose | How to obtain |
 |---|---|---|---|---|
-| `NEXT_PUBLIC_SERVER_URL` | 🟡 Local only | `.local.env` | Backend ORPC URL. **Inlined into the client bundle at build time** by `vite-plugin-environment` — the browser calls `${URL}/rpc`. **For deploy stages this is auto-derived** from `SERVER_DOMAIN` or the workers.dev URL inside `apps/web/alchemy.run.ts`. | Local: `http://localhost:4000`. |
-| `WEB_DOMAIN` | ⚠️ Optional | `.dev.env` / `.prod.env` | Same as the server's `WEB_DOMAIN` — the web app reads it to know whether to bind a custom domain. Use the same value across both env files for a given stage. | See server table. |
-| `SERVER_DOMAIN` | ⚠️ Optional | `.dev.env` / `.prod.env` | Determines `NEXT_PUBLIC_SERVER_URL` at build time. | See server table. |
+| `NEXT_PUBLIC_SERVER_URL` | 🟡 Local only | `.local.env` | Backend ORPC URL. **Inlined into the client bundle at build time** by `vite-plugin-environment` — the browser calls `${URL}/rpc`. **For deploy stages this is auto-derived** from `config.ts` domains or the workers.dev URL inside `apps/web/alchemy.run.ts`. | Local: `http://localhost:4000`. |
 
 > ⚠️ **`NEXT_PUBLIC_*` is visible in the browser bundle.** Never put secrets behind this prefix.
 

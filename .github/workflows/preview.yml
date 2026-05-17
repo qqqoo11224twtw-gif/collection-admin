@@ -52,7 +52,7 @@ jobs:
       - name: Resolve preview URLs
         id: urls
         run: |
-          URLS=$(node scripts/resolve-urls.mjs --stage "$PR_STAGE")
+          URLS=$(node scripts/resolve-urls.ts --stage "$PR_STAGE")
           echo "web=$(echo "$URLS" | jq -r .web)" >> "$GITHUB_OUTPUT"
           echo "server=$(echo "$URLS" | jq -r .server)" >> "$GITHUB_OUTPUT"
 
