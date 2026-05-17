@@ -18,7 +18,7 @@ describe('Server smoke test', () => {
   it('GET / returns hello message', async () => {
     const res = await app.fetch(new Request('http://localhost/'));
     expect(res.status).toBe(200);
-    expect(await res.text()).toBe('Hello nn stack server!');
+    expect(await res.text()).toBe('Hello saasflare starter server!');
   });
 
   it('POST /rpc/planet/list returns 8 planets', async () => {
