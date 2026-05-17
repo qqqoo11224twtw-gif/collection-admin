@@ -20,12 +20,12 @@ clone; thereafter, jump to the section you need.
 - **Env file layout** — control-plane is flat (one CF account auths every
   stage); app secrets are per-stage (R2 keys differ between dev/prod):
 
-  | File | Used by | Goes to GitHub as |
-  |---|---|---|
-  | `.env` (root) | Path B local + every CI job (CF auth + state token) | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_EMAIL`, `ALCHEMY_STATE_TOKEN` |
-  | `apps/{server,web}/.local.env` | `pnpm dev` only | — (local-only) |
-  | `apps/{server,web}/.dev.env` | `dev` stage + every `pr-<N>` preview | `ENV_{SERVER,WEB}_DEV` |
-  | `apps/{server,web}/.prod.env` | `prod` stage | `ENV_{SERVER,WEB}_PROD` |
+  | File | Scope | Used by | Goes to GitHub as |
+  |---|---|---|---|
+  | `~/.saasflare/auth.env` | machine-wide, all saasflare projects | Path B local + every CI job (CF auth + state token) | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_EMAIL`, `ALCHEMY_STATE_TOKEN` |
+  | `apps/{server,web}/.local.env` | this repo | `pnpm dev` only | — (local-only) |
+  | `apps/{server,web}/.dev.env` | this repo | `dev` stage + every `pr-<N>` preview | `ENV_{SERVER,WEB}_DEV` |
+  | `apps/{server,web}/.prod.env` | this repo | `prod` stage | `ENV_{SERVER,WEB}_PROD` |
 
   PR previews reuse dev's app secrets so you don't have to mint new
   tokens per PR. Each PR still gets its own isolated KV / D1 / R2
@@ -89,34 +89,45 @@ test -d node_modules || pnpm install
 
 ### A2. Configure GitHub Secrets
 
-Put the three control-plane secrets in a gitignored `.env` at the repo
-root, then upload all of them in one shot. The same file is sourced by
-Path B for local deploys — single source of truth, no duplication.
+The three control-plane secrets live in a **machine-wide dotfile at
+`~/.saasflare/auth.env`** — outside any repo, so every saasflare project
+on this CF account shares the same file. This guarantees
+`ALCHEMY_STATE_TOKEN` is identical across projects (it must be — it's
+the encryption key for shared alchemy state) and avoids per-repo
+duplication.
+
+**One-time per machine** (skip if you already did this for another
+saasflare project):
 
 ```bash
-cat > .env <<EOF
+mkdir -p ~/.saasflare
+cat > ~/.saasflare/auth.env <<EOF
 CLOUDFLARE_API_TOKEN=$(pnpm dlx alchemy util create-cloudflare-token)
 CLOUDFLARE_EMAIL=your-email@example.com
 ALCHEMY_STATE_TOKEN=$(openssl rand -hex 32)
 EOF
+chmod 600 ~/.saasflare/auth.env
+```
 
-gh secret set -f .env    # pushes each KEY=VALUE line as a separate secret
+**Per-repo** (run from inside this repo):
+
+```bash
+gh secret set -f ~/.saasflare/auth.env    # uploads all three to this repo's GH Secrets
 ```
 
 Notes:
-- `ALCHEMY_STATE_TOKEN` MUST be the same across all saasflare projects
-  on this CF account. If you already have other projects, reuse the
-  existing token instead of generating a new one.
-- `.env` is gitignored (see `.gitignore`). It's your backup — keep it
-  safe (password manager, encrypted disk, your call).
-- GitHub Secrets are write-only after setting, so losing `.env` without
-  a backup means regenerating `CLOUDFLARE_API_TOKEN` (easy) and rotating
-  `ALCHEMY_STATE_TOKEN` across all projects + redeploy to re-adopt
-  resources (painful — don't lose it).
+- Reusing an existing `ALCHEMY_STATE_TOKEN` from another project? Skip the
+  `mkdir`/`cat` block — the file already exists. Just run the `gh secret set`.
+- `~/.saasflare/auth.env` is the backup. Keep it safe (password manager
+  copy, encrypted disk, etc.). GitHub Secrets can't be read back via API,
+  so losing the file means regenerating `CLOUDFLARE_API_TOKEN` (easy) and
+  rotating `ALCHEMY_STATE_TOKEN` across **all** projects + redeploy to
+  re-adopt resources (painful — don't lose it).
 
 Verify:
 ```bash
-gh secret list   # should show all three
+gh secret list             # should show all three
+test -f ~/.saasflare/auth.env && echo "auth file ok"
 ```
 
 ### A3. (Optional) Custom domains in `config.ts`
@@ -240,8 +251,9 @@ Same as A1.
 ### B2. Authenticate alchemy locally
 
 ```bash
-set -a; source .env; set +a   # exports CLOUDFLARE_API_TOKEN, CLOUDFLARE_EMAIL,
-                              # ALCHEMY_STATE_TOKEN from A2 into your shell
+set -a; source ~/.saasflare/auth.env; set +a
+# exports CLOUDFLARE_API_TOKEN, CLOUDFLARE_EMAIL, ALCHEMY_STATE_TOKEN
+# from the machine-wide auth file (A2) into your shell
 ```
 
 This matches CI's state store (remote KV) — see
@@ -298,17 +310,18 @@ resource, CI will silently re-adopt them — but you end up with state in
 two places, and any future `alchemy destroy --stage dev` may miss
 resources tracked in the other store.
 
-**Recommendation**: from day one, source `.env` (from A2) before any
-`pnpm run deploy:*`, so local and CI share the same remote state store:
+**Recommendation**: from day one, source `~/.saasflare/auth.env` (from
+A2) before any `pnpm run deploy:*`, so local and CI share the same
+remote state store:
 
 ```bash
-set -a; source .env; set +a
+set -a; source ~/.saasflare/auth.env; set +a
 pnpm run deploy:dev
 ```
 
-Same file, two consumers: `gh secret set -f .env` for CI, `source .env`
-for local. (GitHub Secrets can't be read back via API — that's why we
-keep the original `.env` locally.)
+Same file, two consumers: `gh secret set -f ~/.saasflare/auth.env` for
+CI, `source` for local. (GitHub Secrets can't be read back via API —
+that's why the auth file stays on your machine.)
 
 Or, accept the divergence and **only deploy via CI** after the first
 local experiment.
