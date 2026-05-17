@@ -10,7 +10,7 @@ which needs three human-provided secrets:
 | Step | Auto-runnable? | Why / why not |
 |---|---|---|
 | A1 preflight | ✅ | scripted checks |
-| A2 fill `.alchemy.env` | ❌ | needs human to log in to CF (browser OAuth) and decide whether to reuse an existing `ALCHEMY_STATE_TOKEN` |
+| A2 fill `.alchemy.env` | ❌ | CF token step is interactive (browser OAuth) — user must run `pnpm dlx alchemy util create-cloudflare-token` themselves and paste the token back. Agent cannot drive it. |
 | A3 per-app `.env` | ❌ if domains/R2 desired | needs human choices |
 | A4 sync secrets | ✅ | `pnpm sync:secrets` |
 | A5 push | ✅ | `git push` |
@@ -18,8 +18,10 @@ which needs three human-provided secrets:
 | A7 PR preview | ✅ | happens automatically on PR |
 | A8 promote prod | ✅ except typed confirmation | requires literal `deploy prod` for safety |
 
-So a `/deploy` agent should pause at A2/A3 to collect input, then drive
-the rest end-to-end.
+So an agent should pause at A2 / A3 / A8 to collect input, then drive
+the rest end-to-end. Pause points are marked inline with
+**🛑 AGENT PAUSE** blocks — ask the questions in those blocks using the
+user's language and plain words (no jargon), then continue.
 
 ## Mental model
 
@@ -91,6 +93,31 @@ cp .alchemy.env.example .alchemy.env
 #                          saasflare project on this CF account — MUST match)
 ```
 
+> **🛑 AGENT PAUSE — the CF token step is interactive (browser OAuth), so
+> the agent cannot run it. Tell the user to do it themselves, then collect
+> the three values:**
+>
+> 1. **CF token.** Say: *"The Cloudflare token step needs a browser login,
+>    so I can't run it for you. Please run this in your terminal:*
+>
+>    ```bash
+>    pnpm dlx alchemy util create-cloudflare-token
+>    ```
+>
+>    *It opens a browser, you log in, and it prints a token. Paste the
+>    token back here. (Or create one manually at
+>    https://dash.cloudflare.com → My Profile → API Tokens → Create Token
+>    → **Edit Cloudflare Workers** template.)"*
+>    Wait for the token before continuing.
+> 2. **CF email.** Ask: *"What email is your Cloudflare account under?"*
+> 3. **State token.** Ask: *"Is this your first saasflare project on this
+>    Cloudflare account? If you have other saasflare projects on the same
+>    account, paste their `ALCHEMY_STATE_TOKEN` here — it must match. If
+>    this is the first one, just say 'first' and I'll generate one for
+>    you with `openssl rand -hex 32`."*
+>
+> Then write all three into `.alchemy.env` and move on.
+
 #### Getting the CF token
 
 Two ways. Pick whichever is more convenient.
@@ -102,12 +129,18 @@ pnpm dlx alchemy util create-cloudflare-token
 ```
 
 If you have **multiple CF accounts** logged into alchemy, use the
-`--profile` flag to pick one:
+`--profile` flag to pick one. A profile needs two steps: `configure`
+creates it and picks the auth method, `login` then runs the OAuth flow.
+Skipping `configure` gives `cloudflare is not configured on profile
+"<name>"`.
 
 ```bash
 # One-time per account
-pnpm dlx alchemy login -p saasflare      # opens browser, lets you pick the account
-pnpm dlx alchemy login -p personal       # different account, different profile
+pnpm dlx alchemy configure -p saasflare  # creates profile, pick "Cloudflare" → "OAuth"
+pnpm dlx alchemy login -p saasflare      # opens browser, log into the right CF account
+
+pnpm dlx alchemy configure -p personal   # repeat for any other account
+pnpm dlx alchemy login -p personal
 
 # Then mint the token from the chosen profile
 pnpm dlx alchemy util create-cloudflare-token -p saasflare
@@ -136,6 +169,20 @@ log in via alchemy at all (e.g., a CI-only setup).
 Only if you need custom domains or R2. Skip otherwise — the apps deploy
 fine with just `.alchemy.env`.
 
+> **🛑 AGENT PAUSE — ask two yes/no questions:**
+>
+> 1. *"Do you want to use your own domain (like `app.yourcompany.com`)?
+>    If yes, the domain must already be managed by Cloudflare DNS, and
+>    I'll need the exact web hostname and the API hostname (e.g.
+>    `dev.yourcompany.com` and `api-dev.yourcompany.com`). If no, we'll
+>    use the free `*.workers.dev` URLs and skip this."*
+> 2. *"Do you need file storage (Cloudflare R2) for the server? If yes,
+>    paste your R2 access key ID and secret access key. If no, skip."*
+>
+> If both answers are no → skip A3 entirely.
+> Otherwise only write the keys the user actually provided into the
+> matching `.dev.env` / `.prod.env` files.
+
 ```bash
 # Custom domains (zone must be on Cloudflare DNS)
 cat >> apps/server/.dev.env <<EOF
@@ -158,6 +205,32 @@ EOF
 
 (Domains need to live in both apps' files because each app's
 `alchemy.run.ts` resolves the other side's URL independently.)
+
+#### Getting R2 keys
+
+R2 needs an **Account API token** (S3-compatible key pair), *not* a User
+API token. The two look similar in the dash but produce different
+artifacts:
+
+| | User API token | Account API token |
+|---|---|---|
+| Produces | Single bearer token | `Access Key ID` + `Secret Access Key` pair |
+| Templates | "Edit Cloudflare Workers" etc. | R2 scopes only |
+| Used for | Control-plane (the `CLOUDFLARE_API_TOKEN` we already minted) | S3 SDK access to R2 buckets |
+
+Steps:
+
+1. https://dash.cloudflare.com → **R2 Object Storage** (accept terms /
+   add billing if first use; 10GB/month is free)
+2. **Manage R2 API Tokens** → **Create Account API token**
+3. Name: e.g. `saasflare-dev-r2`
+4. Permissions: **Object Read & Write**
+5. Optionally scope to specific bucket(s); leave TTL blank for no expiry
+6. **Create Account API Token**
+7. Copy `Access Key ID` and `Secret Access Key` — the Secret is shown
+   **only once**, so capture it before closing the page
+
+Paste the two values into `apps/server/.{stage}.env` as shown above.
 
 ### A4. Sync to GitHub Secrets
 
@@ -200,6 +273,14 @@ Already enabled by `.github/workflows/preview.yml`. Open a PR against
 Each PR gets isolated stage `pr-<N>` with its own KV/D1/R2/Workers.
 
 ### A8. Promoting to prod
+
+> **🛑 AGENT PAUSE — require a typed confirmation:**
+>
+> Ask: *"Ready to promote to production. This deploys to the **real**
+> prod stage on the `main` branch and will be visible to users. To
+> confirm, type exactly `deploy prod`. Anything else cancels."*
+>
+> Only run the commands below if the user typed literally `deploy prod`.
 
 ```bash
 git checkout main
