@@ -52,7 +52,7 @@ user's language and plain words (no jargon), then continue.
 | `apps/server/.local.env` | server, local stage | R2 keys for local testing | — (local-only) |
 | `apps/web/.local.env`    | web, local stage    | future `NEXT_PUBLIC_*` for local | — (local-only) |
 | `apps/server/.dev.env`   | server, dev + every `pr-<N>` | `WEB_DOMAIN`, `SERVER_DOMAIN`, R2 keys | `ENV_SERVER_DEV` |
-| `apps/web/.dev.env`      | web, dev + every `pr-<N>`    | `WEB_DOMAIN`, `SERVER_DOMAIN`, `NEXT_PUBLIC_*` | `ENV_WEB_DEV` |
+| `apps/web/.dev.env`      | web, dev + every `pr-<N>`    | `WEB_DOMAIN`, `WEB_DOMAIN_ALIASES`, `SERVER_DOMAIN`, `NEXT_PUBLIC_*` | `ENV_WEB_DEV` |
 | `apps/server/.prod.env`  | server, prod | same as dev | `ENV_SERVER_PROD` |
 | `apps/web/.prod.env`     | web, prod    | same as dev | `ENV_WEB_PROD` |
 
@@ -209,6 +209,42 @@ EOF
 
 (Domains need to live in both apps' files because each app's
 `alchemy.run.ts` resolves the other side's URL independently.)
+
+#### Apex + www (or other alias hostnames)
+
+Common case: serve from `saasflare.dev` (canonical) and 301 redirect
+`www.saasflare.dev` to it. Set both:
+
+```bash
+cat >> apps/web/.prod.env <<EOF
+WEB_DOMAIN=saasflare.dev                 # canonical (must equal a CF zone name)
+WEB_DOMAIN_ALIASES=www.saasflare.dev     # comma-separated, all 301 → WEB_DOMAIN
+EOF
+```
+
+`apps/web/alchemy.run.ts` reads `WEB_DOMAIN_ALIASES` and for each alias
+provisions, via alchemy resources:
+
+1. A proxied A record on the alias name (IP is a sentinel — traffic is
+   intercepted at the edge before reaching it) — `DnsRecords` resource
+2. A Cloudflare Single Redirect rule (`http_request_dynamic_redirect`
+   phase, wildcard `https://<alias>/*` → `https://<canonical>/${1}`,
+   `301`, `preserveQueryString: true`) — `RedirectRule` resource
+
+Both are recreated/cleaned up via alchemy's lifecycle on stage destroy.
+No dashboard work.
+
+Server-side does **not** need aliases — API hosts don't have SEO /
+cookie-scope concerns, just bind the one canonical `SERVER_DOMAIN`.
+
+PR previews (`pr-<N>` stages) ignore `WEB_DOMAIN_ALIASES` entirely (same
+as `WEB_DOMAIN` / `SERVER_DOMAIN`).
+
+> **Zone resolution caveat**: `WEB_DOMAIN` must equal its Cloudflare
+> zone name (typically the apex). If `WEB_DOMAIN=app.example.com` the
+> zone is `example.com`, and alchemy's `getZoneByDomain` lookup for
+> aliases will fail. Either set `WEB_DOMAIN` to the apex or extend the
+> wiring to take an explicit zone hint.
 
 #### Getting R2 keys
 
