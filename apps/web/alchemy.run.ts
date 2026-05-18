@@ -3,7 +3,6 @@ import {
   computeWorkerDevDomain,
   createCloudflareApi,
   DnsRecords,
-  getZoneByDomain,
   RedirectRule,
   TanStackStart,
 } from 'alchemy/cloudflare';
@@ -52,17 +51,8 @@ const aliases = (process.env.WEB_DOMAIN_ALIASES ?? '')
   .filter(Boolean);
 
 if (!isPRStage && webDomain && aliases.length > 0) {
-  // DnsRecords requires a zone ID, not a domain string (despite its
-  // d.ts comment). Resolve once and share with RedirectRule.
-  const zone = await getZoneByDomain(api, webDomain);
-  if (!zone) {
-    throw new Error(
-      `Cloudflare zone for "${webDomain}" not found. WEB_DOMAIN must equal a zone (apex) on this account.`,
-    );
-  }
-
   await DnsRecords('web-aliases-dns', {
-    zoneId: zone.id,
+    zoneId: webDomain,
     records: aliases.map((alias) => ({
       name: alias,
       type: 'A' as const,
@@ -73,7 +63,7 @@ if (!isPRStage && webDomain && aliases.length > 0) {
 
   for (const alias of aliases) {
     await RedirectRule(`redirect-${alias.replace(/\./g, '-')}`, {
-      zone: zone.id,
+      zone: webDomain,
       requestUrl: `https://${alias}/*`,
       targetUrl: `https://${webDomain}/\${1}`,
       statusCode: 301,
