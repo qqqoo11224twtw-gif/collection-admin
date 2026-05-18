@@ -16,7 +16,8 @@
     "ci": "biome ci",
     "lint": "biome lint .",
     "format": "biome check --write .",
-    "sync:secrets": "bash scripts/sync-secrets.sh"
+    "sync:secrets": "bash scripts/sync-secrets.sh",
+    "db:query": "node --env-file=.alchemy.env scripts/db-query.ts"
   },
   "description": "",
   "keywords": [],

@@ -42,6 +42,7 @@ Read these docs based on the task at hand:
 |------|------|
 | Adding/modifying API endpoints | [docs/api-development.md](docs/api-development.md) |
 | Modifying database schema | [docs/database-d1.md](docs/database-d1.md) |
+| Inspecting D1 data (ad-hoc SQL: "how many users", "show me row 5", etc.) | [docs/db-query.md](docs/db-query.md) |
 | Using UI components or styling | [docs/ui-guidelines.md](docs/ui-guidelines.md) |
 | Code style, TypeScript rules | [docs/coding-standards.md](docs/coding-standards.md) |
 | Env vars, deployment config | [docs/environment.md](docs/environment.md) |
