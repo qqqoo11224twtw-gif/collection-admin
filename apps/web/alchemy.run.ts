@@ -2,8 +2,6 @@ import alchemy from 'alchemy';
 import {
   computeWorkerDevDomain,
   createCloudflareApi,
-  DnsRecords,
-  RedirectRule,
   TanStackStart,
 } from 'alchemy/cloudflare';
 import { CloudflareStateStore } from 'alchemy/state';
@@ -40,37 +38,6 @@ export const web = await TanStackStart('web', {
   adopt: true,
   ...(webDomain ? { domains: [webDomain] } : {}),
 });
-
-// Alias hostnames (e.g. www.) — proxied DNS + edge-level 301 to the
-// canonical WEB_DOMAIN. Skipped for local + pr-* stages and when no
-// canonical domain is configured. WEB_DOMAIN_ALIASES is comma-separated.
-// Requires WEB_DOMAIN to equal its Cloudflare zone name (apex).
-const aliases = (process.env.WEB_DOMAIN_ALIASES ?? '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-
-if (!isPRStage && webDomain && aliases.length > 0) {
-  await DnsRecords('web-aliases-dns', {
-    zoneId: webDomain,
-    records: aliases.map((alias) => ({
-      name: alias,
-      type: 'A' as const,
-      content: '192.0.2.1',
-      proxied: true,
-    })),
-  });
-
-  for (const alias of aliases) {
-    await RedirectRule(`redirect-${alias.replace(/\./g, '-')}`, {
-      zone: webDomain,
-      requestUrl: `https://${alias}/*`,
-      targetUrl: `https://${webDomain}/\${1}`,
-      statusCode: 301,
-      preserveQueryString: true,
-    });
-  }
-}
 
 console.log({ web: web.url });
 
