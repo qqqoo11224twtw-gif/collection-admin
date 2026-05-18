@@ -210,6 +210,77 @@ EOF
 (Domains need to live in both apps' files because each app's
 `alchemy.run.ts` resolves the other side's URL independently.)
 
+#### Adding `www` → apex (or any alias-to-canonical 301)
+
+`alchemy.run.ts` only binds the canonical domain (`WEB_DOMAIN`). To make
+`www.<your-apex>` also reach your site and 301 to the canonical, do this
+**once in the Cloudflare dashboard** — not in code.
+
+Why not IaC? alchemy has `DnsRecords` + `RedirectRule` resources that
+could automate this, but they need two scopes that the
+`pnpm dlx alchemy util create-cloudflare-token` helper does not request
+by default:
+
+- `Zone > DNS > Edit`
+- `Zone > Single Redirect > Edit` (a.k.a. `Dynamic URL Redirects: Edit`)
+
+Adding those scopes to the token is fine, but for a one-time setup the
+dashboard route is faster and zero-config. The redirect rule template
+described below is officially documented by Cloudflare — see
+[Redirect www to domain apex](https://developers.cloudflare.com/pages/how-to/www-redirect/).
+
+Prerequisite: prod is already deployed and `https://<your-apex>` returns
+HTTP 200 (i.e. `WEB_DOMAIN=<your-apex>` is set and you've completed A5
+or A8 once).
+
+**Step 1 — Add a proxied DNS record for `www`**
+
+1. Dashboard → your zone (e.g. `<your-apex>`) → **DNS → Records**
+2. **Add record**
+
+   | Field | Value |
+   |---|---|
+   | Type | `A` |
+   | Name | `www` |
+   | IPv4 address | `192.0.2.1` |
+   | Proxy status | **Proxied** (orange cloud, required) |
+
+   The IP is a documentation sentinel ([RFC 5737](https://www.rfc-editor.org/rfc/rfc5737)).
+   Traffic never reaches it because step 2 intercepts the request at
+   Cloudflare's edge before any origin lookup.
+
+3. **Save**
+
+**Step 2 — Create the Single Redirect rule from the official template**
+
+1. Dashboard → your zone → **Rules → Overview** (URL pattern:
+   `https://dash.cloudflare.com/<account_id>/<your-apex>/rules/overview`)
+2. Find the **Redirect from WWW to root** template
+3. **Create from template** — Cloudflare pre-fills:
+   - **When incoming requests match** → Wildcard pattern → `https://www.*`
+   - **Target URL** → `https://${1}`
+   - **Status code** → `301`
+   - **Preserve query string** → Enabled
+4. **Deploy**
+
+(The template's wildcard `https://www.*` matches `www.<anything>` within
+the zone. Scoped to a single zone, this only ever fires for
+`www.<your-apex>`. If you need a stricter match, switch to
+`https://www.<your-apex>/*` → `https://<your-apex>/${1}`.)
+
+**Verify**
+
+```bash
+curl -sI https://www.<your-apex>/some/path?q=1 | head -3
+# Expect:
+#   HTTP/2 301
+#   location: https://<your-apex>/some/path?q=1
+```
+
+Single Redirects execute in the `http_request_dynamic_redirect` phase,
+which runs **before** Workers — the redirected request never reaches
+your Worker, so it doesn't count against Worker invocations.
+
 #### Getting R2 keys
 
 R2 needs an **Account API token** (S3-compatible key pair), *not* a User
@@ -365,6 +436,12 @@ Same as A6.
   `apps/{server,web}/alchemy.run.ts` checks `app.stage.startsWith('pr-')`
   and skips `WEB_DOMAIN` / `SERVER_DOMAIN` env vars for those stages, so
   each PR gets a clean isolated `*.workers.dev` URL.
+
+- **`www.<your-apex>` returns HTTP 530** (or `ERR_SSL_PROTOCOL_ERROR`,
+  or DNS not found): only `WEB_DOMAIN` is bound to the Worker. `www`
+  isn't part of the IaC config — add it in the dashboard per
+  [Adding `www` → apex](#adding-www--apex-or-any-alias-to-canonical-301)
+  above.
 
 - **`ALCHEMY_STATE_TOKEN` rotation**: if lost or compromised, update
   `.alchemy.env` in **every** saasflare project on this CF account,
