@@ -62,8 +62,16 @@ SQL
 
 ### Write mode (avoid)
 
-The script refuses any SQL whose first keyword isn't `SELECT`, `WITH`,
-`PRAGMA`, or `EXPLAIN`. To override:
+The script refuses SQL that contains any of these write keywords
+(anywhere, not just at the start — catches `WITH x AS (...) DELETE ...`
+style payloads): `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`,
+`CREATE`, `REPLACE`, `TRUNCATE`, `ATTACH`, `DETACH`, `REINDEX`,
+`VACUUM`. String literals (`'...'`) and SQL comments are stripped
+before scanning, so `SELECT 'I want to DELETE this' AS msg` passes
+fine. Multi-statement SQL (multiple `;`-separated statements) is
+refused regardless of mode — submit one statement at a time.
+
+To run a write:
 
 ```bash
 pnpm db:query -- --write <<'SQL'
@@ -72,7 +80,22 @@ SQL
 ```
 
 **Confirm with a human first.** For anything beyond a one-off cleanup,
-write a proper script — `--write` exists for emergencies, not workflows.
+write a proper script — `--write` exists for emergencies, not
+workflows.
+
+#### Prod writes need a literal confirmation
+
+`--write --stage prod` additionally refuses unless you pass
+`--confirm "write prod"` (mirrors the `deploy prod` literal in
+[deploy.md](deploy.md) A8):
+
+```bash
+pnpm db:query -- --stage prod --write --confirm "write prod" <<'SQL'
+UPDATE users SET email = lower(email) WHERE id = 42
+SQL
+```
+
+The confirmation is per-invocation — there is no session-wide opt-in.
 
 ## Schema
 

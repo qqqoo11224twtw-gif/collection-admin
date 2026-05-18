@@ -33,6 +33,7 @@ const { values } = parseArgs({
     db: { type: 'string' },
     format: { type: 'string', default: 'json' },
     write: { type: 'boolean', default: false },
+    confirm: { type: 'string' },
   },
   strict: true,
 });
@@ -40,6 +41,7 @@ const { values } = parseArgs({
 const stage = values.stage as string;
 const format = values.format as string;
 const allowWrite = values.write as boolean;
+const confirm = values.confirm as string | undefined;
 const dbName =
   (values.db as string | undefined) ?? `${PROJECT_NAME}-server-db-${stage}`;
 
@@ -49,17 +51,43 @@ if (!sql) {
   process.exit(1);
 }
 
-// Read-only guard. Strip leading `-- ...` comment lines + whitespace, then
-// inspect the first keyword.
-const READ_ONLY = new Set(['SELECT', 'WITH', 'PRAGMA', 'EXPLAIN']);
-const firstKeyword = sql
-  .replace(/^\s*--[^\n]*\n/gm, '')
-  .trim()
-  .split(/\s+/)[0]
-  ?.toUpperCase();
-if (!firstKeyword || (!READ_ONLY.has(firstKeyword) && !allowWrite)) {
+// Refuse multi-statement SQL (the D1 /query endpoint will accept it and
+// our first-keyword check could be bypassed by `SELECT 1; DELETE ...`).
+// A single trailing `;` is fine.
+const normalizedSql = sql.replace(/;\s*$/, '').trim();
+if (normalizedSql.includes(';')) {
   console.error(
-    `Refusing non-read-only SQL (first keyword: ${firstKeyword}). Pass --write to override.`,
+    'Refusing multi-statement SQL. Submit one statement per invocation.',
+  );
+  process.exit(1);
+}
+
+// Read-only guard. Strip comments + string/identifier literals so e.g.
+// `SELECT 'I want to DELETE this' AS msg` is not flagged, then scan the
+// remainder for any write keyword. Catches `WITH x AS (...) DELETE ...`
+// style payloads that the previous first-keyword-only check would let
+// through.
+const sqlForKeywordScan = normalizedSql
+  .replace(/--[^\n]*/g, '') // -- line comments
+  .replace(/\/\*[\s\S]*?\*\//g, '') // /* block comments */
+  .replace(/'(?:[^']|'')*'/g, "''") // '...' string literals (SQL doubles '' to escape)
+  .replace(/"(?:[^"]|"")*"/g, '""'); // "..." quoted identifiers
+const WRITE_KEYWORDS =
+  /\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE|TRUNCATE|ATTACH|DETACH|REINDEX|VACUUM)\b/i;
+const writeMatch = sqlForKeywordScan.match(WRITE_KEYWORDS);
+if (writeMatch && !allowWrite) {
+  console.error(
+    `Refusing SQL that contains a write keyword (${writeMatch[1].toUpperCase()}). Pass --write to override.`,
+  );
+  process.exit(1);
+}
+
+// Extra guard: --write against prod requires a typed confirmation
+// (mirrors the `deploy prod` literal-string pattern in docs/deploy.md A8).
+if (allowWrite && stage === 'prod' && confirm !== 'write prod') {
+  console.error(
+    'Refusing --write --stage prod without --confirm "write prod". ' +
+      'This is a destructive operation against production — confirm by passing --confirm "write prod".',
   );
   process.exit(1);
 }
