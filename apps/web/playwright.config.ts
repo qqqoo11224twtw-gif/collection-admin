@@ -10,9 +10,13 @@ export default defineConfig({
   timeout: 30000,
   retries: 1,
   expect: { timeout: 10000 },
+  // HTML report → apps/web/playwright-report/ (the dir referenced in docs/testing.md).
+  // Not generated unless the html reporter is enabled; open: 'never' keeps CI non-interactive.
+  reporter: [['html', { open: 'never' }], ['list']],
   use: {
     baseURL,
     headless: true,
+    screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     trace: 'retain-on-failure',
   },
