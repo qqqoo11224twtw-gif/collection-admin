@@ -68,8 +68,27 @@ pnpm test:e2e     # must start within seconds, not hang for 60
 
 ## When cloning starter into a new product
 
-Beyond the ports, give the new product its own identity anchor, or
-`global-setup.ts` will abort every E2E run:
+### Rename the project — 4 spots
+
+`starter` is baked into names that alchemy derives Cloudflare resource names
+from (`<project>-server-db-<stage>`, `<project>-web-<stage>`, …):
+
+- `apps/server/alchemy.run.ts` — `const PROJECT_NAME`
+- `apps/web/alchemy.run.ts` — `const PROJECT_NAME`
+- `scripts/db-query.ts` — `const PROJECT_NAME`
+- `package.json` (repo root) — `name`
+
+Miss the `alchemy.run.ts` pair and you deploy over another product's Workers.
+Miss `db-query.ts` and the script silently targets `starter-server-db-<stage>`,
+failing with "database not found" on every run — the failure is loud, but it
+sits in a script nobody runs until they need it. As of 2026-07-10 **every**
+downstream repo except analytics still has `'starter'` in `db-query.ts`, and
+website / tasks / affiliate / onePay still have it in the root `package.json`
+`name`. Don't trust the root `package.json` name as a source of truth.
+
+### Claim an identity anchor
+
+Give the new product its own, or `global-setup.ts` will abort every E2E run:
 
 - `apps/web/src/routes/__root.tsx` — `<html data-app="saasflare-starter">`
 - `apps/web/e2e/global-setup.ts` — `EXPECTED_APP_ID`
