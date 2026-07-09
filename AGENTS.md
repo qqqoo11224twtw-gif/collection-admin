@@ -50,6 +50,7 @@ Read these docs based on the task at hand:
 | Writing or running tests | [docs/testing.md](docs/testing.md) |
 | Debugging UI issues | [docs/debugging.md](docs/debugging.md) |
 | Deploying, first-time setup, or CI | [docs/deploy.md](docs/deploy.md) |
+| Changing local dev ports, or cloning starter into a new product | [docs/ports.md](docs/ports.md) |
 
 **Always read the frontend rules file before writing frontend code.**
 
