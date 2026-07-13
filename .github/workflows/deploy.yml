@@ -26,6 +26,8 @@ jobs:
   test:
     name: Lint + Unit + Build
     runs-on: ubuntu-latest
+    # Hard cap: a hung job must never burn hours of Actions quota.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -60,6 +62,8 @@ jobs:
     needs: test
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    # Hard cap: a hung job must never burn hours of Actions quota.
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:

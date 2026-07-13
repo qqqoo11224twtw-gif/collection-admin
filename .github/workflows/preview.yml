@@ -18,6 +18,8 @@ jobs:
   deploy-preview:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
+    # Hard cap: a hung job must never burn hours of Actions quota.
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: write
@@ -99,6 +101,8 @@ jobs:
   destroy-preview:
     if: github.event.action == 'closed'
     runs-on: ubuntu-latest
+    # Hard cap: a hung job must never burn hours of Actions quota.
+    timeout-minutes: 15
     permissions:
       contents: read
     env:
