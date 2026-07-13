@@ -22,7 +22,18 @@ export default defineConfig(async () => {
         main: './src/index.ts',
         miniflare: {
           compatibilityDate: '2025-01-01',
-          compatibilityFlags: ['nodejs_compat'],
+          // The pool force-enables the runner-support flags anyway and prints
+          // a noisy `[vpw:debug] Adding …` line for each missing one — declare
+          // them up front so the test output stays quiet.
+          compatibilityFlags: [
+            'nodejs_compat',
+            'enable_nodejs_tty_module',
+            'enable_nodejs_fs_module',
+            'enable_nodejs_http_modules',
+            'enable_nodejs_perf_hooks_module',
+            'enable_nodejs_v8_module',
+            'enable_nodejs_process_v2',
+          ],
           bindings: {
             CORS_ORIGIN: 'http://localhost:3000',
             TEST_MIGRATIONS: migrations,
