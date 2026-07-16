@@ -1,3 +1,4 @@
+import { API_KEY_PREFIX } from '@saasflare-dev/api/auth';
 import { beforeAll, describe, expect, it } from 'vitest';
 import app from '../src/index';
 import { adminCookie, rpc, userCookie } from './helpers';
@@ -32,7 +33,7 @@ describe('API keys', () => {
   });
 
   it('creates a key with the product prefix, never expiring by default', async () => {
-    expect(plaintext.startsWith('sfapp_')).toBe(true);
+    expect(plaintext.startsWith(API_KEY_PREFIX)).toBe(true);
     expect(plaintext.length).toBeGreaterThan(40);
   });
 
@@ -84,7 +85,7 @@ describe('API keys', () => {
   it('rejects missing/forged tokens with one generic 401', async () => {
     for (const res of await Promise.all([
       whoami(),
-      whoami('sfapp_forged00000000000000000000000000000000'),
+      whoami(`${API_KEY_PREFIX}forged00000000000000000000000000000000`),
       whoami('not-even-the-right-shape'),
     ])) {
       expect(res.status).toBe(401);

@@ -61,12 +61,14 @@ export function isAdminEmail(email: string): boolean {
   return adminEmails().includes(email.trim().toLowerCase());
 }
 
+import pkg from '../../../package.json';
+
 /**
- * Managed API keys. The prefix is the product's namespace — forked products
- * must pick their own (tasks uses sftask_, notify ntfy_). Permissions are
- * fixed server-side; users never edit them.
+ * Managed API keys. The prefix is the product's namespace, single-sourced
+ * from the root package.json `saasflare.apiKeyPrefix` (tasks uses sftask_,
+ * notify ntfy_). Permissions are fixed server-side; users never edit them.
  */
-export const API_KEY_PREFIX = 'sfapp_';
+export const API_KEY_PREFIX = pkg.saasflare.apiKeyPrefix;
 /** Longest selectable expiry (plugin's maxExpiresIn is in DAYS). */
 export const API_KEY_MAX_EXPIRES_DAYS = 365;
 export const API_KEY_PERMISSIONS = { api: ['access'] };

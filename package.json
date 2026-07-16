@@ -1,7 +1,10 @@
 {
   "name": "@saasflare-dev/starter",
   "saasflare": {
-    "projectName": "starter"
+    "projectName": "starter",
+    "displayName": "Saasflare Starter",
+    "appId": "saasflare-starter",
+    "apiKeyPrefix": "sfapp_"
   },
   "type": "module",
   "version": "1.0.0",

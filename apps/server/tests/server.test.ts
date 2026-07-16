@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import pkg from '../../../package.json';
 import app from '../src/index';
 import { rpc as authedRpc } from './helpers';
 
@@ -35,7 +36,7 @@ describe('HTTP + routing (Hono)', () => {
   it('GET / returns hello message', async () => {
     const res = await app.fetch(new Request('http://localhost/'));
     expect(res.status).toBe(200);
-    expect(await res.text()).toBe('Hello saasflare starter server!');
+    expect(await res.text()).toBe(`Hello ${pkg.saasflare.projectName} server!`);
   });
 });
 

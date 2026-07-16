@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { APP_DISPLAY_NAME } from './brand';
 
 /**
  * Frontend smoke test — the browser-side counterpart to the server smoke
@@ -13,7 +14,7 @@ import { expect, test } from '@playwright/test';
 test.describe('Smoke tests', () => {
   test('homepage renders and the API round-trip works', async ({ page }) => {
     await page.goto('/');
-    await expect(page).toHaveTitle(/saasflare starter/i);
+    await expect(page).toHaveTitle(new RegExp(APP_DISPLAY_NAME, 'i'));
 
     // All four system-status cards render (proves SSR + hydration). Scoped
     // to the section — "R2 Storage" also appears as an example card.

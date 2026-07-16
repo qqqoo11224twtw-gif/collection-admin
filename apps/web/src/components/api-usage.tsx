@@ -1,11 +1,12 @@
 import { cn } from '@saasflare-dev/ui/lib/utils';
 import { useState } from 'react';
+import { API_KEY_PREFIX } from '~/lib/brand';
 
 const SERVER_URL = import.meta.env.NEXT_PUBLIC_SERVER_URL;
 
 /**
  * Copy-paste usage snippets for the external API, one per common client.
- * `sfapp_…` is a placeholder on purpose — the real key must come from the
+ * The key placeholder is deliberate — the real key must come from the
  * caller's env / secret manager, never from source code.
  */
 const SNIPPETS: Array<{ id: string; label: string; code: string }> = [
@@ -13,7 +14,7 @@ const SNIPPETS: Array<{ id: string; label: string; code: string }> = [
     id: 'curl',
     label: 'cURL',
     code: `curl ${SERVER_URL}/api/v1/whoami \\
-  -H 'Authorization: Bearer sfapp_…'
+  -H 'Authorization: Bearer ${API_KEY_PREFIX}…'
 
 # → {"keyId":"…","userId":"…"}`,
   },

@@ -9,10 +9,14 @@
 // served page is actually the starter web app. If not, it aborts with a
 // message naming what it found instead.
 
+import { APP_ID } from './brand';
+
 // Stable identity anchor rendered into every page's root <html> tag
 // (`data-app="..."` in apps/web/src/routes/__root.tsx). Decoupled from page
 // copy on purpose, so editing titles/marketing text never breaks this guard.
-const EXPECTED_APP_ID = 'saasflare-starter';
+// Single-sourced from package.json `saasflare.appId` via e2e/brand.ts —
+// always matches the data-app the app itself renders.
+const EXPECTED_APP_ID = APP_ID;
 
 function targetUrl(): string {
   return process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000';

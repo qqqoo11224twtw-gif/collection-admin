@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { isRemote, signIn, USER_EMAIL } from './auth-helpers';
+import { APP_DISPLAY_NAME } from './brand';
 
 /**
  * The open-mode sign-up/sign-in story through the real UI. Local-only: the
@@ -43,7 +44,7 @@ test.describe('Auth (open mode)', () => {
 
     await page.goBack();
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByText('Saasflare Starter Console')).toBeVisible();
+    await expect(page.getByText(`${APP_DISPLAY_NAME} Console`)).toBeVisible();
   });
 
   test('todos are private to the account', async ({ page }) => {

@@ -21,6 +21,7 @@ import { Loader2, Terminal } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useConfigStatus } from '~/components/config-notice';
 import { authClient, useSession } from '~/lib/auth';
+import { APP_DISPLAY_NAME } from '~/lib/brand';
 
 export const Route = createFileRoute('/login')({
   validateSearch: (search: Record<string, unknown>): { redirect?: string } =>
@@ -155,7 +156,7 @@ function LoginPage() {
               <Terminal className="size-6" />
             </span>
             <h1 className="text-xl font-semibold tracking-tight">
-              Saasflare Starter
+              {APP_DISPLAY_NAME}
             </h1>
             <p className="text-sm text-muted-foreground">
               {authMode === 'admin-only'

@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { API_KEY_PREFIX } from '@saasflare-dev/api/auth';
 import { afterEach, describe, expect, it } from 'vitest';
 import app from '../src/index';
 import { H, rpc, sendOtp, signIn, testEnv } from './helpers';
@@ -139,7 +140,7 @@ describe('disabled mode', () => {
     testEnv.AUTH_MODE = 'disabled';
     const res = await app.fetch(
       new Request('http://localhost/api/v1/whoami', {
-        headers: { Authorization: 'Bearer sfapp_whatever' },
+        headers: { Authorization: `Bearer ${API_KEY_PREFIX}whatever` },
       }),
     );
     expect(res.status).toBe(404);

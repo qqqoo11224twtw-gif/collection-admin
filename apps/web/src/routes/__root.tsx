@@ -8,6 +8,7 @@ import {
   Outlet,
   Scripts,
 } from '@tanstack/react-router';
+import { APP_DISPLAY_NAME, APP_ID } from '~/lib/brand';
 import globalsCss from '~/styles/globals.css?url';
 
 export const Route = createRootRouteWithContext<{
@@ -17,8 +18,8 @@ export const Route = createRootRouteWithContext<{
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      // Forked products: rename these along with data-app below.
-      { title: 'Saasflare Starter' },
+      // Single-sourced from package.json `saasflare` (docs/ports.md).
+      { title: APP_DISPLAY_NAME },
       {
         name: 'description',
         content:
@@ -40,7 +41,7 @@ function RootComponent() {
     // copy). The E2E guard (e2e/global-setup.ts) uses it to confirm it's
     // testing THIS app and not another saasflare product sharing port 3000.
     // Forked products must give this a unique value.
-    <html lang="en" data-app="saasflare-starter">
+    <html lang="en" data-app={APP_ID}>
       <head>
         <HeadContent />
       </head>

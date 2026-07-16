@@ -60,18 +60,22 @@ pnpm install
 
 ### Make it yours (5 minutes, do it now)
 
-A fork that skips this ships with the starter's identity baked in.
-Follow the full checklist in [docs/ports.md](ports.md); the short list:
+The product identity lives in ONE place — the `saasflare` block in the
+root `package.json`; every title, resource name, e2e guard, and API key
+prefix derives from it (details in [docs/ports.md](ports.md)):
 
-| What | Where |
-|---|---|
-| Root `package.json` → `"saasflare": { "projectName": "my-app" }` | Single source of the project name — every Worker/DB/KV resource name derives from it (lowercase + dashes) |
-| Local ports (only if you run several saasflare apps side by side) | see the 7-spot checklist in ports.md |
-| `data-app="saasflare-starter"` + `<title>` + description | `apps/web/src/routes/__root.tsx` |
-| `EXPECTED_APP_ID` (must match `data-app`) | `apps/web/e2e/global-setup.ts` |
-| Favicon | `apps/web/public/favicon.svg` |
-| API key prefix `sfapp_` → your own (`myapp_`) | `packages/api/src/auth.ts` |
-| Smoke-test title assertion | `apps/web/e2e/smoke.spec.ts` |
+```json
+"saasflare": {
+  "projectName": "my-app",
+  "displayName": "My App",
+  "appId": "my-app",
+  "apiKeyPrefix": "myapp_"
+}
+```
+
+Still manual: `apps/web/public/favicon.svg` (your icon), the `description`
+meta in `__root.tsx`, and local ports if you run several saasflare apps
+side by side (ports.md).
 
 ## 3 · Run it locally
 

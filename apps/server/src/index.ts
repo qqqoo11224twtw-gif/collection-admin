@@ -17,7 +17,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-
+import pkg from '../../../package.json';
 import type { server } from '../alchemy.run';
 
 const app = new Hono<{
@@ -156,7 +156,7 @@ app.get('/api/dev/otp', async (c) => {
 });
 
 app.get('/', (c) => {
-  return c.text('Hello saasflare starter server!');
+  return c.text(`Hello ${pkg.saasflare.projectName} server!`);
 });
 
 app.get('/health', (c) => c.json({ status: 'ok' }));

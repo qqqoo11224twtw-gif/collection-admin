@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { ConfigNotice, useConfigStatus } from '~/components/config-notice';
 import { UserMenu } from '~/components/user-menu';
+import { APP_DISPLAY_NAME } from '~/lib/brand';
 import { orpc } from '~/lib/orpc';
 
 export const Route = createFileRoute('/')({
@@ -38,7 +39,7 @@ function Home() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Terminal className="w-6 h-6" />
-            Saasflare Starter Console
+            {APP_DISPLAY_NAME} Console
           </h1>
           <p className="text-muted-foreground">
             System operational.{' '}

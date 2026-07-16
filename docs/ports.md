@@ -68,67 +68,36 @@ pnpm test:e2e     # must start within seconds, not hang for 60
 
 ## When cloning starter into a new product
 
-### Rename the project — 1 spot
+### Rename the product — ONE place
 
-`starter` is baked into names that alchemy derives Cloudflare resource names
-from (`<project>-server-db-<stage>`, `<project>-web-<stage>`, …):
+The entire product identity is the `saasflare` block in the root
+`package.json`; everything else reads it (bundled at build time in app
+code, via fs in node scripts and e2e):
 
-- `package.json` (repo root) — the `saasflare.projectName` field. **The
-  single source of truth**: both `alchemy.run.ts` files,
-  `scripts/resolve-urls.ts`, and `scripts/db-query.ts` read it at runtime.
-  Set it once and every Worker/DB/KV resource name follows — there is no
-  separate constant to keep in sync. It's a dedicated field (not `name`)
-  because npm package names allow characters that Cloudflare Worker names
-  don't; lowercase letters, digits, and dashes only, enforced with a loud
-  error. Update `name` too if you like — it's cosmetic.
+```json
+"saasflare": {
+  "projectName": "my-app",       // Worker/D1/KV resource names (lowercase+dashes, validated)
+  "displayName": "My App",       // <title>, console/login headings, smoke-test assertion
+  "appId": "my-app",             // <html data-app> and the E2E identity guard (always in sync)
+  "apiKeyPrefix": "myapp_"       // better-auth key prefix + every test/snippet that shows it
+}
+```
 
-Miss this and you deploy over another product's Workers on the same CF
-account. (History: PROJECT_NAME used to be a per-file constant, and as of
-2026-07-10 every downstream repo except analytics had missed at least one
-copy — that drift is why it's now derived from one field. Downstream repos
-adopt this by syncing the four files from starter and fixing their root
-`name` once.)
+Who consumes what:
 
-### Claim an identity anchor
+| Field | Read by |
+|---|---|
+| `projectName` | both `alchemy.run.ts`, `scripts/resolve-urls.ts`, `scripts/db-query.ts`, the server's hello route |
+| `displayName` | `apps/web/src/lib/brand.ts` → `__root.tsx` title, console/login headings; `apps/web/e2e/brand.ts` → smoke/auth assertions |
+| `appId` | `__root.tsx` `data-app` and `e2e/global-setup.ts` guard — one field, so they can never drift apart |
+| `apiKeyPrefix` | `packages/api/src/auth.ts` (`API_KEY_PREFIX`), the `/keys` usage snippets, server tests + e2e assertions (all import the constant or the field) |
 
-Give the new product its own, or `global-setup.ts` will abort every E2E run:
+Getting `projectName` wrong is the dangerous one: deploying with another
+product's name adopts/overwrites its Workers and database on the same CF
+account. The value is validated (`^[a-z][a-z0-9-]*$`) and throws loudly.
 
-- `apps/web/src/routes/__root.tsx` — `<html data-app="saasflare-starter">`,
-  plus the `<title>` / `description` meta in the same file
-- `apps/web/e2e/global-setup.ts` — `EXPECTED_APP_ID`
+### Still manual (assets and copy, not identity)
+
 - `apps/web/public/favicon.svg` — replace the starter terminal-prompt mark
-  with the product's own icon
-- `apps/web/e2e/smoke.spec.ts` — the `toHaveTitle(/saasflare starter/i)`
-  assertion
-
-These two must match each other. The guard exists because sibling products
-sharing `:3000` + `reuseExistingServer: true` meant Playwright would silently
-test whichever app happened to be running. Distinct ports make that collision
-unlikely; the guard makes it loud.
-
-### Rename the API key prefix
-
-The prefix is one **configuration constant** plus a handful of literals in
-tests/examples that assert or illustrate it — change them together or the
-suite goes red:
-
-- `packages/api/src/auth.ts` — `API_KEY_PREFIX = 'sfapp_'` (the source of
-  truth: every key the plugin mints starts with it)
-- `apps/web/src/components/api-usage.tsx` — the `sfapp_…` placeholder in the
-  usage snippets
-- `apps/web/e2e/api-keys.spec.ts` — `expect(key).toMatch(/^sfapp_/)`
-- `apps/server/tests/api-keys.test.ts` — prefix assertion + forged-key
-  literals
-- `apps/server/tests/auth-modes.test.ts` — `Bearer sfapp_whatever` literal
-
-### Rename the brand copy
-
-Pure display strings — grep for `Saasflare Starter` (and the lowercase
-`saasflare starter`) and replace:
-
-- `apps/web/src/routes/index.tsx` — the `Saasflare Starter Console` heading
-- `apps/web/src/routes/login.tsx` — the login-page brand name
-- `apps/server/src/index.ts` — the `Hello saasflare starter server!` root
-  response, asserted by `apps/server/tests/server.test.ts`
-- `apps/web/e2e/auth.spec.ts` — asserts the Console heading after the
-  back-button flow
+- `__root.tsx` `description` meta and other marketing copy
+- Local ports if you run several saasflare apps side by side (top of this doc)

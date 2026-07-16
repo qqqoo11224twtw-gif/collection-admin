@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { isRemote, SERVER_URL, signIn } from './auth-helpers';
+import { API_KEY_PREFIX } from './brand';
 
 /**
  * API key lifecycle through the real UI: create (plaintext shown once) →
@@ -24,7 +25,7 @@ test.describe('API keys', () => {
     await page.getByLabel('Name').fill('e2e-key');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
     const key = (await page.getByTestId('created-key').textContent()) ?? '';
-    expect(key).toMatch(/^sfapp_/);
+    expect(key.startsWith(API_KEY_PREFIX)).toBe(true);
     await page.getByRole('button', { name: 'Done' }).click();
 
     // The one-time plaintext works against the external API.
