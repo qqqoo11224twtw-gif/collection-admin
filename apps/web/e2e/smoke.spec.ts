@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { APP_DISPLAY_NAME } from './brand';
+import { APP_DISPLAY_NAME } from '../src/lib/brand';
 
 /**
  * Frontend smoke test — the browser-side counterpart to the server smoke

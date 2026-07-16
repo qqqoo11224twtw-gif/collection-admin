@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { API_KEY_PREFIX } from '../src/lib/brand';
 import { isRemote, SERVER_URL, signIn } from './auth-helpers';
-import { API_KEY_PREFIX } from './brand';
 
 /**
  * API key lifecycle through the real UI: create (plaintext shown once) →

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { APP_DISPLAY_NAME } from '../src/lib/brand';
 import { isRemote, signIn, USER_EMAIL } from './auth-helpers';
-import { APP_DISPLAY_NAME } from './brand';
 
 /**
  * The open-mode sign-up/sign-in story through the real UI. Local-only: the

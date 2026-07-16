@@ -9,7 +9,7 @@
 // served page is actually the starter web app. If not, it aborts with a
 // message naming what it found instead.
 
-import { APP_ID } from './brand';
+import { APP_ID } from '../src/lib/brand';
 
 // Stable identity anchor rendered into every page's root <html> tag
 // (`data-app="..."` in apps/web/src/routes/__root.tsx). Decoupled from page
