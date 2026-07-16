@@ -61,6 +61,18 @@ describe('config.status', () => {
     expect(s.missing).toContain('EMAIL_FROM');
   });
 
+  it('unset AUTH_MODE resolves environment-aware: open locally, disabled deployed', async () => {
+    testEnv.AUTH_MODE = '';
+    expect((await probe()).authMode).toBe('open');
+
+    testEnv.SERVER_URL = 'https://starter-server.example.com';
+    const deployed = await probe();
+    expect(deployed.authMode).toBe('disabled');
+    // Fail-safe default asks for nothing.
+    expect(deployed.missing).toEqual([]);
+    expect(deployed.warnings).toEqual([]);
+  });
+
   it('disabled: nothing is required', async () => {
     testEnv.AUTH_MODE = 'disabled';
     const s = await probe();

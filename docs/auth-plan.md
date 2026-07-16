@@ -210,6 +210,11 @@ starter 是**面向 to-C 产品**的模板，第一故事是客户注册登录�
   （Tasks 试点只验证了 `admin-only` 收紧路径，`open` 的开放注册链路由 starter 自测补上）。
 - `disabled` 供纯公开站（如 `website`）显式选择；`admin-only` 供内部控制台（如 `analytics`）显式收紧。
 - 无论何种模式（disabled 除外），`ADMIN_EMAILS` 管理员通道保留（§7.4）。
+- **2026-07-16 修订**：`AUTH_MODE` 未设置时按环境解析——本地 = `open`（demo
+  零配置可用，starter 自测 open 链路不受影响），**部署环境 = `disabled`**
+  （fail-safe：首次部署零配置、零暴露面；部署日志明确提示）。产品启用
+  客户登录时显式写 `AUTH_MODE=open`，fail-closed 矩阵（§8.3）对显式模式
+  照常生效。to-C 推荐模式仍是 `open`，只是从「隐式默认」变为「显式选择」。
 
 ### 8.2 `disabled` 模式的 fail-closed 语义
 

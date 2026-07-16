@@ -71,13 +71,22 @@ if (app.stage === 'local') {
 }
 
 // ── AUTH_MODE and the fail-closed env matrix (docs/auth.md) ──
-// The template's single auth switch: open (default) | admin-only | disabled.
-// A typo must fail the deploy, not silently fall back to the default.
+// The template's single auth switch: open | admin-only | disabled. Unset
+// resolves environment-aware (open locally, disabled when deployed) so a
+// fresh fork deploys with zero env; a typo must still fail the deploy.
 const AUTH_MODES = ['disabled', 'open', 'admin-only'] as const;
-const authMode = process.env.AUTH_MODE || 'open';
+const authMode =
+  process.env.AUTH_MODE || (app.stage === 'local' ? 'open' : 'disabled');
 if (!(AUTH_MODES as readonly string[]).includes(authMode)) {
   throw new Error(
     `invalid AUTH_MODE "${authMode}" — expected ${AUTH_MODES.join(' | ')}`,
+  );
+}
+if (!process.env.AUTH_MODE && app.stage !== 'local') {
+  console.log(
+    `AUTH_MODE not set → stage "${app.stage}" deploys with auth DISABLED ` +
+      '(no sign-in, protected routes 401). To enable, set AUTH_MODE=open ' +
+      'plus the mail env — see docs/auth.md.',
   );
 }
 

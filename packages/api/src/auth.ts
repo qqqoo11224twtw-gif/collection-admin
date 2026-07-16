@@ -36,16 +36,24 @@ import { sendEmail } from './email';
 export type AuthMode = 'disabled' | 'open' | 'admin-only';
 
 /**
- * The template's single auth switch. Defaults to `open` (starter's to-C
- * story). An unknown value throws — fail closed — though alchemy.run.ts
- * already rejects it at deploy time.
+ * The template's single auth switch. When unset, the default is
+ * environment-aware: `open` locally (the full demo works with zero
+ * config) and `disabled` on deployed stages (fail-safe: nothing is
+ * exposed until auth is configured on purpose). An unknown value throws
+ * — fail closed — though alchemy.run.ts already rejects it at deploy
+ * time. See docs/auth.md.
  */
 export function authMode(): AuthMode {
-  const raw = (env.AUTH_MODE ?? '').trim() || 'open';
+  const raw = (env.AUTH_MODE ?? '').trim();
   if (raw === 'disabled' || raw === 'open' || raw === 'admin-only') return raw;
-  throw new Error(
-    `invalid AUTH_MODE "${raw}" — expected disabled | open | admin-only`,
-  );
+  if (raw) {
+    throw new Error(
+      `invalid AUTH_MODE "${raw}" — expected disabled | open | admin-only`,
+    );
+  }
+  return (env.SERVER_URL ?? '').startsWith('http://localhost')
+    ? 'open'
+    : 'disabled';
 }
 
 /** Emails granted the admin role (trimmed, lowercased, from ADMIN_EMAILS). */

@@ -16,20 +16,11 @@ Deep dives live elsewhere — this page is the happy path:
   and `web` (TanStack Start frontend). Each is provisioned by its own
   `apps/{server,web}/alchemy.run.ts` — TypeScript infra-as-code
   ([alchemy](https://alchemy.run)), no `wrangler.toml`.
-- **Four kinds of stages**, all from the same code:
-
-  | Stage | Created by | Purpose |
-  |---|---|---|
-  | `local` | `pnpm dev` | Your machine (`localhost:3000` / `:4000`) |
-  | `dev` | push to the `dev` branch | Shared development environment |
-  | `pr-<N>` | opening a PR | Isolated preview per PR, auto-destroyed on close |
-  | `prod` | push to `main` | Production |
-
-- **Auth is on by default** (`AUTH_MODE=open`: anyone can sign up via
-  email OTP, no passwords). This matters for deploys: an auth-enabled
-  deployed stage **refuses to deploy** until you provide four env values
-  (step 4.2) — deliberately fail-closed, so you can never ship a
-  half-configured login.
+- **Auth defaults are environment-aware**: locally everything is on
+  (`open` mode — the full sign-up demo works with zero config); a
+  deployed stage without `AUTH_MODE` set ships with auth **disabled**
+  (fail-safe: no sign-in surface, nothing to configure). Enabling
+  sign-in in production is one explicit step — see 4.1.
 
 ## 1 · Prerequisites
 
@@ -109,48 +100,9 @@ pnpm --filter web test:e2e   # Playwright against the local dev server
 
 ## 4 · First manual deploy to YOUR Cloudflare account
 
-You'll deploy the `dev` stage from your machine once. After step 5, CI
-takes over and you never do this again (keep it for debugging).
-
-You're already authenticated: the `pnpm dlx alchemy login` from step 3
-covers deploys too (no env file needed — credentials live in alchemy's
-local store, deploy state in `.alchemy/`). The only thing a deploy
-genuinely requires is the auth env below.
-
-### 4.1 Auth env → `apps/server/.dev.env` (required)
-
-Because `AUTH_MODE` defaults to `open`, a deployed stage requires real
-auth config or the deploy aborts with
-`stage "dev" requires env: …`. Create `apps/server/.dev.env`:
-
-```bash
-cat >> apps/server/.dev.env <<EOF
-BETTER_AUTH_SECRET=$(openssl rand -hex 32)
-ADMIN_EMAILS=you@example.com
-RESEND_API_KEY=re_xxxxxxxxx
-EMAIL_FROM=My App <auth@yourdomain.com>
-EOF
-```
-
-- `ADMIN_EMAILS` — comma-separated; these accounts get the admin role.
-- `RESEND_API_KEY` — from [resend.com](https://resend.com) → API Keys.
-- `EMAIL_FROM` — must be a **verified sender domain** in Resend
-  (Domains → Add Domain, add the DNS records). While testing you can
-  use Resend's sandbox sender `onboarding@resend.dev`, which only
-  delivers to your own Resend account email.
-
-**Building a public site with no login at all?** Skip Resend and put
-`AUTH_MODE=disabled` in the env file instead — then none of the four
-values are required. See [docs/auth.md](auth.md) for the full matrix
-(`open` / `admin-only` / `disabled`).
-
-### 4.2 (Optional) custom domains and R2
-
-Skip on the first pass — you'll get free `*.workers.dev` URLs.
-When you want `app.yourdomain.com` or file uploads, follow
-[deploy.md A3](deploy.md#a3-optional-create-per-app-stageenv-files).
-
-### 4.3 Deploy and verify
+You're already authenticated — the `pnpm dlx alchemy login` from step 3
+covers deploys too (credentials in alchemy's local store, deploy state
+in `.alchemy/`). So the first deploy is one command:
 
 ```bash
 pnpm run deploy:dev
@@ -163,18 +115,64 @@ Alchemy provisions KV + D1 (with migrations) + the two Workers and
 curl -fsS "<the-server-url>/health"   # → {"status":"ok"}
 ```
 
-Open the web URL, sign in with an `ADMIN_EMAILS` address — the code now
-arrives by **real email**. (The local `/api/dev/otp` backdoor does not
-exist on deployed stages; that's enforced, not a convention.)
+The deployed app runs with **auth disabled** (that's the deployed
+default when `AUTH_MODE` isn't set — the deploy log says so): no login
+button, protected demos 401. For a public site, you may be done.
 
 > First deploy on a fresh CF account can fail resolving `*.workers.dev`
 > — new accounts have no workers.dev subdomain until the first Worker
 > exists. Fix: `pnpm dlx wrangler deploy --name throwaway`, then
 > `wrangler delete throwaway`, and re-run the deploy.
 
+### 4.1 Enable sign-in (when you want it)
+
+Set the mode explicitly and provide mail delivery — create
+`apps/server/.dev.env`:
+
+```bash
+cat >> apps/server/.dev.env <<'ENV'
+AUTH_MODE=open
+BETTER_AUTH_SECRET=<openssl rand -hex 32>
+ADMIN_EMAILS=you@example.com
+RESEND_API_KEY=re_xxxxxxxxx
+EMAIL_FROM=My App <auth@yourdomain.com>
+ENV
+pnpm run deploy:dev
+```
+
+- `AUTH_MODE` — `open` (customers sign up) or `admin-only` (only
+  `ADMIN_EMAILS` may sign in). Full matrix: [docs/auth.md](auth.md).
+- `ADMIN_EMAILS` — comma-separated; these accounts get the admin role.
+- `RESEND_API_KEY` — from [resend.com](https://resend.com) → API Keys.
+- `EMAIL_FROM` — must be a **verified sender domain** in Resend
+  (Domains → Add Domain, add the DNS records). While testing you can
+  use Resend's sandbox sender `onboarding@resend.dev`, which only
+  delivers to your own Resend account email.
+
+Once `AUTH_MODE` is `open`/`admin-only`, the deploy **fails closed**
+without the other three values — a half-configured login can never
+ship. Sign in on the deployed site with an `ADMIN_EMAILS` address: the
+code now arrives by real email (the local `/api/dev/otp` backdoor does
+not exist on deployed stages; that's enforced, not a convention).
+
+### 4.2 (Optional) custom domains and R2
+
+Skip on the first pass — you'll get free `*.workers.dev` URLs.
+When you want `app.yourdomain.com` or file uploads, follow
+[deploy.md A3](deploy.md#a3-create-per-app-stageenv-files).
+
 ## 5 · Multi-environment auto deploy (GitHub Actions)
 
 The workflows are already in the template — you only feed them secrets.
+From here on, every git ref maps to an isolated **stage** (same code,
+separate Workers/D1/KV):
+
+| Stage | Created by | Purpose |
+|---|---|---|
+| `local` | `pnpm dev` | Your machine (`localhost:3000` / `:4000`) |
+| `dev` | push to the `dev` branch | Shared development environment |
+| `pr-<N>` | opening a PR | Isolated preview per PR, auto-destroyed on close |
+| `prod` | push to `main` | Production |
 
 **Pipeline** (`.github/workflows/deploy.yml` + `preview.yml`):
 
@@ -186,7 +184,8 @@ The workflows are already in the template — you only feed them secrets.
 
 ### 5.1 Prepare prod env
 
-Same as 4.2 but for prod — **use a different secret**:
+Only needed if you enabled sign-in (4.1) — same values for prod, with
+**a different signing secret**:
 
 ```bash
 cat >> apps/server/.prod.env <<EOF
@@ -274,10 +273,11 @@ merge to `dev` (auto dev deploy) → merge to `main` (auto prod deploy).
 
 | Symptom | Cause / fix |
 |---|---|
-| Deploy aborts: `stage "dev" requires env: BETTER_AUTH_SECRET, …` | Step 4.2 skipped. Fill the auth env (or set `AUTH_MODE=disabled` for a no-login site), re-run — and `pnpm sync:secrets` if it happened in CI. |
+| Deploy aborts: `stage "dev" requires env: BETTER_AUTH_SECRET, …` | You set `AUTH_MODE=open`/`admin-only` without the mail env — finish 4.1 (or remove `AUTH_MODE` to stay disabled), re-run — and `pnpm sync:secrets` if it happened in CI. |
 | `401 Authentication error` on the first D1/R2 resource | Token minted from the dashboard template. Re-mint with `pnpm dlx alchemy util create-cloudflare-token`, update `.alchemy.env`, re-sync, re-push. |
 | `computeWorkerDevDomain` fails on a fresh account | No workers.dev subdomain yet — deploy + delete a throwaway Worker once (see 4.4). |
 | `gh secret set` → "no default repository" | `gh repo set-default`. |
+| No login button on the deployed site | Deployed default is `disabled` — set `AUTH_MODE=open` + mail env (4.1). |
 | Sign-in works locally but not on dev | Deployed stages send real email: is `EMAIL_FROM` a verified Resend domain? Is the recipient allowed (sandbox sender only delivers to yourself)? |
 | CI deploy green but env change didn't apply | Secrets are snapshots — `pnpm sync:secrets` after every env edit. |
 

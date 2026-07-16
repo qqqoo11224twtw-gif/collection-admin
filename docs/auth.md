@@ -20,9 +20,9 @@ instance** — the modes are configurations, never parallel systems:
 
 | Mode | Who can sign in | Use it for | What changes |
 |---|---|---|---|
-| `open` (**default**) | Anyone — any email self-registers via OTP | Customer-facing SaaS (most products) | Everything mounted; OTP send endpoint is rate-limited (see §5) |
+| `open` (**local default**) | Anyone — any email self-registers via OTP | Customer-facing SaaS (most products) | Everything mounted; OTP send endpoint is rate-limited (see §5) |
 | `admin-only` | Only `ADMIN_EMAILS` | Internal consoles, private dashboards | A Hono-layer whitelist gate rejects other emails with 403 `EMAIL_NOT_ADMIN` **before** better-auth runs |
-| `disabled` | Nobody — there is no auth | Pure public sites (e.g. `website`) | `/api/auth/*` and `/api/v1/*` 404; `protectedProcedure`/`adminProcedure` always throw 401 `AUTH_DISABLED` |
+| `disabled` (**deployed default**) | Nobody — there is no auth | Pure public sites (e.g. `website`) | `/api/auth/*` and `/api/v1/*` 404; `protectedProcedure`/`adminProcedure` always throw 401 `AUTH_DISABLED` |
 
 Rules that hold in **every** mode:
 
@@ -33,6 +33,11 @@ Rules that hold in **every** mode:
   becomes admin"** — that pattern has produced real takeover CVEs.
 - The frontend learns the mode from the public `config.status` oRPC probe
   (`orpc.config.status`) — **do not** duplicate `AUTH_MODE` into web env.
+- **Unset `AUTH_MODE` resolves environment-aware**: `open` locally (the
+  demo works with zero config), `disabled` on deployed stages (fail-safe
+  — a fresh fork deploys with zero env and exposes nothing; the deploy
+  log announces it). Enabling auth in production is always an explicit
+  `AUTH_MODE=` line.
 - An unknown `AUTH_MODE` value fails the deploy (alchemy) and 500s at
   runtime (fail closed). No silent fallback.
 
@@ -57,7 +62,7 @@ default: OTP codes print to the server console and are readable at
 
 | Variable | disabled | open | admin-only | Notes |
 |---|---|---|---|---|
-| `AUTH_MODE` | valid value | valid value | valid value | unset ⇒ `open` |
+| `AUTH_MODE` | valid value | valid value | valid value | unset ⇒ `open` locally, `disabled` deployed |
 | `BETTER_AUTH_SECRET` | — | ✅ required | ✅ required | `openssl rand -hex 32`; local default is `local-dev-secret-not-for-prod` |
 | `RESEND_API_KEY` + `EMAIL_FROM` | — | ✅ required | ✅ required | Resend REST API; `EMAIL_FROM` must be a verified sender domain |
 | `ADMIN_EMAILS` | — | ✅ required | ✅ required | admin-only: empty = nobody can sign in; open: empty = no admin channel |

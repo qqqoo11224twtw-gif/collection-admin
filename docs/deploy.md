@@ -170,22 +170,21 @@ Profiles are stored under `~/.config/.alchemy/credentials/<profile>/`.
 
 ### A3. Create per-app `.{stage}.env` files
 
-**Auth env is required** (not optional): `AUTH_MODE` defaults to `open`,
-and every deployed auth-enabled stage fails closed at deploy time without
-these four values in `apps/server/.{stage}.env` (see docs/auth.md §2):
+**Auth is opt-in on deployed stages**: unset `AUTH_MODE` deploys with
+auth disabled (fail-safe, zero env needed). To enable sign-in, set the
+mode plus mail delivery — and note the deploy then fails closed without
+all four values in `apps/server/.{stage}.env` (docs/auth.md §2):
 
 ```bash
-cat >> apps/server/.dev.env <<EOF
-BETTER_AUTH_SECRET=$(openssl rand -hex 32)
+cat >> apps/server/.dev.env <<'ENV'
+AUTH_MODE=open
+BETTER_AUTH_SECRET=<openssl rand -hex 32>
 ADMIN_EMAILS=you@example.com
 RESEND_API_KEY=re_...          # resend.com → API Keys
 EMAIL_FROM=My App <auth@yourdomain.com>   # verified Resend sender
-EOF
+ENV
 # Repeat for .prod.env with a DIFFERENT secret when promoting.
 ```
-
-Products with no login at all set `AUTH_MODE=disabled` instead — then
-none of the four are required.
 
 Domains and R2 remain optional — skip them and the apps deploy on
 `*.workers.dev` URLs.
@@ -423,9 +422,10 @@ Same as A6.
 ## Common issues
 
 - **Deploy aborts with `stage "<stage>" requires env: BETTER_AUTH_SECRET,
-  RESEND_API_KEY, EMAIL_FROM, ADMIN_EMAILS`**: the fail-closed auth check
-  (A3). Fill `apps/server/.{stage}.env`, or set `AUTH_MODE=disabled` for
-  a no-login product; re-run `pnpm sync:secrets` if deploying via CI.
+  RESEND_API_KEY, EMAIL_FROM, ADMIN_EMAILS`**: you set
+  `AUTH_MODE=open`/`admin-only` without the rest of the auth env (A3).
+  Fill `apps/server/.{stage}.env`, or drop `AUTH_MODE` to stay disabled;
+  re-run `pnpm sync:secrets` if deploying via CI.
 
 - **`computeWorkerDevDomain` errors / wrong URL**: alchemy hits
   `GET /accounts/{id}/workers/subdomain`. New CF accounts don't have a
