@@ -1,7 +1,5 @@
-import { ORPCError, os } from '@orpc/server';
-import type { Context } from './context';
-
-export const o = os.$context<Context>();
+import { ORPCError } from '@orpc/server';
+import { publicProcedure as o } from './middleware';
 
 export const connection = o.handler(({ context }) => {
   console.log('Env: ', context.env);

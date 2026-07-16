@@ -92,3 +92,6 @@ apps/web/playwright-report/
 apps/web/test-results/
 apps/web/blob-report/
 apps/web/playwright/.cache/
+
+# Playwright MCP browser session artifacts
+.playwright-mcp/

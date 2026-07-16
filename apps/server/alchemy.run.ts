@@ -39,16 +39,50 @@ const isPRStage = app.stage.startsWith('pr-');
 const serverDomain = isPRStage ? undefined : process.env.SERVER_DOMAIN;
 
 let corsOrigin: string;
+let serverUrl: string;
 if (app.stage === 'local') {
   corsOrigin = Array.from(
     { length: 10 },
     (_, i) => `http://localhost:${3000 + i}`,
   ).join(',');
+  serverUrl = 'http://localhost:4000';
 } else {
   const webDomain =
     (!isPRStage && process.env.WEB_DOMAIN) ||
     (await computeWorkerDevDomain(api, `${PROJECT_NAME}-web-${app.stage}`));
   corsOrigin = `https://${webDomain}`;
+  const selfDomain =
+    serverDomain || (await computeWorkerDevDomain(api, serverScriptName));
+  serverUrl = `https://${selfDomain}`;
+}
+
+// ── AUTH_MODE and the fail-closed env matrix (docs/auth.md) ──
+// The template's single auth switch: open (default) | admin-only | disabled.
+// A typo must fail the deploy, not silently fall back to the default.
+const AUTH_MODES = ['disabled', 'open', 'admin-only'] as const;
+const authMode = process.env.AUTH_MODE || 'open';
+if (!(AUTH_MODES as readonly string[]).includes(authMode)) {
+  throw new Error(
+    `invalid AUTH_MODE "${authMode}" — expected ${AUTH_MODES.join(' | ')}`,
+  );
+}
+
+// Fail closed: a deployed auth-enabled stage without real auth/email secrets
+// must not come up half-configured (default signing secret or console-logged
+// OTPs). `disabled` deployments need none of these.
+if (authMode !== 'disabled' && app.stage !== 'local' && !isPRStage) {
+  const missing = ['BETTER_AUTH_SECRET', 'RESEND_API_KEY', 'EMAIL_FROM'].filter(
+    (k) => !process.env[k],
+  );
+  // No admin channel: blocks admin-only outright (nobody could sign in);
+  // open mode keeps the requirement too — every product retains the
+  // ADMIN_EMAILS admin channel (docs/auth.md).
+  if (!process.env.ADMIN_EMAILS) missing.push('ADMIN_EMAILS');
+  if (missing.length > 0) {
+    throw new Error(
+      `stage "${app.stage}" with AUTH_MODE=${authMode} requires env: ${missing.join(', ')} (see docs/auth.md)`,
+    );
+  }
 }
 
 // Create a KV namespace
@@ -110,6 +144,19 @@ export const server = await Worker('server', {
   ...(serverDomain ? { domains: [serverDomain] } : {}),
   bindings: {
     CORS_ORIGIN: corsOrigin,
+    SERVER_URL: serverUrl,
+    // Auth switch + secrets (docs/auth.md). Local defaults are fine for dev;
+    // deployed auth-enabled stages fail closed above.
+    AUTH_MODE: authMode,
+    BETTER_AUTH_SECRET:
+      process.env.BETTER_AUTH_SECRET ?? 'local-dev-secret-not-for-prod',
+    // Comma-separated emails granted the admin role (in admin-only mode, the
+    // ONLY emails that may sign in at all).
+    ADMIN_EMAILS: process.env.ADMIN_EMAILS ?? '',
+    // Transactional email (OTP). Without a key (local only — deployed stages
+    // fail closed above), codes are logged to the worker console instead.
+    RESEND_API_KEY: process.env.RESEND_API_KEY ?? '',
+    EMAIL_FROM: process.env.EMAIL_FROM ?? '',
     R2_PUBLIC_DOMAIN: BUCKET.devDomain || '',
     KV,
     DB,

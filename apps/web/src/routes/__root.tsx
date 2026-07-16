@@ -17,10 +17,16 @@ export const Route = createRootRouteWithContext<{
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'TanStack Start on Cloudflare Workers' },
-      { name: 'description', content: 'Built with Alchemy' },
+      // Forked products: rename these along with data-app below.
+      { title: 'Saasflare Starter' },
+      {
+        name: 'description',
+        content:
+          'Full-stack SaaS starter on Cloudflare Workers — Hono, oRPC, TanStack Start, better-auth.',
+      },
     ],
     links: [
+      { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
       { rel: 'stylesheet', href: uiGlobalsCss },
       { rel: 'stylesheet', href: globalsCss },
     ],

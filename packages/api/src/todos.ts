@@ -1,17 +1,22 @@
-import { ORPCError, os } from '@orpc/server';
+import { ORPCError } from '@orpc/server';
 import { todos } from '@saasflare-dev/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import type { Context } from './context';
+import { protectedProcedure } from './middleware';
 
-const o = os.$context<Context>();
-
+/**
+ * The template's per-user private data demo: every query is scoped to the
+ * session user, so two signed-in users see two independent todo lists. This
+ * is the pattern products copy for their own owned-by-a-user tables.
+ */
 export const todosApi = {
-  getTodos: o.handler(async ({ context }) => {
-    const allTodos = await context.DB.select().from(todos).all();
-    return allTodos;
+  getTodos: protectedProcedure.handler(async ({ context }) => {
+    return context.DB.select()
+      .from(todos)
+      .where(eq(todos.userId, context.user.id))
+      .all();
   }),
-  createTodo: o
+  createTodo: protectedProcedure
     .input(
       z.object({
         text: z.string(),
@@ -19,11 +24,11 @@ export const todosApi = {
     )
     .handler(async ({ context, input }) => {
       const [newTodo] = await context.DB.insert(todos)
-        .values({ ...input, createdAt: new Date() })
+        .values({ ...input, userId: context.user.id, createdAt: new Date() })
         .returning();
       return newTodo;
     }),
-  updateTodo: o
+  updateTodo: protectedProcedure
     .input(
       z.object({
         id: z.number(),
@@ -33,16 +38,18 @@ export const todosApi = {
     )
     .handler(async ({ context, input }) => {
       const { id, ...updateData } = input;
+      // Ownership is part of the WHERE clause — another user's todo id
+      // behaves exactly like a nonexistent one.
       const [updatedTodo] = await context.DB.update(todos)
         .set(updateData)
-        .where(eq(todos.id, id))
+        .where(and(eq(todos.id, id), eq(todos.userId, context.user.id)))
         .returning();
       if (!updatedTodo) {
         throw new ORPCError('NOT_FOUND');
       }
       return updatedTodo;
     }),
-  deleteTodo: o
+  deleteTodo: protectedProcedure
     .input(
       z.object({
         id: z.number(),
@@ -50,7 +57,7 @@ export const todosApi = {
     )
     .handler(async ({ context, input }) => {
       const [deletedTodo] = await context.DB.delete(todos)
-        .where(eq(todos.id, input.id))
+        .where(and(eq(todos.id, input.id), eq(todos.userId, context.user.id)))
         .returning();
       if (!deletedTodo) {
         throw new ORPCError('NOT_FOUND');

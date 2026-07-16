@@ -40,7 +40,7 @@ Layout routes render `<Outlet />` (not `{children}`):
 ```tsx
 import { createFileRoute, Outlet } from '@tanstack/react-router';
 
-export const Route = createFileRoute('/playground')({
+export const Route = createFileRoute('/examples')({
   component: PlaygroundLayout,
 });
 
@@ -62,7 +62,7 @@ Use TanStack Router's `<Link>` with `to` prop for internal links, `<a>` for exte
 import { Link } from '@tanstack/react-router';
 
 // Internal link
-<Link to="/playground/components/users">Users</Link>
+<Link to="/examples/components/todos">Todos</Link>
 
 // External link
 <a href="https://example.com" target="_blank" rel="noopener noreferrer">Docs</a>
@@ -74,7 +74,7 @@ import { Link } from '@tanstack/react-router';
 import { useLocation } from '@tanstack/react-router';
 
 const location = useLocation();
-const isIndex = location.pathname === '/playground';
+const isIndex = location.pathname === '/examples';
 ```
 
 ## SSR / Data Fetching
@@ -100,7 +100,7 @@ apps/web/
 │   ├── routes/           # Pages & layouts
 │   │   ├── __root.tsx    # Root layout (HTML shell, providers)
 │   │   ├── index.tsx     # Home page (/)
-│   │   └── playground/   # Nested routes
+│   │   └── examples/    # Nested routes
 │   ├── components/       # Reusable components
 │   ├── lib/              # Utilities (orpc, query-client, upload)
 │   └── styles/           # CSS files
@@ -114,7 +114,7 @@ apps/web/
 - Save components in `apps/web/src/components/`
 - Save page routes in `apps/web/src/routes/`
   - Example: `Login` component → `apps/web/src/components/login/index.tsx`
-  - Example: `Login` page → `apps/web/src/routes/playground/components/login.tsx`
+  - Example: `Login` page → `apps/web/src/routes/examples/components/login.tsx`
 
 ## Images
 

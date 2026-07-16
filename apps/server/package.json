@@ -17,8 +17,9 @@
     "format": "biome format --write"
   },
   "dependencies": {
-    "@saasflare-dev/api": "workspace:*",
     "@orpc/server": "catalog:",
+    "@saasflare-dev/api": "workspace:*",
+    "@saasflare-dev/db": "workspace:*",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
     "zod": "catalog:"

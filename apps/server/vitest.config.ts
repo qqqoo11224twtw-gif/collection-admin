@@ -36,6 +36,15 @@ export default defineConfig(async () => {
           ],
           bindings: {
             CORS_ORIGIN: 'http://localhost:3000',
+            SERVER_URL: 'http://localhost',
+            // Tests default to the template default; mode-specific suites
+            // mutate env.AUTH_MODE per test (authMode() reads it lazily).
+            AUTH_MODE: 'open',
+            BETTER_AUTH_SECRET: 'test-secret',
+            // Messy on purpose: the whitelist must trim + lowercase entries.
+            ADMIN_EMAILS: ' Boss@Test.dev ',
+            RESEND_API_KEY: '',
+            EMAIL_FROM: '',
             TEST_MIGRATIONS: migrations,
             // Dummy R2 credentials so storage.presign can be smoke-tested.
             // getSignedUrl() signs locally (no network), so fake values are
@@ -65,6 +74,23 @@ export default defineConfig(async () => {
     ],
     test: {
       setupFiles: ['./tests/setup.ts'],
+      // False-positive filter: oRPC / better-auth convert thrown errors
+      // (ORPCError 401/403, better-auth APIError) into proper HTTP responses
+      // — the tests assert those responses — but the workers pool still
+      // reports the rejected promise as an unhandled rejection and fails the
+      // run. Ignore exactly those shapes; anything else still fails.
+      onUnhandledError(error: unknown) {
+        const e = error as {
+          code?: unknown;
+          status?: unknown;
+          statusCode?: unknown;
+        };
+        const isOrpcError =
+          typeof e.code === 'string' && typeof e.status === 'number';
+        const isBetterAuthApiError =
+          typeof e.statusCode === 'number' && typeof e.status === 'string';
+        if (isOrpcError || isBetterAuthApiError) return false;
+      },
     },
   };
 });

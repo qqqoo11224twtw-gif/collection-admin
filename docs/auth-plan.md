@@ -2,7 +2,7 @@
 
 > 本文是跨仓库的架构决策与迁移路线。先在 `tasks` 完成真实试点，验证后再把稳定的共性能力抽回 `starter`。具体试点实施清单位于同级独立仓库的 `tasks/docs/auth-plan.md`。
 
-最后更新：2026-07-15 · 当前阶段：**Phase 1（Tasks 试点）完成，结论已回填（见 §7）；待启动 Phase 2 抽取**
+最后更新：2026-07-15 · 当前阶段：**Phase 2（抽取到 Starter）完成 ✅（见 §9）；待启动 Phase 3 产品迁移**
 
 ## 1. 目标与边界
 
@@ -34,6 +34,7 @@ Saasflare 各产品统一以下底层能力和安全约定：
   - `open`：**面向客户的注册登录故事**——任意邮箱可通过 OTP 注册/登录（默认无密码；社交登录等作为产品扩展）。
   - `admin-only`：仅 `ADMIN_EMAILS` 白名单可登录，适合内部控制台。
 - 三种模式是**同一 auth 实例的不同配置**，不是并行系统：`admin-only` = `open` 关闭开放注册 + OTP 发送前白名单 gate（Tasks 试点已验证此收紧路径）。非白名单邮箱返回显式 403 `EMAIL_NOT_ADMIN`（产品取舍：私有后台里明确报错优于防枚举；`open` 模式产品可自行权衡）。
+- starter 本体默认 `open`，disabled 模式下受保护 procedure 一律 401 fail closed；模式开关、env 校验矩阵与 demo 改造等 Phase 2 模板决策见 §8。
 
 ### 2.2 管理员能力
 
@@ -198,3 +199,91 @@ type VerifiedApiKey = {
 - 各产品**独立用户池，不做跨产品 SSO**（维持 §1 边界；如未来要 SSO，是在上面加中心化认证层，不影响本抽象）。
 - starter 的 `open` 模式定位为**客户注册登录**能力：默认无密码邮箱 OTP；社交登录、密码体系按产品需要作为扩展，不进 Core 第一版。
 - 管理员模式是同一实例的收紧配置；每个产品无论何种模式都保留 `ADMIN_EMAILS` 管理员通道。
+
+## 8. Phase 2 模板决策（2026-07-15，与用户确认）
+
+### 8.1 定位与默认模式
+
+starter 是**面向 to-C 产品**的模板，第一故事是客户注册登录，不是内部控制台。因此：
+
+- **starter 本体默认 `AUTH_MODE=open`**，并以自身 demo 作为 `open` 模式的第一个验证者
+  （Tasks 试点只验证了 `admin-only` 收紧路径，`open` 的开放注册链路由 starter 自测补上）。
+- `disabled` 供纯公开站（如 `website`）显式选择；`admin-only` 供内部控制台（如 `analytics`）显式收紧。
+- 无论何种模式（disabled 除外），`ADMIN_EMAILS` 管理员通道保留（§7.4）。
+
+### 8.2 `disabled` 模式的 fail-closed 语义
+
+- `protectedProcedure` / `adminProcedure` 中间件先读模式：`disabled` 时**运行时一律抛 401**，
+  错误码 `AUTH_DISABLED`（与「未登录」的 401 可区分，便于排查）。不做启动期路由树检测——
+  运行时兜底是无条件 fail closed，哪怕 clone 忘了删受保护路由，最坏也是调不通而非裸奔。
+- 约定：disabled 产品应删除不用的受保护路由；401 兜底是保险丝，不是常态。
+
+### 8.3 `AUTH_MODE` 与 env 校验矩阵
+
+`AUTH_MODE` 是唯一的模式开关，只在服务端 env 存一份；取值三选一，拼错时 alchemy 部署直接失败。
+前端不重复配置——经公开的 config 探针（Tasks `config.status` 模式）取回当前 mode 决定是否挂载登录 UI。
+
+| 变量 | disabled | open | admin-only |
+|---|---|---|---|
+| `AUTH_MODE` | 必须合法 | 必须合法 | 必须合法（缺省默认 `open`） |
+| `BETTER_AUTH_SECRET` | 不要求 | 部署环境必填 | 部署环境必填 |
+| `RESEND_API_KEY` / `EMAIL_FROM` | 不要求 | 部署环境必填 | 部署环境必填 |
+| `ADMIN_EMAILS` | 不要求 | 必填（管理员通道，§7.4） | 必填（否则无人可登录） |
+
+alchemy 的 fail-closed 部署检查（§7.2）按此矩阵分档执行，不再无条件要求全部密钥。
+
+### 8.4 `open` 模式加固
+
+- **OTP 发信端点限流**：open 模式下发送 OTP 对任意邮箱开放，等于把 Resend 账号暴露为轰炸器；
+  必须启用 better-auth 内置 rate limit（注意与 api-key 插件的每 Key 限流是两套东西，§7.1）。
+- Miniflare + Playwright 覆盖 open 链路：任意邮箱注册 → 普通角色 → 进不了 admin 接口。
+
+### 8.5 Demo 改造（充分展示注册登录故事）
+
+- **删除遗留 demo：自建 `users` 表 + `usersApi` + playground users 页**——与 better-auth 的
+  `user` 表命名冲突、且是无鉴权 CRUD；schema 里无人使用的 `posts` 表一并删除。
+- `todos` demo 改造为**登录用户私有数据**：加 `userId` 归属列，API 切 `protectedProcedure`，
+  只读写当前用户自己的数据——用它展示「注册 → 登录 → 个人数据 → API Key」的完整 to-C 故事。
+- 公开面只保留 health check（及 config 探针）。
+
+### 8.6 附带事项（已完成）
+
+- 开工时核对 starter 锁定的 alchemy 版本是否已含 Tasks 试点发现的 dev 代理崩溃修复
+  （`tasks/patches/alchemy.patch`）；未包含则一并携带。
+- Phase 2 合入 `dev` 后，`feat/desktop-template` 按分支策略 rebase 一次；桌面端 Bearer
+  作为「产品扩展」对新 auth 工厂适配。
+
+## 9. Phase 2 完成记录（2026-07-15）
+
+按 §7.3 清单 + §8 决策全部落地，三道闸（44 集成测试 / typecheck / biome ci）
++ 本地 e2e 8/8 全绿：
+
+- `packages/db`：user/session/account/verification/apikey 五表 + `rate_limit`
+  表（better-auth 内置限流的 D1 存储）；删除遗留 `users`/`posts` demo 表；
+  `todos` 加 `userId` 归属列（迁移 `0002`）；`db:generate` 自动 biome format。
+- `packages/api`：`auth.ts`（`authMode()` 三档 + 懒加载单例工厂 + Key 封装 +
+  promotion-only 管理员同步）、`middleware.ts`（disabled → 401
+  `AUTH_DISABLED` fail closed）、`email.ts`、`api-keys.ts`（protectedProcedure
+  ——to-C：任意用户管理自己的 Key）、`config.ts`（探针含 authMode）；todos 全部
+  按 session 用户过滤；storage 切 protected，planet/health 显式 public。
+- `apps/server`：admin-only 白名单 gate（Hono 层、better-auth 之前）、
+  `/api/auth/*` 挂载（disabled 404）、`/api/v1/whoami` Key demo、dev-only OTP
+  读回；alchemy 按 §8.3 矩阵分档 fail-closed，`AUTH_MODE` 非法直接部署失败；
+  携带 `patches/alchemy.patch`。
+- `apps/web`：两步 OTP 登录页（按模式自适应文案/禁用页）、`AuthGate`、
+  `UserMenu`、`ApiKeysManager`、`ConfigNotice`（探针驱动，前端不配模式）；
+  playground 重构为「注册登录 → 私有 Todos → API Keys」的 to-C 故事；
+  orpc client 走 `credentials: 'include'`。
+- 测试：三模式矩阵（open 注册/admin-only 403+零残留/disabled 全 404+旧
+  session 失效）、Key 全生命周期、todos 归属隔离、探针矩阵、dev OTP；e2e
+  覆盖 UI 注册登录、redirect 回跳、跨账号隔离、Key 创建→调用→撤销→401。
+  测试用 `testEnv` 动态切 `AUTH_MODE`（env 懒读使然）。
+- 文档：新增 **`docs/auth.md`**（面向 clone 后 agent 的配置指南：三模式、env
+  矩阵、插件偏差表、两套限流区别、"不要简化"清单、提交自查）；
+  environment.md / AGENTS.md / .local.env.example 同步。
+- 与 §4 公共接口目标的偏差：`VerifiedApiKey` 仍为试点形状
+  `{ valid, keyId, userId }`（`permissions`/`expiresAt` 尚无消费方，产品需要
+  时按 §4 补全）；Admin API 的用户列表/升降权管理面（§2.2 后半）未随模板
+  实现——等首个需要它的产品出现再抽取。
+- open 模式状态：已由 starter 自身 demo + 测试验证注册链路；仍待首个生产
+  使用者（subscribe）验证真实邮件送达与转化，维持 §8.1 标注。

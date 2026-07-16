@@ -1,9 +1,10 @@
 import type { RouterClient } from '@orpc/server';
+import { apiKeysApi } from './api-keys';
+import { configApi } from './config';
 import { connection, db, kv, r2 } from './health-check';
 import { planetApi } from './planet';
 import { storageApi } from './storage';
 import { todosApi } from './todos';
-import { usersApi } from './users';
 
 export const appRouter = {
   healthCheck: {
@@ -12,10 +13,11 @@ export const appRouter = {
     db,
     r2,
   },
-  users: usersApi,
+  config: configApi,
   todos: todosApi,
   storage: storageApi,
   planet: planetApi,
+  apiKeys: apiKeysApi,
 };
 
 export type AppRouter = typeof appRouter;

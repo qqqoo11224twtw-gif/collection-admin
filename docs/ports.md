@@ -90,8 +90,13 @@ website / tasks / affiliate / onePay still have it in the root `package.json`
 
 Give the new product its own, or `global-setup.ts` will abort every E2E run:
 
-- `apps/web/src/routes/__root.tsx` — `<html data-app="saasflare-starter">`
+- `apps/web/src/routes/__root.tsx` — `<html data-app="saasflare-starter">`,
+  plus the `<title>` / `description` meta in the same file
 - `apps/web/e2e/global-setup.ts` — `EXPECTED_APP_ID`
+- `apps/web/public/favicon.svg` — replace the starter terminal-prompt mark
+  with the product's own icon
+- `apps/web/e2e/smoke.spec.ts` — the `toHaveTitle(/saasflare starter/i)`
+  assertion
 
 These two must match each other. The guard exists because sibling products
 sharing `:3000` + `reuseExistingServer: true` meant Playwright would silently

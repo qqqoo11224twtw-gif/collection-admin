@@ -275,7 +275,7 @@ These run **only when you ask Claude Code** (or another agent harness) — gener
 
 In Claude Code, ask in natural language. Example:
 
-> "Use the planner agent to map the todo creation flow at /playground. Cover happy path, empty input validation, and the optimistic-update revert when the API errors."
+> "Use the planner agent to map the todo creation flow at /examples/components/todos. Cover happy path, empty input validation, and the optimistic-update revert when the API errors."
 
 The planner will:
 

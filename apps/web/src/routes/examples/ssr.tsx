@@ -10,7 +10,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { SourceCodeButton } from '~/components/source-code-button';
 import { orpc } from '~/lib/orpc';
 
-export const Route = createFileRoute('/playground/ssr')({
+export const Route = createFileRoute('/examples/ssr')({
   loader: ({ context }) =>
     context.queryClient.ensureQueryData(orpc.planet.list.queryOptions()),
   component: SSRDemoPage,
@@ -18,19 +18,20 @@ export const Route = createFileRoute('/playground/ssr')({
 
 function SSRDemoPage() {
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8">
+    <div className="space-y-8">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             SSR & Hydration Demo
           </h1>
           <p className="text-muted-foreground mt-2">
-            The data below is prefetched on the server and hydrated on the
-            client. View the page source to confirm the data is present in the
-            HTML.
+            This example demonstrates server-side rendering with TanStack Query:
+            the data below is prefetched on the server, delivered in the initial
+            HTML, and hydrated on the client. View the page source to confirm
+            the data is already there.
           </p>
         </div>
-        <SourceCodeButton path="apps/web/src/routes/playground/ssr.tsx" />
+        <SourceCodeButton path="apps/web/src/routes/examples/ssr.tsx" />
       </div>
 
       <div className="p-6 bg-muted/50 border rounded-lg">

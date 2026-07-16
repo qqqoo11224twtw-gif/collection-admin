@@ -9,16 +9,22 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as PlaygroundRouteImport } from './routes/playground'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as ExamplesRouteImport } from './routes/examples'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as PlaygroundIndexRouteImport } from './routes/playground/index'
-import { Route as PlaygroundSsrRouteImport } from './routes/playground/ssr'
-import { Route as PlaygroundComponentsUsersRouteImport } from './routes/playground/components/users'
-import { Route as PlaygroundComponentsR2UploadRouteImport } from './routes/playground/components/r2-upload'
+import { Route as ExamplesSsrRouteImport } from './routes/examples/ssr'
+import { Route as ExamplesComponentsTodosRouteImport } from './routes/examples/components/todos'
+import { Route as ExamplesComponentsR2UploadRouteImport } from './routes/examples/components/r2-upload'
+import { Route as ExamplesComponentsApiKeysRouteImport } from './routes/examples/components/api-keys'
 
-const PlaygroundRoute = PlaygroundRouteImport.update({
-  id: '/playground',
-  path: '/playground',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExamplesRoute = ExamplesRouteImport.update({
+  id: '/examples',
+  path: '/examples',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -26,91 +32,107 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PlaygroundIndexRoute = PlaygroundIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => PlaygroundRoute,
-} as any)
-const PlaygroundSsrRoute = PlaygroundSsrRouteImport.update({
+const ExamplesSsrRoute = ExamplesSsrRouteImport.update({
   id: '/ssr',
   path: '/ssr',
-  getParentRoute: () => PlaygroundRoute,
+  getParentRoute: () => ExamplesRoute,
 } as any)
-const PlaygroundComponentsUsersRoute =
-  PlaygroundComponentsUsersRouteImport.update({
-    id: '/components/users',
-    path: '/components/users',
-    getParentRoute: () => PlaygroundRoute,
-  } as any)
-const PlaygroundComponentsR2UploadRoute =
-  PlaygroundComponentsR2UploadRouteImport.update({
+const ExamplesComponentsTodosRoute = ExamplesComponentsTodosRouteImport.update({
+  id: '/components/todos',
+  path: '/components/todos',
+  getParentRoute: () => ExamplesRoute,
+} as any)
+const ExamplesComponentsR2UploadRoute =
+  ExamplesComponentsR2UploadRouteImport.update({
     id: '/components/r2-upload',
     path: '/components/r2-upload',
-    getParentRoute: () => PlaygroundRoute,
+    getParentRoute: () => ExamplesRoute,
+  } as any)
+const ExamplesComponentsApiKeysRoute =
+  ExamplesComponentsApiKeysRouteImport.update({
+    id: '/components/api-keys',
+    path: '/components/api-keys',
+    getParentRoute: () => ExamplesRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/playground': typeof PlaygroundRouteWithChildren
-  '/playground/ssr': typeof PlaygroundSsrRoute
-  '/playground/': typeof PlaygroundIndexRoute
-  '/playground/components/r2-upload': typeof PlaygroundComponentsR2UploadRoute
-  '/playground/components/users': typeof PlaygroundComponentsUsersRoute
+  '/examples': typeof ExamplesRouteWithChildren
+  '/login': typeof LoginRoute
+  '/examples/ssr': typeof ExamplesSsrRoute
+  '/examples/components/api-keys': typeof ExamplesComponentsApiKeysRoute
+  '/examples/components/r2-upload': typeof ExamplesComponentsR2UploadRoute
+  '/examples/components/todos': typeof ExamplesComponentsTodosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/playground/ssr': typeof PlaygroundSsrRoute
-  '/playground': typeof PlaygroundIndexRoute
-  '/playground/components/r2-upload': typeof PlaygroundComponentsR2UploadRoute
-  '/playground/components/users': typeof PlaygroundComponentsUsersRoute
+  '/examples': typeof ExamplesRouteWithChildren
+  '/login': typeof LoginRoute
+  '/examples/ssr': typeof ExamplesSsrRoute
+  '/examples/components/api-keys': typeof ExamplesComponentsApiKeysRoute
+  '/examples/components/r2-upload': typeof ExamplesComponentsR2UploadRoute
+  '/examples/components/todos': typeof ExamplesComponentsTodosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/playground': typeof PlaygroundRouteWithChildren
-  '/playground/ssr': typeof PlaygroundSsrRoute
-  '/playground/': typeof PlaygroundIndexRoute
-  '/playground/components/r2-upload': typeof PlaygroundComponentsR2UploadRoute
-  '/playground/components/users': typeof PlaygroundComponentsUsersRoute
+  '/examples': typeof ExamplesRouteWithChildren
+  '/login': typeof LoginRoute
+  '/examples/ssr': typeof ExamplesSsrRoute
+  '/examples/components/api-keys': typeof ExamplesComponentsApiKeysRoute
+  '/examples/components/r2-upload': typeof ExamplesComponentsR2UploadRoute
+  '/examples/components/todos': typeof ExamplesComponentsTodosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/playground'
-    | '/playground/ssr'
-    | '/playground/'
-    | '/playground/components/r2-upload'
-    | '/playground/components/users'
+    | '/examples'
+    | '/login'
+    | '/examples/ssr'
+    | '/examples/components/api-keys'
+    | '/examples/components/r2-upload'
+    | '/examples/components/todos'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/playground/ssr'
-    | '/playground'
-    | '/playground/components/r2-upload'
-    | '/playground/components/users'
+    | '/examples'
+    | '/login'
+    | '/examples/ssr'
+    | '/examples/components/api-keys'
+    | '/examples/components/r2-upload'
+    | '/examples/components/todos'
   id:
     | '__root__'
     | '/'
-    | '/playground'
-    | '/playground/ssr'
-    | '/playground/'
-    | '/playground/components/r2-upload'
-    | '/playground/components/users'
+    | '/examples'
+    | '/login'
+    | '/examples/ssr'
+    | '/examples/components/api-keys'
+    | '/examples/components/r2-upload'
+    | '/examples/components/todos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  PlaygroundRoute: typeof PlaygroundRouteWithChildren
+  ExamplesRoute: typeof ExamplesRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/playground': {
-      id: '/playground'
-      path: '/playground'
-      fullPath: '/playground'
-      preLoaderRoute: typeof PlaygroundRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/examples': {
+      id: '/examples'
+      path: '/examples'
+      fullPath: '/examples'
+      preLoaderRoute: typeof ExamplesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -120,58 +142,59 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/playground/': {
-      id: '/playground/'
-      path: '/'
-      fullPath: '/playground/'
-      preLoaderRoute: typeof PlaygroundIndexRouteImport
-      parentRoute: typeof PlaygroundRoute
-    }
-    '/playground/ssr': {
-      id: '/playground/ssr'
+    '/examples/ssr': {
+      id: '/examples/ssr'
       path: '/ssr'
-      fullPath: '/playground/ssr'
-      preLoaderRoute: typeof PlaygroundSsrRouteImport
-      parentRoute: typeof PlaygroundRoute
+      fullPath: '/examples/ssr'
+      preLoaderRoute: typeof ExamplesSsrRouteImport
+      parentRoute: typeof ExamplesRoute
     }
-    '/playground/components/users': {
-      id: '/playground/components/users'
-      path: '/components/users'
-      fullPath: '/playground/components/users'
-      preLoaderRoute: typeof PlaygroundComponentsUsersRouteImport
-      parentRoute: typeof PlaygroundRoute
+    '/examples/components/todos': {
+      id: '/examples/components/todos'
+      path: '/components/todos'
+      fullPath: '/examples/components/todos'
+      preLoaderRoute: typeof ExamplesComponentsTodosRouteImport
+      parentRoute: typeof ExamplesRoute
     }
-    '/playground/components/r2-upload': {
-      id: '/playground/components/r2-upload'
+    '/examples/components/r2-upload': {
+      id: '/examples/components/r2-upload'
       path: '/components/r2-upload'
-      fullPath: '/playground/components/r2-upload'
-      preLoaderRoute: typeof PlaygroundComponentsR2UploadRouteImport
-      parentRoute: typeof PlaygroundRoute
+      fullPath: '/examples/components/r2-upload'
+      preLoaderRoute: typeof ExamplesComponentsR2UploadRouteImport
+      parentRoute: typeof ExamplesRoute
+    }
+    '/examples/components/api-keys': {
+      id: '/examples/components/api-keys'
+      path: '/components/api-keys'
+      fullPath: '/examples/components/api-keys'
+      preLoaderRoute: typeof ExamplesComponentsApiKeysRouteImport
+      parentRoute: typeof ExamplesRoute
     }
   }
 }
 
-interface PlaygroundRouteChildren {
-  PlaygroundSsrRoute: typeof PlaygroundSsrRoute
-  PlaygroundIndexRoute: typeof PlaygroundIndexRoute
-  PlaygroundComponentsR2UploadRoute: typeof PlaygroundComponentsR2UploadRoute
-  PlaygroundComponentsUsersRoute: typeof PlaygroundComponentsUsersRoute
+interface ExamplesRouteChildren {
+  ExamplesSsrRoute: typeof ExamplesSsrRoute
+  ExamplesComponentsApiKeysRoute: typeof ExamplesComponentsApiKeysRoute
+  ExamplesComponentsR2UploadRoute: typeof ExamplesComponentsR2UploadRoute
+  ExamplesComponentsTodosRoute: typeof ExamplesComponentsTodosRoute
 }
 
-const PlaygroundRouteChildren: PlaygroundRouteChildren = {
-  PlaygroundSsrRoute: PlaygroundSsrRoute,
-  PlaygroundIndexRoute: PlaygroundIndexRoute,
-  PlaygroundComponentsR2UploadRoute: PlaygroundComponentsR2UploadRoute,
-  PlaygroundComponentsUsersRoute: PlaygroundComponentsUsersRoute,
+const ExamplesRouteChildren: ExamplesRouteChildren = {
+  ExamplesSsrRoute: ExamplesSsrRoute,
+  ExamplesComponentsApiKeysRoute: ExamplesComponentsApiKeysRoute,
+  ExamplesComponentsR2UploadRoute: ExamplesComponentsR2UploadRoute,
+  ExamplesComponentsTodosRoute: ExamplesComponentsTodosRoute,
 }
 
-const PlaygroundRouteWithChildren = PlaygroundRoute._addFileChildren(
-  PlaygroundRouteChildren,
+const ExamplesRouteWithChildren = ExamplesRoute._addFileChildren(
+  ExamplesRouteChildren,
 )
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  PlaygroundRoute: PlaygroundRouteWithChildren,
+  ExamplesRoute: ExamplesRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

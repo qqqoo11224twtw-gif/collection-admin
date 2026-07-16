@@ -1,6 +1,6 @@
 # Saasflare Starter
 
-Monorepo: pnpm workspaces · Hono backend · oRPC + TanStack Query · Tailwind V4 + Shadcn/ui · Cloudflare Workers
+Monorepo: pnpm workspaces · Hono backend · oRPC + TanStack Query · Tailwind V4 + Shadcn/ui · Cloudflare Workers · better-auth (email OTP, `AUTH_MODE` tri-mode — see docs/auth.md)
 
 ## Active Stack
 
@@ -40,6 +40,7 @@ Read these docs based on the task at hand:
 
 | When | Read |
 |------|------|
+| **Anything auth: login, sessions, admin, API keys, AUTH_MODE, protected routes** | [docs/auth.md](docs/auth.md) |
 | Adding/modifying API endpoints | [docs/api-development.md](docs/api-development.md) |
 | Modifying database schema | [docs/database-d1.md](docs/database-d1.md) |
 | Inspecting D1 data (ad-hoc SQL: "how many users", "show me row 5", etc.) | [docs/db-query.md](docs/db-query.md) |

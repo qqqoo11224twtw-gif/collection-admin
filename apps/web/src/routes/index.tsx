@@ -9,17 +9,20 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import {
   Check,
   CircleAlert,
-  Code,
   Database,
   Github,
   Globe,
   HardDrive,
+  KeyRound,
+  LayoutTemplate,
   Loader2,
   type LucideIcon,
   Server,
   Terminal,
   Workflow,
 } from 'lucide-react';
+import { ConfigNotice, useConfigStatus } from '~/components/config-notice';
+import { UserMenu } from '~/components/user-menu';
 import { orpc } from '~/lib/orpc';
 
 export const Route = createFileRoute('/')({
@@ -27,6 +30,7 @@ export const Route = createFileRoute('/')({
 });
 
 function Home() {
+  const configQuery = useConfigStatus();
   return (
     <main className="w-full max-w-5xl mx-auto px-4 py-12 flex flex-col gap-12">
       {/* Header */}
@@ -43,34 +47,10 @@ function Home() {
             </span>
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link
-            to="/playground"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-muted"
-          >
-            <Code size={16} />
-            Playground
-          </Link>
-          <a
-            href={import.meta.env.NEXT_PUBLIC_SERVER_URL || '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-muted"
-          >
-            <Server size={16} />
-            API Server
-          </a>
-          <a
-            href="https://github.com/saasflare-dev/starter"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-muted"
-          >
-            <Github size={16} />
-            GitHub
-          </a>
-        </div>
+        <UserMenu />
       </div>
+
+      <ConfigNotice status={configQuery.data} />
 
       {/* System Status */}
       <section className="space-y-4">
@@ -105,6 +85,39 @@ function Home() {
         </div>
       </section>
 
+      {/* Examples — linked straight from the console, no hub page */}
+      <section className="space-y-4">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+          Examples
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <ExampleCard
+            title="Per-User Data — Todos"
+            description="A todo list scoped to your account: the pattern for every user-owned table."
+            href="/examples/components/todos"
+            icon={LayoutTemplate}
+          />
+          <ExampleCard
+            title="API Key Authentication"
+            description="Create a key, then call the external API (GET /api/v1/whoami) with it."
+            href="/examples/components/api-keys"
+            icon={KeyRound}
+          />
+          <ExampleCard
+            title="File Uploads — R2"
+            description="Direct-to-bucket uploads with presigned URLs and progress tracking."
+            href="/examples/components/r2-upload"
+            icon={HardDrive}
+          />
+          <ExampleCard
+            title="SSR Data Fetching"
+            description="Server-rendered data with TanStack Query prefetching."
+            href="/examples/ssr"
+            icon={Server}
+          />
+        </div>
+      </section>
+
       {/* Quick Links / Resources */}
       <section className="space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -134,8 +147,17 @@ function Home() {
         </div>
       </section>
 
-      {/* Footer Actions */}
-      <div className="mt-auto pt-12 flex flex-col items-center gap-8 border-t border-border/40">
+      {/* Footer */}
+      <div className="mt-auto pt-12 flex flex-col items-center gap-4 border-t border-border/40">
+        <a
+          href="https://github.com/saasflare-dev/starter"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-muted"
+        >
+          <Github size={16} />
+          GitHub
+        </a>
         <p className="text-xs text-muted-foreground font-mono">
           Edit{' '}
           <span className="bg-muted px-1 py-0.5 rounded text-foreground">
@@ -145,6 +167,60 @@ function Home() {
         </p>
       </div>
     </main>
+  );
+}
+
+function ExampleCard({
+  title,
+  description,
+  href,
+  icon: Icon,
+  disabled = false,
+}: {
+  title: string;
+  description: string;
+  href: string;
+  icon: LucideIcon;
+  disabled?: boolean;
+}) {
+  const Content = (
+    <>
+      <div
+        className={cn(
+          'p-2 rounded-md transition-colors',
+          disabled
+            ? 'bg-muted text-muted-foreground'
+            : 'bg-muted text-muted-foreground group-hover:text-foreground group-hover:bg-background',
+        )}
+      >
+        <Icon size={20} />
+      </div>
+      <div>
+        <h3 className="text-sm font-medium text-foreground leading-none mb-1">
+          {title}
+        </h3>
+        <p className="text-xs text-muted-foreground line-clamp-2">
+          {description}
+        </p>
+      </div>
+    </>
+  );
+
+  if (disabled) {
+    return (
+      <div className="flex items-center gap-4 p-4 rounded-lg border border-border bg-muted/30 opacity-60 cursor-not-allowed">
+        {Content}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={href}
+      className="group flex items-center gap-4 p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors hover:shadow-sm hover:border-primary/20"
+    >
+      {Content}
+    </Link>
   );
 }
 

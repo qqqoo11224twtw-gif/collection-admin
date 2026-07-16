@@ -49,6 +49,16 @@ See [docs/deploy.md](deploy.md) for the full env file layout.
 | `SERVER_DOMAIN` | ⚠️ Optional | `.dev.env` / `.prod.env` | Custom backend domain. Same constraints. | Pick a hostname on CF. |
 | `R2_ACCESS_KEY_ID` | ⚠️ Optional | server's `.local.env` / `.dev.env` / `.prod.env` | Enables R2 storage routes (presigned uploads, listing, delete). Without it, R2 bindings are skipped and storage routes return errors. | CF dashboard → R2 → **Manage R2 API tokens** → **Object Read & Write** scope. Copy `Access Key ID`. |
 | `R2_SECRET_ACCESS_KEY` | ⚠️ Optional | same | Pair of `R2_ACCESS_KEY_ID`. Required together. | Same dialog — copy `Secret Access Key` (shown only once). |
+| `AUTH_MODE` | ⚠️ Optional (default `open`) | any server env file | The auth switch: `open` \| `admin-only` \| `disabled`. Invalid values fail the deploy. See [docs/auth.md](auth.md). | Pick per product. |
+| `BETTER_AUTH_SECRET` | ✅ Deployed stages when `AUTH_MODE` ≠ `disabled` | server `.dev.env` / `.prod.env` | Session signing secret. Local default exists; deploy fails closed without a real one. | `openssl rand -hex 32` |
+| `ADMIN_EMAILS` | ✅ Deployed stages when `AUTH_MODE` ≠ `disabled` | server env files | Comma-separated emails granted the admin role (in `admin-only` mode: the only emails that may sign in). Trimmed + lowercased. | Your email(s). |
+| `RESEND_API_KEY` | ✅ Deployed stages when `AUTH_MODE` ≠ `disabled` | server `.dev.env` / `.prod.env` | OTP mail delivery via Resend. Locally unset → codes print to server console + `/api/dev/otp`. | [resend.com](https://resend.com) → API key |
+| `EMAIL_FROM` | ✅ Deployed stages when `AUTH_MODE` ≠ `disabled` | same | OTP sender, must be a verified Resend sender domain. | e.g. `Your App <auth@yourdomain.com>` |
+
+The server also gets `SERVER_URL` as a **derived binding** (its own public
+URL — `http://localhost:4000` for stage `local`, else the custom/workers.dev
+domain); better-auth uses it as `baseURL` and the config probe uses it to
+tell local from deployed. Never hand-set it.
 
 R2 also relies on these **derived bindings** that the server does NOT need in env files (alchemy fills them in):
 - `BUCKET` — the R2Bucket resource binding

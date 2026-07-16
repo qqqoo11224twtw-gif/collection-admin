@@ -15,6 +15,13 @@
       "when": 1764322261321,
       "tag": "0001_typical_fantastic_four",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784111317545,
+      "tag": "0002_powerful_purifiers",
+      "breakpoints": true
     }
   ]
 }

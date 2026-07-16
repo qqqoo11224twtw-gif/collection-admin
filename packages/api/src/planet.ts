@@ -1,6 +1,5 @@
-import { os } from '@orpc/server';
 import { z } from 'zod';
-import type { Context } from './context';
+import { publicProcedure } from './middleware';
 
 const planets = [
   { id: 1, name: 'Mercury', type: 'Terrestrial', distanceAu: 0.39 },
@@ -14,8 +13,10 @@ const planets = [
 ];
 
 export const planetApi = {
-  list: os
-    .$context<Context>()
+  // Deliberately public: static read-only demo data (used by the SSR demo,
+  // which prefetches without a browser cookie). Real products should default
+  // to protectedProcedure and opt into public per route.
+  list: publicProcedure
     .output(
       z.array(
         z.object({

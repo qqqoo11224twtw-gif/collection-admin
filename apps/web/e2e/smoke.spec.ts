@@ -13,16 +13,18 @@ import { expect, test } from '@playwright/test';
 test.describe('Smoke tests', () => {
   test('homepage renders and the API round-trip works', async ({ page }) => {
     await page.goto('/');
-    await expect(page).toHaveTitle(/tanstack/i);
+    await expect(page).toHaveTitle(/saasflare starter/i);
 
-    // All four system-status cards render (proves SSR + hydration).
+    // All four system-status cards render (proves SSR + hydration). Scoped
+    // to the section — "R2 Storage" also appears as an example card.
+    const status = page.locator('section').filter({ hasText: 'System Status' });
     for (const name of [
       'API Connection',
       'KV Storage',
       'D1 Database',
       'R2 Storage',
     ]) {
-      await expect(page.getByText(name, { exact: true })).toBeVisible();
+      await expect(status.getByText(name, { exact: true })).toBeVisible();
     }
 
     // At least one health check resolves to "Healthy" — proves the full
@@ -33,10 +35,12 @@ test.describe('Smoke tests', () => {
     });
   });
 
-  test('playground renders its example cards', async ({ page }) => {
-    await page.goto('/playground');
-    await expect(page.getByText('User Management')).toBeVisible();
-    await expect(page.getByText('R2 Storage')).toBeVisible();
-    await expect(page.getByText('Server Side Rendering')).toBeVisible();
+  test('homepage lists the example cards (no hub page)', async ({ page }) => {
+    await page.goto('/');
+    const demos = page.locator('section').filter({ hasText: 'Examples' });
+    await expect(demos.getByText('Per-User Data — Todos')).toBeVisible();
+    await expect(demos.getByText('API Key Authentication')).toBeVisible();
+    await expect(demos.getByText('File Uploads — R2')).toBeVisible();
+    await expect(demos.getByText('SSR Data Fetching')).toBeVisible();
   });
 });

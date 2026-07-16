@@ -1,0 +1,31 @@
+diff --git a/lib/cloudflare/miniflare/miniflare-worker-proxy.js b/lib/cloudflare/miniflare/miniflare-worker-proxy.js
+index 69167a12a490c3387e65de29603865eedb7ad518..dc79f29299e1b43c2fe495af0f2594a480267ce5 100644
+--- a/lib/cloudflare/miniflare/miniflare-worker-proxy.js
++++ b/lib/cloudflare/miniflare/miniflare-worker-proxy.js
+@@ -162,9 +162,11 @@ const parseIncomingMessage = (req) => {
+             headers.set(key, value);
+         }
+     }
++    // PATCH(saasflare): swallow client-abort errors on the request stream —
++    // an unhandled 'error' event here kills the whole dev process.
+     const body = ["GET", "HEAD", "OPTIONS"].includes(method) || !req.readable
+         ? undefined
+-        : Readable.toWeb(req);
++        : (req.on("error", () => {}), Readable.toWeb(req));
+     return {
+         method,
+         url,
+@@ -186,7 +188,12 @@ const writeMiniflareResponseToNode = (res, out) => {
+         }
+     });
+     if (res.body) {
+-        Readable.fromWeb(res.body).pipe(out, { end: true });
++        // PATCH(saasflare): a client disconnect aborts the response stream with
++        // an AbortError; without an 'error' listener that unhandled event
++        // crashes the dev process. Destroy the outgoing response instead.
++        const readable = Readable.fromWeb(res.body);
++        readable.on("error", (error) => out.destroy(error));
++        readable.pipe(out, { end: true });
+     }
+     else {
+         out.end();

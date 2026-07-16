@@ -1,14 +1,14 @@
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { ORPCError, os } from '@orpc/server';
+import { ORPCError } from '@orpc/server';
 import { z } from 'zod';
-import type { Context } from './context';
 import { getS3Client } from './lib/s3';
+import { protectedProcedure } from './middleware';
 
-const o = os.$context<Context>();
-
+// Shared-bucket demo, sign-in required: presign/delete are write vectors and
+// list exposes bucket contents, so none of them may be anonymous.
 export const storageApi = {
-  presign: o
+  presign: protectedProcedure
     .input(
       z.array(
         z.object({
@@ -56,7 +56,7 @@ export const storageApi = {
       return presignedUrls;
     }),
 
-  list: o
+  list: protectedProcedure
     .output(
       z.array(
         z.object({
@@ -84,7 +84,7 @@ export const storageApi = {
       }));
     }),
 
-  delete: o
+  delete: protectedProcedure
     .input(
       z.object({
         key: z.string(),

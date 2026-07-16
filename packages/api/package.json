@@ -25,8 +25,10 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.956.0",
     "@aws-sdk/s3-request-presigner": "^3.956.0",
-    "@saasflare-dev/db": "workspace:*",
+    "@better-auth/api-key": "catalog:",
     "@orpc/server": "catalog:",
+    "@saasflare-dev/db": "workspace:*",
+    "better-auth": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
     "zod": "catalog:"

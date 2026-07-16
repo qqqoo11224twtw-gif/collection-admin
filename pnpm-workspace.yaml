@@ -8,10 +8,14 @@ catalog:
   react-dom: ^19.2.3
   hono: ^4.10.8
   zod: ^4.1.12
-  drizzle-orm: ^0.45.1
+  drizzle-orm: ^0.45.2
   drizzle-kit: ^0.31.8
   lucide-react: ^0.562.0
   tailwindcss: ^4.1.18
+
+  # Auth
+  better-auth: ^1.6.23
+  "@better-auth/api-key": ^1.6.23
 
   # oRPC
   "@orpc/server": ^1.13.13
@@ -19,7 +23,7 @@ catalog:
   "@orpc/tanstack-query": ^1.13.13
 
   # Cloudflare
-  "@cloudflare/workers-types": ^4.20260317.1
+  "@cloudflare/workers-types": ^4.20260401.1
   wrangler: ^4.86.0
   alchemy: ^0.90.1
 

@@ -1,6 +1,9 @@
 {
   "extends": "@saasflare-dev/config/tsconfig.base.json",
   "compilerOptions": {
+    // App, not a library — no .d.ts output. Disables declaration-emit checks
+    // like TS2883 on plugin-inferred types (e.g. the better-auth client).
+    "declaration": false,
     "jsx": "react-jsx",
     "noEmit": true,
     "paths": {
