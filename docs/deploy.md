@@ -396,7 +396,10 @@ For debugging when CI is broken or you're iterating on `alchemy.run.ts`.
 
 ### B1. Preflight + env files
 
-Same as A1–A3. Make sure `.alchemy.env` exists.
+Same as A1–A3 — except `.alchemy.env` is optional locally: if you've run
+`pnpm dlx alchemy login` (browser OAuth), deploys use those credentials
+and keep state in `.alchemy/`. The env file (and its remote state store)
+is only mandatory for CI, which has no browser.
 
 ### B2. Deploy
 

@@ -112,32 +112,12 @@ pnpm --filter web test:e2e   # Playwright against the local dev server
 You'll deploy the `dev` stage from your machine once. After step 5, CI
 takes over and you never do this again (keep it for debugging).
 
-### 4.1 Control-plane secrets → `.alchemy.env`
+You're already authenticated: the `pnpm dlx alchemy login` from step 3
+covers deploys too (no env file needed — credentials live in alchemy's
+local store, deploy state in `.alchemy/`). The only thing a deploy
+genuinely requires is the auth env below.
 
-```bash
-cp .alchemy.env.example .alchemy.env
-```
-
-Fill in the three values:
-
-1. **`CLOUDFLARE_API_TOKEN`** — mint it with the helper (interactive
-   browser OAuth):
-
-   ```bash
-   pnpm dlx alchemy util create-cloudflare-token
-   ```
-
-   ⚠️ **Do not** create this token from the Cloudflare dashboard's
-   "Edit Cloudflare Workers" template — it's missing the D1 and R2-data
-   scopes alchemy needs, and the deploy will fail halfway with
-   `401 Authentication error`. The helper is the only supported path.
-
-2. **`CLOUDFLARE_EMAIL`** — your Cloudflare login email.
-3. **`ALCHEMY_STATE_TOKEN`** — `openssl rand -hex 32`. If you run
-   several projects from this template on the same CF account, they
-   **must all share this value** (it encrypts alchemy's remote state).
-
-### 4.2 Auth env → `apps/server/.dev.env` (required)
+### 4.1 Auth env → `apps/server/.dev.env` (required)
 
 Because `AUTH_MODE` defaults to `open`, a deployed stage requires real
 auth config or the deploy aborts with
@@ -164,26 +144,23 @@ EOF
 values are required. See [docs/auth.md](auth.md) for the full matrix
 (`open` / `admin-only` / `disabled`).
 
-### 4.3 (Optional) custom domains and R2
+### 4.2 (Optional) custom domains and R2
 
 Skip on the first pass — you'll get free `*.workers.dev` URLs.
 When you want `app.yourdomain.com` or file uploads, follow
 [deploy.md A3](deploy.md#a3-optional-create-per-app-stageenv-files).
 
-### 4.4 Deploy and verify
+### 4.3 Deploy and verify
 
 ```bash
 pnpm run deploy:dev
 ```
 
-The script auto-sources `.alchemy.env`, provisions KV + D1 (with
-migrations) + the two Workers, and prints their URLs. Verify:
+Alchemy provisions KV + D1 (with migrations) + the two Workers and
+**prints both URLs at the end of the run**. Verify:
 
 ```bash
-URLS=$(node --env-file=.alchemy.env --env-file=apps/server/.dev.env \
-  scripts/resolve-urls.ts --stage dev)
-echo "$URLS" | jq
-curl -fsS "$(echo "$URLS" | jq -r .server)/health"   # → {"status":"ok"}
+curl -fsS "<the-server-url>/health"   # → {"status":"ok"}
 ```
 
 Open the web URL, sign in with an `ADMIN_EMAILS` address — the code now
@@ -223,7 +200,36 @@ EOF
 Add prod domains / R2 keys here too if you use them (and mirror the
 domains into `apps/web/.prod.env` — see deploy.md A3).
 
-### 5.2 Upload secrets to GitHub
+### 5.2 Headless credentials → `.alchemy.env`
+
+CI has no browser, so it can't use `alchemy login` — it needs an API
+token in an env file that gets uploaded as a secret:
+
+```bash
+cp .alchemy.env.example .alchemy.env
+```
+
+1. **`CLOUDFLARE_API_TOKEN`** — mint it with the helper (interactive
+   browser OAuth, one time):
+
+   ```bash
+   pnpm dlx alchemy util create-cloudflare-token
+   ```
+
+   ⚠️ **Do not** create this token from the Cloudflare dashboard's
+   "Edit Cloudflare Workers" template — it's missing the D1 and R2-data
+   scopes alchemy needs, and the deploy will fail halfway with
+   `401 Authentication error`. The helper is the only supported path.
+
+2. **`CLOUDFLARE_EMAIL`** — your Cloudflare login email.
+3. **`ALCHEMY_STATE_TOKEN`** — `openssl rand -hex 32`. When the token is
+   present, alchemy switches to a **remote state store** (encrypted with
+   this value) so every CI run shares state. If you run several projects
+   from this template on the same CF account, they **must all share this
+   value**. Resources you already deployed manually are re-adopted by
+   name (`adopt: true` everywhere), so the local→CI transition is safe.
+
+### 5.3 Upload secrets to GitHub
 
 ```bash
 gh auth login          # once
@@ -245,7 +251,7 @@ pnpm sync:secrets
 Secrets are **snapshots**: whenever you edit an env file locally, run
 `pnpm sync:secrets` again before pushing.
 
-### 5.3 Turn it on
+### 5.4 Turn it on
 
 ```bash
 git push origin dev
