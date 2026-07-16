@@ -75,6 +75,8 @@ from (`<project>-server-db-<stage>`, `<project>-web-<stage>`, …):
 
 - `apps/server/alchemy.run.ts` — `const PROJECT_NAME`
 - `apps/web/alchemy.run.ts` — `const PROJECT_NAME`
+- `scripts/resolve-urls.ts` — `const PROJECT_NAME` (CI computes deploy/PR
+  URLs from it; wrong name = CI verifies the wrong Worker)
 - `scripts/db-query.ts` — `const PROJECT_NAME`
 - `package.json` (repo root) — `name`
 
@@ -102,3 +104,30 @@ These two must match each other. The guard exists because sibling products
 sharing `:3000` + `reuseExistingServer: true` meant Playwright would silently
 test whichever app happened to be running. Distinct ports make that collision
 unlikely; the guard makes it loud.
+
+### Rename the API key prefix
+
+The prefix is one **configuration constant** plus a handful of literals in
+tests/examples that assert or illustrate it — change them together or the
+suite goes red:
+
+- `packages/api/src/auth.ts` — `API_KEY_PREFIX = 'sfapp_'` (the source of
+  truth: every key the plugin mints starts with it)
+- `apps/web/src/components/api-usage.tsx` — the `sfapp_…` placeholder in the
+  usage snippets
+- `apps/web/e2e/api-keys.spec.ts` — `expect(key).toMatch(/^sfapp_/)`
+- `apps/server/tests/api-keys.test.ts` — prefix assertion + forged-key
+  literals
+- `apps/server/tests/auth-modes.test.ts` — `Bearer sfapp_whatever` literal
+
+### Rename the brand copy
+
+Pure display strings — grep for `Saasflare Starter` (and the lowercase
+`saasflare starter`) and replace:
+
+- `apps/web/src/routes/index.tsx` — the `Saasflare Starter Console` heading
+- `apps/web/src/routes/login.tsx` — the login-page brand name
+- `apps/server/src/index.ts` — the `Hello saasflare starter server!` root
+  response, asserted by `apps/server/tests/server.test.ts`
+- `apps/web/e2e/auth.spec.ts` — asserts the Console heading after the
+  back-button flow
