@@ -49,6 +49,10 @@ starter/
 
 ## ⚡️ Getting Started
 
+> **New here? Follow the full tutorial** — [docs/quickstart.md](docs/quickstart.md)
+> walks from "Use this template" through your first manual deploy to
+> multi-environment CI auto-deploy, including the required auth env.
+
 ### Prerequisites
 
 - Node.js (v20+)
@@ -202,6 +206,10 @@ starter/
 ---
 
 ## ⚡️ 快速开始
+
+> **新用户请看完整教程** —— [docs/quickstart.md](docs/quickstart.md)：
+> 从 GitHub「Use this template」到手动部署到自己的 Cloudflare 账号，
+> 再到多环境自动部署（含必填的 auth 环境变量），一步步走完。
 
 ### 前置要求
 

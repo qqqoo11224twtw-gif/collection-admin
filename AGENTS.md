@@ -40,6 +40,7 @@ Read these docs based on the task at hand:
 
 | When | Read |
 |------|------|
+| First-time setup: template → local dev → own CF account → CI auto-deploy | [docs/quickstart.md](docs/quickstart.md) |
 | **Anything auth: login, sessions, admin, API keys, AUTH_MODE, protected routes** | [docs/auth.md](docs/auth.md) |
 | Adding/modifying API endpoints | [docs/api-development.md](docs/api-development.md) |
 | Modifying database schema | [docs/database-d1.md](docs/database-d1.md) |

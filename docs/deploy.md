@@ -168,12 +168,34 @@ Profiles are stored under `~/.config/.alchemy/credentials/<profile>/`.
 > `CLOUDFLARE_API_TOKEN` from env directly and don't touch profile
 > credentials — so you never need to pass `--profile` to `deploy:*`.
 
-### A3. (Optional) Create per-app `.{stage}.env` files
+### A3. Create per-app `.{stage}.env` files
 
-Only if you need custom domains or R2. Skip otherwise — the apps deploy
-fine with just `.alchemy.env`.
+**Auth env is required** (not optional): `AUTH_MODE` defaults to `open`,
+and every deployed auth-enabled stage fails closed at deploy time without
+these four values in `apps/server/.{stage}.env` (see docs/auth.md §2):
 
-> **🛑 AGENT PAUSE — ask two yes/no questions:**
+```bash
+cat >> apps/server/.dev.env <<EOF
+BETTER_AUTH_SECRET=$(openssl rand -hex 32)
+ADMIN_EMAILS=you@example.com
+RESEND_API_KEY=re_...          # resend.com → API Keys
+EMAIL_FROM=My App <auth@yourdomain.com>   # verified Resend sender
+EOF
+# Repeat for .prod.env with a DIFFERENT secret when promoting.
+```
+
+Products with no login at all set `AUTH_MODE=disabled` instead — then
+none of the four are required.
+
+Domains and R2 remain optional — skip them and the apps deploy on
+`*.workers.dev` URLs.
+
+> **🛑 AGENT PAUSE — first settle auth, then ask two yes/no questions:**
+>
+> 0. *"Does this deployment need sign-in? If yes: which emails should be
+>    administrators, and paste a Resend API key + verified sender (I'll
+>    generate the signing secret). If it's a pure public site, I'll set
+>    AUTH_MODE=disabled and skip all of that."*
 >
 > 1. *"Do you want to use your own domain (like `app.yourcompany.com`)?
 >    If yes, the domain must already be managed by Cloudflare DNS, and
@@ -396,6 +418,11 @@ Same as A6.
 ---
 
 ## Common issues
+
+- **Deploy aborts with `stage "<stage>" requires env: BETTER_AUTH_SECRET,
+  RESEND_API_KEY, EMAIL_FROM, ADMIN_EMAILS`**: the fail-closed auth check
+  (A3). Fill `apps/server/.{stage}.env`, or set `AUTH_MODE=disabled` for
+  a no-login product; re-run `pnpm sync:secrets` if deploying via CI.
 
 - **`computeWorkerDevDomain` errors / wrong URL**: alchemy hits
   `GET /accounts/{id}/workers/subdomain`. New CF accounts don't have a
