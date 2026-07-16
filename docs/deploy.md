@@ -170,10 +170,10 @@ Profiles are stored under `~/.config/.alchemy/credentials/<profile>/`.
 
 ### A3. Create per-app `.{stage}.env` files
 
-**Auth is opt-in on deployed stages**: unset `AUTH_MODE` deploys with
-auth disabled (fail-safe, zero env needed). To enable sign-in, set the
-mode plus mail delivery — and note the deploy then fails closed without
-all four values in `apps/server/.{stage}.env` (docs/auth.md §2):
+**Auth is opt-in on deployed stages** — unset `AUTH_MODE` deploys with
+auth disabled and needs zero env. Enabling sign-in requires all four
+values below (the deploy fails closed otherwise); the canonical
+matrix and mode semantics live in [docs/auth.md §1–2](auth.md):
 
 ```bash
 cat >> apps/server/.dev.env <<'ENV'

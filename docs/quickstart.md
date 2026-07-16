@@ -201,32 +201,20 @@ domains into `apps/web/.prod.env` — see deploy.md A3).
 
 ### 5.2 Headless credentials → `.alchemy.env`
 
-CI has no browser, so it can't use `alchemy login` — it needs an API
-token in an env file that gets uploaded as a secret:
+CI has no browser, so it can't use `alchemy login` — it needs a token
+file, uploaded as a secret:
 
 ```bash
 cp .alchemy.env.example .alchemy.env
 ```
 
-1. **`CLOUDFLARE_API_TOKEN`** — mint it with the helper (interactive
-   browser OAuth, one time):
-
-   ```bash
-   pnpm dlx alchemy util create-cloudflare-token
-   ```
-
-   ⚠️ **Do not** create this token from the Cloudflare dashboard's
-   "Edit Cloudflare Workers" template — it's missing the D1 and R2-data
-   scopes alchemy needs, and the deploy will fail halfway with
-   `401 Authentication error`. The helper is the only supported path.
-
-2. **`CLOUDFLARE_EMAIL`** — your Cloudflare login email.
-3. **`ALCHEMY_STATE_TOKEN`** — `openssl rand -hex 32`. When the token is
-   present, alchemy switches to a **remote state store** (encrypted with
-   this value) so every CI run shares state. If you run several projects
-   from this template on the same CF account, they **must all share this
-   value**. Resources you already deployed manually are re-adopted by
-   name (`adopt: true` everywhere), so the local→CI transition is safe.
+Fill the three values per [deploy.md A2](deploy.md#a2-create-alchemyenv)
+(canonical: the token **must** come from
+`pnpm dlx alchemy util create-cloudflare-token`, never the dashboard;
+one `ALCHEMY_STATE_TOKEN` shared across all your forks on the same CF
+account). With the token present, alchemy switches to a remote state
+store shared by CI runs; manually-deployed resources are re-adopted by
+name, so the local→CI transition is safe.
 
 ### 5.3 Upload secrets to GitHub
 
@@ -271,17 +259,18 @@ merge to `dev` (auto dev deploy) → merge to `main` (auto prod deploy).
 
 ## 6 · When something breaks
 
+Symptoms specific to this walkthrough:
+
 | Symptom | Cause / fix |
 |---|---|
 | Deploy aborts: `stage "dev" requires env: BETTER_AUTH_SECRET, …` | You set `AUTH_MODE=open`/`admin-only` without the mail env — finish 4.1 (or remove `AUTH_MODE` to stay disabled), re-run — and `pnpm sync:secrets` if it happened in CI. |
-| `401 Authentication error` on the first D1/R2 resource | Token minted from the dashboard template. Re-mint with `pnpm dlx alchemy util create-cloudflare-token`, update `.alchemy.env`, re-sync, re-push. |
-| `computeWorkerDevDomain` fails on a fresh account | No workers.dev subdomain yet — deploy + delete a throwaway Worker once (see 4.4). |
-| `gh secret set` → "no default repository" | `gh repo set-default`. |
 | No login button on the deployed site | Deployed default is `disabled` — set `AUTH_MODE=open` + mail env (4.1). |
 | Sign-in works locally but not on dev | Deployed stages send real email: is `EMAIL_FROM` a verified Resend domain? Is the recipient allowed (sandbox sender only delivers to yourself)? |
 | CI deploy green but env change didn't apply | Secrets are snapshots — `pnpm sync:secrets` after every env edit. |
 
-More in [deploy.md → Common issues](deploy.md#common-issues).
+Everything else (401 dashboard-token, missing workers.dev subdomain,
+`gh` defaults, adopt conflicts, state-token rotation) is canonical in
+[deploy.md → Common issues](deploy.md#common-issues).
 
 ## 7 · Where to go next
 
