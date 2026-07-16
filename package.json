@@ -1,5 +1,8 @@
 {
   "name": "@saasflare-dev/starter",
+  "saasflare": {
+    "projectName": "starter"
+  },
   "type": "module",
   "version": "1.0.0",
   "scripts": {

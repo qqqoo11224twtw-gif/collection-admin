@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import alchemy from 'alchemy';
 import {
   computeWorkerDevDomain,
@@ -6,7 +7,20 @@ import {
 } from 'alchemy/cloudflare';
 import { CloudflareStateStore } from 'alchemy/state';
 
-const PROJECT_NAME = 'starter';
+// Single source of truth for the product name: the root package.json
+// `saasflare.projectName` field. Rename a fork THERE, once — every
+// Worker/DB/KV resource name follows. A dedicated field (not `name`)
+// because npm package names allow characters that Cloudflare Worker
+// names don't. Read at runtime (not imported) so it works identically
+// under node, alchemy, and CI.
+const PROJECT_NAME = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+).saasflare?.projectName as string | undefined;
+if (!PROJECT_NAME || !/^[a-z][a-z0-9-]*$/.test(PROJECT_NAME)) {
+  throw new Error(
+    `root package.json needs "saasflare": { "projectName": "<lowercase-dashes>" } (got ${JSON.stringify(PROJECT_NAME)})`,
+  );
+}
 
 const api = await createCloudflareApi();
 

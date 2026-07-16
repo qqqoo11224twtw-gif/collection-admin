@@ -65,7 +65,7 @@ Follow the full checklist in [docs/ports.md](ports.md); the short list:
 
 | What | Where |
 |---|---|
-| `PROJECT_NAME = 'starter'` → your name | `apps/server/alchemy.run.ts` + `apps/web/alchemy.run.ts` (drives every Worker/DB/KV resource name) |
+| Root `package.json` → `"saasflare": { "projectName": "my-app" }` | Single source of the project name — every Worker/DB/KV resource name derives from it (lowercase + dashes) |
 | Local ports (only if you run several saasflare apps side by side) | see the 7-spot checklist in ports.md |
 | `data-app="saasflare-starter"` + `<title>` + description | `apps/web/src/routes/__root.tsx` |
 | `EXPECTED_APP_ID` (must match `data-app`) | `apps/web/e2e/global-setup.ts` |

@@ -68,25 +68,26 @@ pnpm test:e2e     # must start within seconds, not hang for 60
 
 ## When cloning starter into a new product
 
-### Rename the project — 4 spots
+### Rename the project — 1 spot
 
 `starter` is baked into names that alchemy derives Cloudflare resource names
 from (`<project>-server-db-<stage>`, `<project>-web-<stage>`, …):
 
-- `apps/server/alchemy.run.ts` — `const PROJECT_NAME`
-- `apps/web/alchemy.run.ts` — `const PROJECT_NAME`
-- `scripts/resolve-urls.ts` — `const PROJECT_NAME` (CI computes deploy/PR
-  URLs from it; wrong name = CI verifies the wrong Worker)
-- `scripts/db-query.ts` — `const PROJECT_NAME`
-- `package.json` (repo root) — `name`
+- `package.json` (repo root) — the `saasflare.projectName` field. **The
+  single source of truth**: both `alchemy.run.ts` files,
+  `scripts/resolve-urls.ts`, and `scripts/db-query.ts` read it at runtime.
+  Set it once and every Worker/DB/KV resource name follows — there is no
+  separate constant to keep in sync. It's a dedicated field (not `name`)
+  because npm package names allow characters that Cloudflare Worker names
+  don't; lowercase letters, digits, and dashes only, enforced with a loud
+  error. Update `name` too if you like — it's cosmetic.
 
-Miss the `alchemy.run.ts` pair and you deploy over another product's Workers.
-Miss `db-query.ts` and the script silently targets `starter-server-db-<stage>`,
-failing with "database not found" on every run — the failure is loud, but it
-sits in a script nobody runs until they need it. As of 2026-07-10 **every**
-downstream repo except analytics still has `'starter'` in `db-query.ts`, and
-website / tasks / affiliate / onePay still have it in the root `package.json`
-`name`. Don't trust the root `package.json` name as a source of truth.
+Miss this and you deploy over another product's Workers on the same CF
+account. (History: PROJECT_NAME used to be a per-file constant, and as of
+2026-07-10 every downstream repo except analytics had missed at least one
+copy — that drift is why it's now derived from one field. Downstream repos
+adopt this by syncing the four files from starter and fixing their root
+`name` once.)
 
 ### Claim an identity anchor
 
