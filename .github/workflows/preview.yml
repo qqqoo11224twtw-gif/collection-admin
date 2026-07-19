@@ -40,10 +40,14 @@ jobs:
       - run: pnpm install
 
       - name: Inject env files
+        env:
+          ALCHEMY_ENV_FILE_CONTENT: ${{ secrets.ENV_ALCHEMY }}
+          SERVER_ENV_FILE_CONTENT: ${{ secrets.ENV_SERVER_DEV }}
+          WEB_ENV_FILE_CONTENT: ${{ secrets.ENV_WEB_DEV }}
         run: |
-          echo "${{ secrets.ENV_ALCHEMY }}" > .alchemy.env
-          echo "${{ secrets.ENV_SERVER_DEV }}" > apps/server/.dev.env
-          echo "${{ secrets.ENV_WEB_DEV }}" > apps/web/.dev.env
+          printf '%s\n' "$ALCHEMY_ENV_FILE_CONTENT" > .alchemy.env
+          printf '%s\n' "$SERVER_ENV_FILE_CONTENT" > apps/server/.dev.env
+          printf '%s\n' "$WEB_ENV_FILE_CONTENT" > apps/web/.dev.env
 
       - name: Deploy PR preview
         run: pnpm run deploy:pr
@@ -122,10 +126,14 @@ jobs:
       - run: pnpm install
 
       - name: Inject env files
+        env:
+          ALCHEMY_ENV_FILE_CONTENT: ${{ secrets.ENV_ALCHEMY }}
+          SERVER_ENV_FILE_CONTENT: ${{ secrets.ENV_SERVER_DEV }}
+          WEB_ENV_FILE_CONTENT: ${{ secrets.ENV_WEB_DEV }}
         run: |
-          echo "${{ secrets.ENV_ALCHEMY }}" > .alchemy.env
-          echo "${{ secrets.ENV_SERVER_DEV }}" > apps/server/.dev.env
-          echo "${{ secrets.ENV_WEB_DEV }}" > apps/web/.dev.env
+          printf '%s\n' "$ALCHEMY_ENV_FILE_CONTENT" > .alchemy.env
+          printf '%s\n' "$SERVER_ENV_FILE_CONTENT" > apps/server/.dev.env
+          printf '%s\n' "$WEB_ENV_FILE_CONTENT" > apps/web/.dev.env
 
       - name: Destroy PR preview
         run: pnpm run destroy:pr
