@@ -59,7 +59,19 @@ function LoginPage() {
   const [emailTouched, setEmailTouched] = useState(false);
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  // Separate in-flight flags: resending a code must not spin the Verify
+  // button, and verifying must not relabel the resend link.
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  // Seconds until "Resend code" unlocks. The server rate-limits OTP sends
+  // (3/min/IP); the cooldown keeps normal users from ever hitting that wall.
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
 
   const configQuery = useConfigStatus();
   const authMode = configQuery.data?.authMode;
@@ -86,7 +98,7 @@ function LoginPage() {
       setEmailTouched(true);
       return;
     }
-    setBusy(true);
+    setSending(true);
     setError(null);
     try {
       const { error: sendError } =
@@ -106,15 +118,16 @@ function LoginPage() {
       }
       setStep('otp');
       setOtp('');
+      setCooldown(60);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Network error.');
     } finally {
-      setBusy(false);
+      setSending(false);
     }
   };
 
   const verify = async (code: string) => {
-    setBusy(true);
+    setVerifying(true);
     setError(null);
     try {
       const { error: verifyError } = await authClient.signIn.emailOtp({
@@ -133,7 +146,7 @@ function LoginPage() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Network error.');
     } finally {
-      setBusy(false);
+      setVerifying(false);
     }
   };
 
@@ -214,11 +227,11 @@ function LoginPage() {
                 <CardFooter className="flex-col gap-3 pt-6">
                   <Button
                     className="w-full"
-                    disabled={busy || !emailValid}
+                    disabled={sending || !emailValid}
                     type="submit"
                   >
-                    {busy && <Loader2 size={16} className="animate-spin" />}
-                    {busy ? 'Sending…' : 'Send code'}
+                    {sending && <Loader2 size={16} className="animate-spin" />}
+                    {sending ? 'Sending…' : 'Send code'}
                   </Button>
                   <p className="text-center text-xs text-muted-foreground">
                     No password — we email you a 6-digit code.
@@ -241,7 +254,7 @@ function LoginPage() {
                         maxLength={6}
                         autoFocus
                         value={otp}
-                        disabled={busy}
+                        disabled={verifying}
                         data-testid="otp-input"
                         onChange={(value) => {
                           setOtp(value);
@@ -277,11 +290,13 @@ function LoginPage() {
                 <CardFooter className="flex-col gap-3 pt-6">
                   <Button
                     className="w-full"
-                    disabled={busy || otp.length !== 6}
+                    disabled={verifying || otp.length !== 6}
                     onClick={() => void verify(otp)}
                   >
-                    {busy && <Loader2 size={16} className="animate-spin" />}
-                    {busy ? 'Verifying…' : 'Verify and sign in'}
+                    {verifying && (
+                      <Loader2 size={16} className="animate-spin" />
+                    )}
+                    {verifying ? 'Verifying…' : 'Verify and sign in'}
                   </Button>
                   <div className="flex w-full items-center justify-between text-xs text-muted-foreground">
                     <button
@@ -297,11 +312,15 @@ function LoginPage() {
                     </button>
                     <button
                       type="button"
-                      className="hover:text-foreground"
-                      disabled={busy}
+                      className="hover:text-foreground disabled:opacity-50 disabled:hover:text-muted-foreground"
+                      disabled={sending || verifying || cooldown > 0}
                       onClick={() => void sendCode()}
                     >
-                      Resend code
+                      {sending
+                        ? 'Sending…'
+                        : cooldown > 0
+                          ? `Resend code (${cooldown}s)`
+                          : 'Resend code'}
                     </button>
                   </div>
                 </CardFooter>
