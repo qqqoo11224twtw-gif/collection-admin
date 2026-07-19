@@ -29,9 +29,19 @@ export const Route = createFileRoute('/login')({
   component: LoginPage,
 });
 
-/** Only same-app paths — never a full URL — to rule out open redirects. */
+/**
+ * Only same-app paths — never a full URL — to rule out open redirects.
+ * /login itself is rejected too: a stale or nested redirect back to the
+ * login page would bounce the user through it instead of landing home.
+ */
 function safeRedirect(target: string | undefined): string {
-  if (target?.startsWith('/') && !target.startsWith('//')) return target;
+  if (
+    target?.startsWith('/') &&
+    !target.startsWith('//') &&
+    !target.startsWith('/login')
+  ) {
+    return target;
+  }
   return '/';
 }
 

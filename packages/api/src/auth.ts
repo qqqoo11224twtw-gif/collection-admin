@@ -91,6 +91,15 @@ function buildAuth() {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.SERVER_URL,
     basePath: '/api/auth',
+    session: {
+      // Serve get-session from a short-lived signed cookie instead of a D1
+      // query per call. Trade-off: revoking a session (sign-out elsewhere,
+      // admin ban) can take up to maxAge to propagate to other devices.
+      cookieCache: {
+        enabled: true,
+        maxAge: 300,
+      },
+    },
     plugins: [
       // Email OTP sign-in (passwordless). The first code for an unknown email
       // auto-registers the user — in admin-only mode the Hono gate has

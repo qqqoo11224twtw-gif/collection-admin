@@ -17,6 +17,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const { data: session, isPending } = useSession();
 
   useEffect(() => {
+    // Bail once the login navigation is underway: history updates before
+    // this gate unmounts, so without this guard the effect re-fires with
+    // location already at /login and captures the /login URL itself as the
+    // redirect target — nesting one encoding layer per pass.
+    if (location.pathname === '/login') return;
     if (!isPending && !session) {
       void navigate({
         to: '/login',
@@ -34,7 +39,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   // No flash of protected content while the session resolves.
   if (isPending || !session) {
     return (
-      <main className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
+      <main className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
         Checking session…
       </main>
     );
