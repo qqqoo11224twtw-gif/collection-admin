@@ -1,3 +1,5 @@
+/* biome-ignore-all lint/complexity/noImportantStyles: required to override Radix's inline scroll-lock styles */
+
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 
@@ -15,7 +17,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* biome-ignore-all lint/complexity/noImportantStyles: required to override Radix's inline scroll-lock styles */
 html body[data-scroll-locked] {
   --removed-body-scroll-bar-size: 0 !important;
   margin-right: 0 !important;
