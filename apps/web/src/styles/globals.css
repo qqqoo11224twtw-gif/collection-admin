@@ -5,8 +5,8 @@ html {
   scrollbar-gutter: stable;
 }
 
-/* The stack itself lives in packages/ui/src/styles/tokens.css so that this
-   inherited rule and the `font-sans` utility can never disagree. Only the
+/* The stack itself is defined in packages/ui/src/styles/globals.css so that
+   this inherited rule and the `font-sans` utility can never disagree. Only the
    webfont files are imported here, since they are this app's dependency. */
 body {
   font-family: var(--font-sans);

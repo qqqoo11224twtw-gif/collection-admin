@@ -198,7 +198,8 @@ newsletter 是最新一代，但**它不是"shadcn 默认"**：
 > examples），「默认值合不合适」在当前的 starter 里根本无法回答。
 >
 > 新顺序：**组件基线 → 演示页（全默认值）→ 看着演示页只改不合适的 token**。
-> 好处是 `tokens.css` 初始为空，之后每加一条都必须说得出「在演示页上看到了什么」。
+> 好处是我们的 token 块初始只有字体两行，之后每加一条都必须说得出
+> 「在演示页上看到了什么」。
 
 ### Phase 0 — 品牌槽位化 ⬜ 未做（与 Phase 1 解耦，可随时插入）
 
@@ -248,8 +249,9 @@ newsletter 是最新一代，但**它不是"shadcn 默认"**：
 
 按 §1.1 的修正把字体从 body 规则搬进 token，顺带**修掉一个真 bug**：
 
-- 新建 `packages/ui/src/styles/tokens.css`（分层的第一个文件，见 §4），
-  定义 `--font-sans` / `--font-mono`；
+- 在 `packages/ui/src/styles/globals.css` **末尾的 `:root` 块**里定义
+  `--font-sans` / `--font-mono`（放置方案见 §4；曾先建过独立的 `tokens.css`，
+  因为覆盖能力残缺已删）；
 - `apps/web` 的 `body` 规则改成 `font-family: var(--font-sans)`——保留继承那条路
   （给没写 class 的元素兜底），但值从 token 取，两条路不可能再分叉；
 - webfont 文件的 `@import` 留在 `apps/web`（`@fontsource-variable/*` 是那边的依赖）。
@@ -373,51 +375,57 @@ Geist Mono 装了、字体文件也 import 了，但从未生效**。sans 那条
    手改会在下次 `shadcn add --overwrite` 时被静默冲掉。设计系统的自定义值放在
    **我们自己的文件**里（下方分层方案）。
 
-### `packages/ui` 的分层约定（Phase 3 开工前建好）
+### token 放哪：`globals.css` 末尾的 `:root` 块
 
-```
-packages/ui/src/styles/
-├── globals.css   ← shadcn 的地盘。CLI 写。人只在末尾加 @import，内容一律不改
-├── tokens.css    ← 我们的地盘。【只有变量赋值，一个选择器都没有】
-└── brand.css     ← 品牌槽位，starter 里默认中性，产品仓覆盖三个值
-```
-
-接法（**注意不是"末尾追加"——CSS 的 `@import` 必须在所有规则之前**）：
+**方案在 07-27 换过一次**，先记结论：
 
 ```css
-@import "tailwindcss";
-@source ...;
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
-/* Our own layer. Everything above this line is shadcn's — do not hand-edit it. */
-@import "./tokens.css";        ← 我们的地盘从这里开始
+/* packages/ui/src/styles/globals.css —— 文件最末尾 */
+:root {
+  --font-sans: "Geist Variable", "PingFang SC", …;
+  --font-mono: "Geist Mono Variable", …;
+  /* Phase 3 的字阶、行高、圆角都加在这里 */
+}
 ```
 
-CLI 更新只动 `globals.css` 自己的内容，`tokens.css` 毫发无伤。要守的是「那行
-`@import` 别被冲掉」，diff 一眼可见，也可加进 CI 检查。
+**为什么是「末尾的 `:root`」而不是独立文件**（曾短暂建过 `tokens.css`，已删）：
 
-**⚠️ 但这个位置带来一个真实限制（2026-07-27 浏览器实测确认）：**
+CSS 变量遵循级联——**同名变量，写在后面的赢**。而 `@import` 按规范**必须出现在
+所有规则之前**，所以任何用 `@import` 引进来的文件，都排在 `globals.css` 自己的
+`:root {}` 之前，**永远盖不住 shadcn 已经声明的值**。实测确认过：
+独立文件里写 `--radius: 9px` 无效（仍是 `0.625rem`），
+而末尾的 `:root` 里写 `--radius: 2px` 生效。
 
-| 要改的东西 | 值来自哪 | `tokens.css` 能否覆盖 |
-|---|---|---|
-| 字阶 `--text-*`、行高、间距 `--spacing` | `@import "tailwindcss"`（在我们**之前**） | ✅ **能**。实测 `--text-sm: 15px` → 元素 `font-size` 确实变 15px |
-| `--radius`、`--background` 等颜色 | `globals.css` 自己的 `:root {}`（在我们**之后**） | ❌ **不能**。实测 `--radius: 9px` 无效，仍是 `0.625rem` |
+一个独立文件换来的只是「视觉上分开」，代价却是覆盖能力残缺，不划算。
 
-也就是说 Phase 3 的**字阶/行高/间距完全没问题**（那正好是主要工作量），
-但**圆角和语义色需要另想办法**。三条路，开工时再选：
-① 直接改 `globals.css` 的 `:root`，并记进「重拉后需重新应用」清单；
-② `tokens.css` 里用 `:root:root { }` 提高特异性压过后面的 `:root`（有效但是 hack）；
-③ 语义色用**新增**变量名（`--color-success` 等 globals 里本来就没有的），天然无冲突。
+**为什么这样改是安全的**（推翻了本文档早先「globals.css 是 CLI 地盘、手改会丢」的说法）：
 
-> ③ 对语义色是最干净的——反正那些 token 现在根本不存在，是新增不是覆盖。
-> 真正麻烦的只有 `--radius` 一个值。
+- 实测：这次 `shadcn add` 了 **25 个组件**（含 sidebar 这种自带 token 的），
+  `globals.css` **一字节没动**；
+- 佐证：文件尾部那段手写的 `button:not([disabled]) { cursor: pointer }`
+  历经多次 shadcn 操作**一直活着**。
 
-> `globals.css` **现在已经被污染了**（尾部那段 `button:not([disabled]) { cursor: pointer }`
-> 是手写的）。建分层时把它一并搬走。
+结论：CLI 对 `globals.css` 是**按需追加**（只在组件需要新变量时补），
+**不是整文件覆盖**。所以末尾追加自己的块是安全的，只要保持在最后。
 
-**规矩：`tokens.css` 里不允许出现任何选择器。** 将来若真需要 `data-slot` 覆盖，
-单开 `overrides.css`——文件名本身就是警告，且每条必须写注释说明「为什么 token 做不到」。
-「我们到底覆盖了多少东西」= 看这个文件有几行。理想状态是它不存在。
+**两种情况要分清**（实测：utility 生成的是 `.text-sm { font-size: var(--text-sm) }`，
+引用变量而非写死值，所以覆盖变量即可全站生效）：
+
+| 你要做的 | 用什么 |
+|---|---|
+| **改已有值**（`--font-sans` `--text-sm` `--radius` 颜色…） | 末尾 `:root {}` 就够 |
+| **造新 utility**（`bg-success` 这种全新 class） | 还需要一个 `@theme {}` 块，Tailwind 得在构建期知道这个 class 存在 |
+
+Phase 3 的语义色属于后者，字阶/行高/圆角属于前者。
+
+> `brand.css`（品牌槽位）同理——Phase 0 做的时候也按「末尾 `:root`」处理，
+> 或者干脆和这个块合并，靠注释分区即可。
+
+**规矩：这个 `:root` 块里只写变量赋值，不写选择器规则。** 将来若真需要
+`data-slot` 覆盖尺寸，单开 `overrides.css`（用 `@import` 引入即可——覆盖组件样式
+不受前面说的变量级联限制，那是选择器特异性的事）。文件名本身就是警告，
+每条必须注释说明「为什么 token 做不到」。「我们到底覆盖了多少东西」= 看它有几行，
+理想状态是它不存在。
 
 ### 重拉组件后必须重新应用的改动清单
 

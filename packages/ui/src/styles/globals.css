@@ -5,8 +5,6 @@
 @source "../**/*.{ts,tsx}";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-/* Our own layer. Everything above this line is shadcn's — do not hand-edit it. */
-@import "./tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -129,4 +127,37 @@
   [role="button"]:not([disabled]) {
     cursor: pointer;
   }
+}
+/* ---------------------------------------------------------------------------
+ * Our design tokens. Everything above this line comes from the shadcn CLI.
+ *
+ * This block must stay LAST: CSS variables follow the cascade, so whichever
+ * :root is declared last wins. That is what lets us override values shadcn
+ * already declares above (--radius, colors) — an @import at the top of the file
+ * cannot, because @import is required to precede all rules.
+ *
+ * Utilities reference these variables rather than inlining their values
+ * (`.font-sans { font-family: var(--font-sans) }`), so redefining a variable
+ * here re-styles every use of the matching utility across all apps.
+ *
+ * Only plain overrides belong here. Introducing a *new* utility (say
+ * `bg-success`) additionally needs an @theme block, since Tailwind has to know
+ * the class exists at build time.
+ *
+ * See docs/design-system-plan.md.
+ * ------------------------------------------------------------------------- */
+:root {
+  /* Single source of truth for both paths that can set a font: the `font-sans`
+     / `font-mono` utilities, and the inherited `body { font-family }` rule in
+     apps/web, which reads var(--font-sans). Defining only one lets them drift.
+     CJK families sit between Geist and the system stack so mixed Chinese and
+     English text renders consistently; systems lacking them fall through. */
+  --font-sans:
+    "Geist Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "SimHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+
+  --font-mono:
+    "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
 }
