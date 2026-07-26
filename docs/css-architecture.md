@@ -4,8 +4,8 @@ How styling is wired in this repo: file responsibilities, token placement rules,
 and the traps that have already bitten us. Assumes working knowledge of Tailwind
 v4 — this documents what is **specific to this project**.
 
-Design-system planning (phases, decisions, rationale) lives in
-[`design-system-plan.md`](design-system-plan.md). This file covers mechanics only.
+Scope is mechanics: which file owns what, and which constraints are load-bearing.
+It does not prescribe visual values — those are the design system's concern.
 
 ---
 
@@ -42,8 +42,8 @@ apps/web/src/styles/globals.css      product layer (webfonts, scrollbar, app qui
 @custom-variant dark (...);      /* ┐                                        */
 @theme inline { ... }            /* │ shadcn CLI territory.                  */
 :root { --radius; colors }       /* │ Maintained by `shadcn add`.            */
-.dark { ... }                    /* │ `.dark` values are UNMAINTAINED —      */
-@layer base { ... }              /* ┘ see design-system-plan.md §3(a).       */
+.dark { ... }                    /* │ `.dark` values are UNMAINTAINED — §5.  */
+@layer base { ... }              /* ┘                                        */
 
 :root { --font-sans; --font-mono }  /* ours — MUST stay last, see §3 */
 ```
@@ -203,15 +203,15 @@ fall through at no cost — do not "simplify" them away.
 | Token customization | edited in place | same (CLI merges) | ok |
 | Package resolution | tsconfig paths + Vite | `package.json` `exports` | TODO |
 
-The sibling `website` repo chains stylesheets with
-`@import "../../../../packages/ui/src/styles/globals.css"` instead of using two
-`<link>` tags. Cascade behaviour is equivalent; the four-level relative path is
-more brittle than the alias used here. Not a pattern to copy.
+An alternative wiring is to chain the stylesheets — have the app's `globals.css`
+`@import` the package one, yielding a single `<link>`. Cascade behaviour is
+equivalent, since link order and import order both resolve the same way, and it
+requires a relative path across package boundaries instead of the alias. The two
+`<link>` tags are kept for that reason.
 
 ---
 
 ## See also
 
-- [`design-system-plan.md`](design-system-plan.md) — phases, decisions, survey data
 - [`ui-guidelines.md`](ui-guidelines.md) — component installation and import rules
 - [`rules-tanstack.md`](rules-tanstack.md) — frontend framework conventions
