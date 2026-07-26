@@ -99,7 +99,7 @@ cookie; `credentials: 'include'` is already wired into the oRPC link too.
   persist it). The DB stores a hash.
 - Server-side constants in `packages/api/src/auth.ts`:
   `API_KEY_PREFIX = 'sfapp_'` — **every forked product must rename this**
-  (tasks: `sftask_`, notify: `ntfy_`) — and `API_KEY_PERMISSIONS`, the fixed
+  (a product named Acme would use `acme_`) — and `API_KEY_PERMISSIONS`, the fixed
   permission set. Users never edit permissions; version one exposes no
   permission UI.
 - Expiry is chosen at creation: default **never**, presets 7/30/90/365 days,
@@ -162,8 +162,8 @@ cookie; `credentials: 'include'` is already wired into the oRPC link too.
 
 ## 7. Hard-won constraints — do NOT "simplify" these away
 
-Each of these looks removable and is not. All were paid for in the Tasks
-pilot (`tasks/docs/auth-plan.md` A0–A7):
+Each of these looks removable and is not. All were paid for in a production
+pilot before being extracted into this template:
 
 - **The admin-only whitelist gate lives in the Hono layer, BEFORE
   better-auth.** better-auth writes the verification row *before* invoking

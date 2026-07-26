@@ -1,8 +1,8 @@
 # Local dev ports
 
-Starter's baseline is **web `:3000` / server `:4000`**. Every product cloned from
-starter gets its own hundreds-block so several can run at once — see the port
-table in the parent `CLAUDE.md`. Convention: block `X` → **web `3X00`, server `4X00`**.
+Starter's baseline is **web `:3000` / server `:4000`**. If you run several
+projects cloned from this template side by side, give each one its own
+hundreds-block so they do not collide: block `X` → **web `3X00`, server `4X00`**.
 
 Changing the ports means touching **7 functional spots across 5 files**, plus
 comments and docs. Miss one and the failure is usually silent or confusing

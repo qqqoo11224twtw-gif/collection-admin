@@ -3,8 +3,16 @@
 ## `@saasflare-dev/ui` Package Rules
 
 - Install shadcn components with: `pnpm dlx shadcn@latest add <component> -c packages/ui` (run from root folder)
+  - `shadcn` is also a dependency of `packages/ui`, so
+    `pnpm --filter @saasflare-dev/ui exec shadcn add <component>` runs the exact
+    version in the lockfile instead of whatever `@latest` resolves to. Prefer it
+    when you want reproducibility.
 - Note: use `shadcn@latest`, not `shadcn-ui@latest`
-- Never modify code in `@saasflare-dev/ui`
+- Never hand-edit `packages/ui/src/components/*` — the CLI rewrites those files
+  and silently drops your changes. Restyle through tokens instead; see
+  [css-architecture.md](css-architecture.md).
+  - Sole current exception: `sonner.tsx` re-exports `toast`, which upstream does
+    not. Reapply it after re-pulling that component.
 
 ### Imports
 
@@ -26,7 +34,7 @@ The `tsconfig.json` path mapping `@saasflare-dev/ui/*` points to `packages/ui/sr
 
 ### Component Specific Rules
 
-- **Dialog Width**: `DialogContent` has a default `sm:max-w-lg` class. To set wider (e.g., `max-w-4xl`), you MUST add `sm:` prefix: `sm:max-w-4xl`.
+- **Dialog Width**: `DialogContent` has a default `sm:max-w-md` class. To set wider (e.g., `max-w-4xl`), you MUST add the `sm:` prefix: `sm:max-w-4xl` — without it the default wins at `sm` and up.
 
 ## Styling
 
@@ -44,8 +52,10 @@ The `tsconfig.json` path mapping `@saasflare-dev/ui/*` points to `packages/ui/sr
 
 ### Color
 
-- Establish a constrained palette: neutrals (grays), primary color, semantic colors (success/warning/error).
-- Use primary color for primary actions only. Most text should be dark gray (e.g., `text-slate-800`), not pure black.
+- Use the semantic tokens (`text-foreground`, `text-muted-foreground`, `bg-card`,
+  `border-border`, `bg-destructive`…), never a raw palette class such as
+  `text-slate-800` or `text-red-600`. The tokens are theme-aware; raw classes are not.
+- Use the primary color for primary actions only.
 
 ### Typography
 

@@ -1,6 +1,6 @@
 # TanStack Start Frontend Rules
 
-This file contains rules specific to `apps/web/` (TanStack Start). Read `GEMINI.md` first for shared project conventions.
+This file contains rules specific to `apps/web/` (TanStack Start). Read `AGENTS.md` first for shared project conventions.
 
 ## Framework Basics
 
