@@ -47,6 +47,7 @@ Read these docs based on the task at hand:
 | Inspecting D1 data (ad-hoc SQL: "how many users", "show me row 5", etc.) | [docs/db-query.md](docs/db-query.md) |
 | Using UI components or styling | [docs/ui-guidelines.md](docs/ui-guidelines.md) |
 | **App design system: type scale, spacing, density, page patterns, `/design` showcase** | [docs/design-system-plan.md](docs/design-system-plan.md) |
+| **How the CSS is wired: Tailwind v4 mechanics, where tokens live, cascade pitfalls** | [docs/css-architecture.md](docs/css-architecture.md) |
 | Code style, TypeScript rules | [docs/coding-standards.md](docs/coding-standards.md) |
 | Env vars, deployment config | [docs/environment.md](docs/environment.md) |
 | **Frontend: TanStack Start** | [docs/rules-tanstack.md](docs/rules-tanstack.md) |
