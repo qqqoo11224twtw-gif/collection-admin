@@ -5,11 +5,11 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* The stack itself lives in packages/ui/src/styles/tokens.css so that this
+   inherited rule and the `font-sans` utility can never disagree. Only the
+   webfont files are imported here, since they are this app's dependency. */
 body {
-  font-family:
-    "Geist Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
-    "SimHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;

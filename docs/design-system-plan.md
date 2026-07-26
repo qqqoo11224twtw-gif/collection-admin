@@ -244,6 +244,26 @@ newsletter 是最新一代，但**它不是"shadcn 默认"**：
 **⚠️ 遗留：`docs/ui-guidelines.md` 未更新**（仍是 65 行泛泛的 Refactoring UI 建议，
 没有一条具体数值）。等 Phase 3 定完 token 再一次性重写，现在写等于白写。
 
+#### Phase 1.5 — 字体 token 化 ✅ 已完成（2026-07-27）
+
+按 §1.1 的修正把字体从 body 规则搬进 token，顺带**修掉一个真 bug**：
+
+- 新建 `packages/ui/src/styles/tokens.css`（分层的第一个文件，见 §4），
+  定义 `--font-sans` / `--font-mono`；
+- `apps/web` 的 `body` 规则改成 `font-family: var(--font-sans)`——保留继承那条路
+  （给没写 class 的元素兜底），但值从 token 取，两条路不可能再分叉；
+- webfont 文件的 `@import` 留在 `apps/web`（`@fontsource-variable/*` 是那边的依赖）。
+
+**修掉的 bug**：`--font-mono` 从来没定义过，所以 4 处 `font-mono`
+（api-keys ×2、examples、index）**一直落在 Tailwind 默认等宽栈上——
+Geist Mono 装了、字体文件也 import 了，但从未生效**。sans 那条至少有 body 规则
+侥幸兜住（见 §1.1 的 cascade layer 说明），mono 这条没有任何兜底。
+
+**`verify`（浏览器实测四条路径全部一致）**：
+`--font-sans` / `--font-mono` token 值正确；`body` 继承 = Geist Variable；
+`.font-sans` utility = Geist Variable（**改前是 Tailwind 默认栈**）；
+`.font-mono` utility = Geist Mono Variable（**改前根本没生效**）。
+
 ### Phase 2 — 演示页 `/design` + 应用模式 ⬅️ **下一步**
 
 - **目标**：一个能打开看的页面，既是规范也是回归基准。
@@ -362,9 +382,35 @@ packages/ui/src/styles/
 └── brand.css     ← 品牌槽位，starter 里默认中性，产品仓覆盖三个值
 ```
 
-`globals.css` 末尾追加 `@import "./tokens.css"; @import "./brand.css";`——
-后 import 的赢，覆盖顺序天然正确；CLI 更新只动 `globals.css`，我们的文件毫发无伤。
-唯一要守的是「末尾那两行别被冲掉」，diff 一眼可见，也可加进 CI 检查。
+接法（**注意不是"末尾追加"——CSS 的 `@import` 必须在所有规则之前**）：
+
+```css
+@import "tailwindcss";
+@source ...;
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/* Our own layer. Everything above this line is shadcn's — do not hand-edit it. */
+@import "./tokens.css";        ← 我们的地盘从这里开始
+```
+
+CLI 更新只动 `globals.css` 自己的内容，`tokens.css` 毫发无伤。要守的是「那行
+`@import` 别被冲掉」，diff 一眼可见，也可加进 CI 检查。
+
+**⚠️ 但这个位置带来一个真实限制（2026-07-27 浏览器实测确认）：**
+
+| 要改的东西 | 值来自哪 | `tokens.css` 能否覆盖 |
+|---|---|---|
+| 字阶 `--text-*`、行高、间距 `--spacing` | `@import "tailwindcss"`（在我们**之前**） | ✅ **能**。实测 `--text-sm: 15px` → 元素 `font-size` 确实变 15px |
+| `--radius`、`--background` 等颜色 | `globals.css` 自己的 `:root {}`（在我们**之后**） | ❌ **不能**。实测 `--radius: 9px` 无效，仍是 `0.625rem` |
+
+也就是说 Phase 3 的**字阶/行高/间距完全没问题**（那正好是主要工作量），
+但**圆角和语义色需要另想办法**。三条路，开工时再选：
+① 直接改 `globals.css` 的 `:root`，并记进「重拉后需重新应用」清单；
+② `tokens.css` 里用 `:root:root { }` 提高特异性压过后面的 `:root`（有效但是 hack）；
+③ 语义色用**新增**变量名（`--color-success` 等 globals 里本来就没有的），天然无冲突。
+
+> ③ 对语义色是最干净的——反正那些 token 现在根本不存在，是新增不是覆盖。
+> 真正麻烦的只有 `--radius` 一个值。
 
 > `globals.css` **现在已经被污染了**（尾部那段 `button:not([disabled]) { cursor: pointer }`
 > 是手写的）。建分层时把它一并搬走。
