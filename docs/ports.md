@@ -66,38 +66,5 @@ pnpm dev          # web on :3X00, server on :4X00
 pnpm test:e2e     # must start within seconds, not hang for 60
 ```
 
-## When cloning starter into a new product
-
-### Rename the product — ONE place
-
-The entire product identity is the `saasflare` block in the root
-`package.json`; everything else reads it (JSON import in app/e2e code,
-fs read in the node scripts):
-
-```json
-"saasflare": {
-  "projectName": "my-app",       // Worker/D1/KV resource names (lowercase+dashes, validated)
-  "displayName": "My App",       // <title>, console/login headings, smoke-test assertion
-  "appId": "my-app",             // <html data-app> and the E2E identity guard (always in sync)
-  "apiKeyPrefix": "myapp_"       // better-auth key prefix + every test/snippet that shows it
-}
-```
-
-Who consumes what:
-
-| Field | Read by |
-|---|---|
-| `projectName` | both `alchemy.run.ts`, `scripts/resolve-urls.ts`, `scripts/db-query.ts`, the server's hello route |
-| `displayName` | `apps/web/src/lib/brand.ts` (imported by app code AND the e2e suite) → `__root.tsx` title, console/login headings, smoke/auth assertions |
-| `appId` | `__root.tsx` `data-app` and `e2e/global-setup.ts` guard — one field, so they can never drift apart |
-| `apiKeyPrefix` | `packages/api/src/auth.ts` (`API_KEY_PREFIX`), the `/keys` usage snippets, server tests + e2e assertions (all import the constant or the field) |
-
-Getting `projectName` wrong is the dangerous one: deploying with another
-product's name adopts/overwrites its Workers and database on the same CF
-account. The value is validated (`^[a-z][a-z0-9-]*$`) and throws loudly.
-
-### Still manual (assets and copy, not identity)
-
-- `apps/web/public/favicon.svg` — replace the starter terminal-prompt mark
-- `__root.tsx` `description` meta and other marketing copy
-- Local ports if you run several saasflare apps side by side (top of this doc)
+Renaming the product itself (the `saasflare` block in the root `package.json`)
+is a separate task — see [quickstart.md](quickstart.md#make-it-yours-5-minutes-do-it-now).

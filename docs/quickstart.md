@@ -8,7 +8,7 @@ never deploy by hand again.
 Deep dives live elsewhere — this page is the happy path:
 [docs/deploy.md](deploy.md) (full deploy runbook + troubleshooting),
 [docs/auth.md](auth.md) (auth configuration), [docs/ports.md](ports.md)
-(rename checklist), [docs/environment.md](environment.md) (every env var).
+(renumbering local dev ports), [docs/environment.md](environment.md) (every env var).
 
 ## 0 · What you're about to deploy
 
@@ -52,21 +52,40 @@ pnpm install
 ### Make it yours (5 minutes, do it now)
 
 The product identity lives in ONE place — the `saasflare` block in the
-root `package.json`; every title, resource name, e2e guard, and API key
-prefix derives from it (details in [docs/ports.md](ports.md)):
+root `package.json`. Every title, resource name, e2e guard, and API key
+prefix derives from it, either by JSON import in app/e2e code or by an fs
+read in the node scripts:
 
 ```json
 "saasflare": {
-  "projectName": "my-app",
-  "displayName": "My App",
-  "appId": "my-app",
-  "apiKeyPrefix": "myapp_"
+  "projectName": "my-app",       // Worker/D1/KV resource names (lowercase+dashes, validated)
+  "displayName": "My App",       // <title>, console/login headings, smoke-test assertion
+  "appId": "my-app",             // <html data-app> and the E2E identity guard (always in sync)
+  "apiKeyPrefix": "myapp_"       // better-auth key prefix + every test/snippet that shows it
 }
 ```
 
-Still manual: `apps/web/public/favicon.svg` (your icon), the `description`
-meta in `__root.tsx`, and local ports if you run several saasflare apps
-side by side (ports.md).
+> **Get `projectName` right the first time.** Deploying with a name another
+> project already uses on the same Cloudflare account adopts and overwrites its
+> Workers and database. The value is validated (`^[a-z][a-z0-9-]*$`) and throws
+> loudly on a bad format — but it cannot tell that a *valid* name is already
+> someone else's.
+
+Who reads what, if you need to trace a value:
+
+| Field | Read by |
+|---|---|
+| `projectName` | both `alchemy.run.ts`, `scripts/resolve-urls.ts`, `scripts/db-query.ts`, the server's hello route |
+| `displayName` | `apps/web/src/lib/brand.ts` (imported by app code AND the e2e suite) → `__root.tsx` title, console/login headings, smoke/auth assertions |
+| `appId` | `__root.tsx` `data-app` and `e2e/global-setup.ts` guard — one field, so they can never drift apart |
+| `apiKeyPrefix` | `packages/api/src/auth.ts` (`API_KEY_PREFIX`), the `/keys` usage snippets, server tests + e2e assertions |
+
+**Still manual** (assets and copy, not identity):
+
+- `apps/web/public/favicon.svg` — replace the starter terminal-prompt mark
+- the `description` meta in `__root.tsx`, and any other marketing copy
+- local ports, only if you run several projects side by side — see
+  [docs/ports.md](ports.md)
 
 ## 3 · Run it locally
 
