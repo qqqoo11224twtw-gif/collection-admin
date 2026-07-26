@@ -1,6 +1,7 @@
 @import "tailwindcss";
-@source "../../../apps/**/*.{ts,tsx}";
-@source "../../../components/**/*.{ts,tsx}";
+/* Tailwind auto-detects sources from here up to the git root, which already
+   covers apps/ and packages/. This line is only kept as an explicit anchor for
+   this package's own components. */
 @source "../**/*.{ts,tsx}";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
