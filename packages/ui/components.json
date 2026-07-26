@@ -1,11 +1,11 @@
 {
   "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "new-york",
-  "rsc": true,
+  "style": "radix-vega",
+  "rsc": false,
   "tsx": true,
   "tailwind": {
     "config": "",
-    "css": "../../apps/web/src/styles/globals.css",
+    "css": "src/styles/globals.css",
     "baseColor": "neutral",
     "cssVariables": true,
     "prefix": ""
@@ -18,5 +18,8 @@
     "utils": "@saasflare-dev/ui/lib/utils",
     "ui": "@saasflare-dev/ui/components"
   },
-  "registries": {}
+  "registries": {},
+  "menuColor": "default",
+  "menuAccent": "subtle",
+  "rtl": false
 }
