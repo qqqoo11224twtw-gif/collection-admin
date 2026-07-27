@@ -189,32 +189,25 @@ function ScalePage() {
       </div>
 
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-4">
-        <h2 className="text-sm font-semibold">What to compare</h2>
-        <ul className="flex list-disc flex-col gap-1.5 pl-4 text-sm text-muted-foreground">
-          <li>
-            <span className="text-foreground">Finding your place:</span> A
-            labels each group at 18px. B has no label at all — decide whether
-            the whitespace alone makes the grouping obvious, because that is the
-            entire bet.
-          </li>
-          <li>
-            <span className="text-foreground">Where the eye lands first:</span>{' '}
-            A pulls toward the headings, B toward the numbers. Which is correct
-            depends on whether people arrive here to navigate or to read a
-            figure.
-          </li>
-          <li>
-            <span className="text-foreground">Scaling past two groups:</span> B
-            works cleanly at three or four blocks; beyond that, unlabelled
-            sections get hard to scan and A's headings start paying for
-            themselves.
-          </li>
-          <li>
-            <span className="text-foreground">Cost:</span> B spends its budget
-            on one large number and buys grouping with whitespace, so it needs
-            more vertical room per block.
-          </li>
-        </ul>
+        <h2 className="text-sm font-semibold">The rule</h2>
+        <p className="text-sm text-muted-foreground">
+          Neither column wins outright — the heading is not a style choice but a
+          content one.{' '}
+          <span className="text-foreground">
+            Drop the heading when the content says what it is; keep it when a
+            reader could be unsure what they are looking at.
+          </span>{' '}
+          A table of payments under a page titled Payments needs no label. Six
+          same-shaped blocks on a settings page each need one, or people lose
+          their place scrolling.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Everything else is already settled and applies either way: 12px is not
+          used, secondary text stays at 14px and recedes through color, the page
+          title is 24px, and table rows are 14px. When a heading is warranted it
+          is 18px — never 14px caps, which puts it at the same size as the
+          content it labels.
+        </p>
       </div>
     </div>
   );

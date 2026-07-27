@@ -59,14 +59,52 @@ The `tsconfig.json` path mapping `@saasflare-dev/ui/*` points to `packages/ui/sr
 
 ### Typography
 
-- Use Tailwind's font-size scale (`text-xs`, `text-sm`, `text-base`, `text-lg`, `text-xl`).
+Tailwind's scale is a palette to pick from, not a ladder to climb one rung at a
+time. Picking adjacent steps (`text-xs` → `text-sm` → `text-base`) gives ratios
+of 1.17 and 1.14, which reads as noise rather than hierarchy. Pick these:
+
+| Role | Class | Size |
+|---|---|---|
+| Page title | `text-2xl` | 24px |
+| Metric / headline number | `text-2xl` | 24px |
+| Section heading — only when needed, see below | `text-lg` | 18px |
+| Everything else: body, table cells, labels, form text | `text-sm` | 14px |
+
+- **Do not use `text-xs`.** Secondary text stays at `text-sm` and recedes with
+  `text-muted-foreground` instead of shrinking. 12px is the first step to break
+  in dense CJK text, and shrinking is a weaker signal than contrast anyway.
+  (Badges are the one place it may still earn its keep.)
+- **Never use `text-sm` + caps as a section heading.** That puts the label at
+  the same size as the content it labels, so size contributes nothing and the
+  hierarchy rests entirely on letter-spacing tricks.
 - Stick to a few font weights (`font-normal`, `font-medium`, `font-semibold`).
-- Create hierarchy through font weight and color, not just size.
+- Use `tabular-nums` on any column of figures so digits line up vertically.
+
+#### Whether a section needs a heading
+
+**Drop the heading when the content says what it is; keep it when a reader
+could be unsure what they are looking at.**
+
+A payments table on a page titled "Payments" is self-evident — a "Recent
+activity" label above it is noise, and whitespace groups it fine. Six
+same-shaped blocks on a settings page are not self-evident; without labels
+people lose their place while scrolling.
+
+This mirrors shadcn's own `dashboard-01`, which ships no section headings at
+all: its three blocks (cards, chart, table) are visually distinct enough that
+whitespace alone carries the grouping. Its entire type census is `text-sm`,
+`text-2xl`/`text-3xl` for metrics, and zero `text-xs`.
+
+Compare both arrangements live at `/design/scale`.
 
 ### Visual Hierarchy and Depth
 
-- Use subtle shadows (`shadow-sm`, `shadow-md`) for elevation.
-- Prefer box shadows or background colors over borders. When using borders, keep them subtle (`border-slate-200`).
+- Use subtle shadows (`shadow-xs`, `shadow-sm`) for elevation.
+- Prefer whitespace and background (`bg-card`, `bg-muted`) over borders for
+  grouping. When a border is needed use `border-border`, never a palette class.
+- Note that the current shadcn style separates surfaces with `ring-1
+  ring-foreground/10` rather than a border — match the surrounding component
+  rather than mixing both on the same surface.
 
 ### Component Design
 
