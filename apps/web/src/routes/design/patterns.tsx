@@ -112,10 +112,7 @@ function PaymentsTable() {
               </Badge>
             </TableCell>
             <TableCell className="px-4 text-right">
-              {/* h-7, not the size="sm" default of h-8: inside a table the
-                  button sets the row height, and 32px makes rows 49px tall.
-                  Keeps text-sm — size="xs" would drop the label to 12px. */}
-              <Button variant="ghost" size="sm" className="h-7">
+              <Button variant="ghost" size="sm">
                 View
               </Button>
             </TableCell>
