@@ -33,24 +33,8 @@ interface Spec {
   meta: string;
 }
 
-const CURRENT: Spec = {
-  name: 'A · Current',
-  summary:
-    'What the codebase does today. Section headings, card labels and table text all land on 14px, so size carries none of the hierarchy — caps, weight and color do all the work. Timestamps drop to 12px.',
-  steps: '12 · 14 · 16 · 24',
-  ratios: '1.17 → 1.14 → 1.50',
-  sectionTitles: true,
-  groupGap: 'gap-6',
-  pageTitle: 'text-2xl font-bold tracking-tight',
-  sectionTitle: 'text-sm font-semibold uppercase tracking-wider',
-  cardTitle: 'text-sm font-medium',
-  cardValue: 'text-base font-semibold tabular-nums',
-  body: 'text-sm',
-  meta: 'text-xs',
-};
-
 const LIFTED: Spec = {
-  name: 'B · Lifted headings',
+  name: 'A · Lifted headings',
   summary:
     'Keeps the headings but moves them up to 18px so a glance can find them. 12px is dropped — secondary text stays at 14px and recedes through color instead of shrinking.',
   steps: '14 · 18 · 24',
@@ -66,7 +50,7 @@ const LIFTED: Spec = {
 };
 
 const SHADCN: Spec = {
-  name: "C · shadcn's own",
+  name: "B · shadcn's own",
   summary:
     'How dashboard-01 actually does it: no section headings at all — grouping comes from whitespace — and only two steps in play. The metric jumps straight from 14px to 24px, and the block uses text-xs zero times.',
   steps: '14 · 24',
@@ -185,21 +169,21 @@ function ScalePage() {
     <div className="flex flex-col gap-8">
       <div className="flex max-w-3xl flex-col gap-2">
         <p className="text-sm text-muted-foreground">
-          All three columns use the stock Tailwind scale — no token is modified.
-          Only the assignment differs. The page title and table rows are the
-          same in every column, so nothing here is simply "bigger"; what moves
-          is the middle of the hierarchy.
+          Both columns use the stock Tailwind scale — no token is modified, only
+          the assignment differs. Page title and table rows are identical in
+          each, so neither is simply "bigger"; what moves is the middle of the
+          hierarchy. They agree on dropping 12px entirely and on keeping
+          secondary text at 14px, receding through color rather than size.
         </p>
         <p className="text-sm text-muted-foreground">
-          Column C mirrors shadcn's dashboard-01 block, whose entire type census
-          is: text-sm ×8, text-2xl ×4, text-3xl ×4 (the same metric, enlarged by
-          container query once the card exceeds 250px), text-base ×1 — and
-          text-xs never.
+          The disagreement is whether section headings should exist. B mirrors
+          shadcn's dashboard-01, whose entire type census is text-sm ×8,
+          text-2xl ×4, text-3xl ×4 (the same metric, enlarged by container query
+          once the card exceeds 250px), text-base ×1 — and text-xs never.
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Column spec={CURRENT} />
+      <div className="grid gap-6 lg:grid-cols-2">
         <Column spec={LIFTED} />
         <Column spec={SHADCN} />
       </div>
@@ -208,25 +192,27 @@ function ScalePage() {
         <h2 className="text-sm font-semibold">What to compare</h2>
         <ul className="flex list-disc flex-col gap-1.5 pl-4 text-sm text-muted-foreground">
           <li>
-            <span className="text-foreground">Finding your place:</span> in A,
-            can you locate the two groups without reading? In C there is no
-            label at all — does the whitespace alone make the grouping obvious?
+            <span className="text-foreground">Finding your place:</span> A
+            labels each group at 18px. B has no label at all — decide whether
+            the whitespace alone makes the grouping obvious, because that is the
+            entire bet.
           </li>
           <li>
             <span className="text-foreground">Where the eye lands first:</span>{' '}
-            A pulls toward the headings, C pulls toward the numbers. Which is
-            right depends on whether people come here to navigate or to read a
+            A pulls toward the headings, B toward the numbers. Which is correct
+            depends on whether people arrive here to navigate or to read a
             figure.
           </li>
           <li>
-            <span className="text-foreground">Cost:</span> C spends its budget
-            on one big number and buys grouping with whitespace, so it needs
-            more vertical room per block than A.
+            <span className="text-foreground">Scaling past two groups:</span> B
+            works cleanly at three or four blocks; beyond that, unlabelled
+            sections get hard to scan and A's headings start paying for
+            themselves.
           </li>
           <li>
-            <span className="text-foreground">CJK:</span> A's 12px timestamps
-            are the first thing to break in dense Chinese text; B and C both
-            keep secondary text at 14px and lower contrast instead.
+            <span className="text-foreground">Cost:</span> B spends its budget
+            on one large number and buys grouping with whitespace, so it needs
+            more vertical room per block.
           </li>
         </ul>
       </div>
