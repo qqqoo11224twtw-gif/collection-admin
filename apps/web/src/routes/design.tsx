@@ -1,4 +1,3 @@
-import { cn } from '@saasflare-dev/ui/lib/utils';
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
 import { ArrowLeft, SwatchBook } from 'lucide-react';
 
@@ -65,15 +64,23 @@ function DesignLayout() {
 
         <nav className="flex flex-wrap gap-2">
           {SECTIONS.map((s) => (
+            /*
+             * Colors live entirely in activeProps/inactiveProps, never in the
+             * base className. Router merges those as plain strings, so
+             * tailwind-merge never sees them — a base `text-muted-foreground`
+             * would collide with the active `text-background` and win or lose
+             * purely on stylesheet order.
+             */
             <Link
               key={s.to}
               to={s.to}
-              className={cn(
-                'rounded-md border border-border px-3 py-1.5 text-sm font-medium transition-colors',
-                'hover:bg-muted hover:text-foreground text-muted-foreground',
-              )}
+              className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
               activeProps={{
-                className: 'bg-foreground text-background border-foreground',
+                className: 'border-foreground bg-foreground text-background',
+              }}
+              inactiveProps={{
+                className:
+                  'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
               }}
             >
               {s.label}
