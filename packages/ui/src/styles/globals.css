@@ -160,4 +160,27 @@
   --font-mono:
     "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco,
     Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* Status colors. shadcn only ships --destructive, so every other status was
+     being hand-rolled per call site — the survey found one "success green"
+     spread across five different shades in a single app.
+
+     These are stock Tailwind steps, not invented values: --destructive is
+     exactly red-600, so emerald/yellow/sky at the same step keep all four
+     statuses at one perceptual lightness. Use the soft form for anything that
+     repeats down a column (bg-success/10 + text-success); solids are loud
+     enough that several rows of them fight each other. */
+  --success: oklch(0.596 0.145 163.225); /* emerald-600 */
+  --warning: oklch(0.681 0.162 75.834); /* yellow-600 */
+  --info: oklch(0.588 0.158 241.966); /* sky-600 */
+}
+
+/* Variables alone would not produce bg-success or text-success — Tailwind has
+   to be told the utilities exist. `inline` makes the generated rule reference
+   the variable directly, so overriding --success downstream restyles every
+   use without regenerating anything. */
+@theme inline {
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
 }

@@ -60,11 +60,13 @@ function Pattern({
   );
 }
 
+/* Soft form throughout: a status column repeats down every row, and solid
+   badges at that density fight each other for attention. */
 const STATUS_STYLE: Record<PaymentStatus, string> = {
-  succeeded: 'bg-secondary text-secondary-foreground',
-  pending: 'bg-secondary text-secondary-foreground',
+  succeeded: 'bg-success/10 text-success',
+  pending: 'bg-warning/10 text-warning',
   failed: 'bg-destructive/10 text-destructive',
-  refunded: 'bg-secondary text-secondary-foreground',
+  refunded: 'bg-info/10 text-info',
 };
 
 function PaymentsTable() {

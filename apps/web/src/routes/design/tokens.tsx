@@ -7,103 +7,52 @@ export const Route = createFileRoute('/design/tokens')({
 });
 
 /*
- * Candidate values for the semantic colors this project does not have yet.
- * Only --destructive exists today, which is why every non-error status in the
- * app currently renders as the same grey.
- *
- * Both sets are stock Tailwind steps rather than invented values, because
- * --destructive already *is* Tailwind red-600 — matching that step keeps the
- * whole set at one perceptual lightness. Values are inline here on purpose:
- * nothing is committed to a token until one set is chosen.
+ * Status roles, rendered from the real tokens rather than literal values, so
+ * this section keeps reflecting whatever --success/--warning/--info hold.
+ * Class names are spelled out because Tailwind scans source text statically.
  */
-const SEMANTIC_SETS = [
-  {
-    name: 'A · Primary hues',
-    note: 'green / amber / blue at the 600 step — the same step --destructive already uses. Highest chroma, so statuses read strongly at badge size.',
-    colors: {
-      danger: 'oklch(0.577 0.245 27.325)',
-      success: 'oklch(0.627 0.194 149.214)',
-      warning: 'oklch(0.666 0.179 58.318)',
-      info: 'oklch(0.546 0.245 262.881)',
-    },
-  },
-  {
-    name: 'B · Muted hues',
-    note: 'emerald / yellow / sky at the same step. Lower chroma reads calmer in a table where several rows carry a status at once.',
-    colors: {
-      danger: 'oklch(0.577 0.245 27.325)',
-      success: 'oklch(0.596 0.145 163.225)',
-      warning: 'oklch(0.681 0.162 75.834)',
-      info: 'oklch(0.588 0.158 241.966)',
-    },
-  },
-] as const;
-
 const SEMANTIC_ROLES = [
-  { key: 'success', label: 'Succeeded', Icon: CircleCheck },
-  { key: 'warning', label: 'Pending', Icon: Clock },
-  { key: 'danger', label: 'Failed', Icon: CircleX },
-  { key: 'info', label: 'Refunded', Icon: Info },
+  {
+    key: 'success',
+    label: 'Succeeded',
+    Icon: CircleCheck,
+    soft: 'bg-success/10 text-success',
+    solid: 'bg-success text-white',
+    text: 'text-success',
+    token: '--success',
+    origin: 'emerald-600',
+  },
+  {
+    key: 'warning',
+    label: 'Pending',
+    Icon: Clock,
+    soft: 'bg-warning/10 text-warning',
+    solid: 'bg-warning text-white',
+    text: 'text-warning',
+    token: '--warning',
+    origin: 'yellow-600',
+  },
+  {
+    key: 'danger',
+    label: 'Failed',
+    Icon: CircleX,
+    soft: 'bg-destructive/10 text-destructive',
+    solid: 'bg-destructive text-white',
+    text: 'text-destructive',
+    token: '--destructive',
+    origin: 'red-600',
+  },
+  {
+    key: 'info',
+    label: 'Refunded',
+    Icon: Info,
+    soft: 'bg-info/10 text-info',
+    solid: 'bg-info text-white',
+    text: 'text-info',
+    token: '--info',
+    origin: 'sky-600',
+  },
 ] as const;
-
-function SemanticSet({ set }: { set: (typeof SEMANTIC_SETS)[number] }) {
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <h3 className="text-lg font-medium tracking-tight">{set.name}</h3>
-        <p className="text-sm text-muted-foreground">{set.note}</p>
-      </div>
-
-      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
-        {/* Soft badges — how a status column actually renders */}
-        <div className="flex flex-wrap gap-2">
-          {SEMANTIC_ROLES.map(({ key, label, Icon }) => {
-            const c = set.colors[key];
-            return (
-              <span
-                key={key}
-                className="inline-flex h-5 items-center gap-1 rounded-4xl px-2 text-xs font-medium"
-                style={{
-                  color: c,
-                  background: `color-mix(in oklch, ${c} 12%, transparent)`,
-                }}
-              >
-                <Icon className="size-3" />
-                {label}
-              </span>
-            );
-          })}
-        </div>
-
-        {/* Solid — for the rare case a status needs to shout */}
-        <div className="flex flex-wrap gap-2">
-          {SEMANTIC_ROLES.map(({ key, label }) => (
-            <span
-              key={key}
-              className="inline-flex h-5 items-center rounded-4xl px-2 text-xs font-medium text-white"
-              style={{ background: set.colors[key] }}
-            >
-              {label}
-            </span>
-          ))}
-        </div>
-
-        {/* On body text, which is where contrast against 14px matters */}
-        <div className="flex flex-col gap-1">
-          {SEMANTIC_ROLES.map(({ key, label }) => (
-            <span
-              key={key}
-              className="text-sm"
-              style={{ color: set.colors[key] }}
-            >
-              {label} — the charge could not be completed.
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /*
  * Class names are spelled out in full on purpose. Tailwind scans source text
@@ -286,13 +235,55 @@ function TokensPage() {
       </Section>
 
       <Section
-        title="Semantic colors — pick a set"
-        note="Not yet committed to a token. Today only --destructive exists, which is why every non-error status in the app renders as the same grey. Both candidate sets use stock Tailwind steps at the same lightness as --destructive (which is itself Tailwind red-600), so the four statuses sit at one perceptual weight."
+        title="Status colors"
+        note="Stock Tailwind steps, not invented values: --destructive is exactly red-600, so emerald / yellow / sky at the same step keep all four statuses at one perceptual lightness. Use the soft form for anything repeating down a column — several solid badges in a table fight each other. Solid is for a single status that has to be unmissable."
       >
-        <div className="grid gap-6 lg:grid-cols-2">
-          {SEMANTIC_SETS.map((set) => (
-            <SemanticSet key={set.name} set={set} />
-          ))}
+        <div className="overflow-x-auto rounded-lg border border-border bg-card">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th className="px-4 py-2.5 text-left font-medium">Token</th>
+                <th className="px-4 py-2.5 text-left font-medium">Soft</th>
+                <th className="px-4 py-2.5 text-left font-medium">Solid</th>
+                <th className="px-4 py-2.5 text-left font-medium">
+                  As body text
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {SEMANTIC_ROLES.map((r) => (
+                <tr
+                  key={r.key}
+                  className="border-b border-border last:border-0"
+                >
+                  <td className="px-4 py-2.5 align-middle whitespace-nowrap">
+                    <code className="text-xs">{r.token}</code>
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {r.origin}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 align-middle">
+                    <span
+                      className={`inline-flex h-5 items-center gap-1 rounded-4xl px-2 text-xs font-medium ${r.soft}`}
+                    >
+                      <r.Icon className="size-3" />
+                      {r.label}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 align-middle">
+                    <span
+                      className={`inline-flex h-5 items-center rounded-4xl px-2 text-xs font-medium ${r.solid}`}
+                    >
+                      {r.label}
+                    </span>
+                  </td>
+                  <td className={`px-4 py-2.5 align-middle ${r.text}`}>
+                    The charge could not be completed.
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Section>
 

@@ -43,7 +43,7 @@ function Home() {
           </h1>
           <p className="text-muted-foreground">
             System operational.{' '}
-            <span className="text-emerald-500 font-medium">
+            <span className="text-success font-medium">
               Ready for requests.
             </span>
           </p>
@@ -289,8 +289,8 @@ function StatusCheckCard({
               query.isLoading
                 ? 'bg-muted text-muted-foreground border-transparent'
                 : query.isError || !query.data
-                  ? 'bg-red-500/10 text-red-600 border-red-200/50'
-                  : 'bg-emerald-500/10 text-emerald-600 border-emerald-200/50',
+                  ? 'bg-destructive/10 text-destructive border-destructive/20'
+                  : 'bg-success/10 text-success border-success/20',
             )}
           >
             {query.isLoading ? (

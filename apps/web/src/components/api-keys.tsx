@@ -86,7 +86,7 @@ export function ApiKeysManager() {
           Loading keys…
         </p>
       ) : keysQuery.isError ? (
-        <p className="py-8 text-center text-sm text-red-600">
+        <p className="py-8 text-center text-sm text-destructive">
           {keysQuery.error.message}
         </p>
       ) : (keysQuery.data ?? []).length === 0 ? (
@@ -152,7 +152,7 @@ function KeyRow({ row }: { row: ApiKeyRow }) {
           type="button"
           size="sm"
           variant="ghost"
-          className="text-red-600 hover:text-red-700"
+          className="text-destructive hover:text-destructive/80"
           onClick={() => setConfirming(true)}
           disabled={revokeMutation.isPending}
         >
@@ -319,7 +319,7 @@ function CreateKeyDialog({
                 </div>
               </div>
               {createMutation.isError ? (
-                <p className="text-sm text-red-600">
+                <p className="text-sm text-destructive">
                   {createMutation.error.message}
                 </p>
               ) : null}

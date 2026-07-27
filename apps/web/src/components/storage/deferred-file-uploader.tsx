@@ -334,7 +334,7 @@ export function DeferredFileUploader() {
                     </div>
 
                     {file.status === 'success' && (
-                      <div className="absolute top-2 right-2 bg-background/80 rounded-full p-1 text-green-500">
+                      <div className="absolute top-2 right-2 bg-background/80 rounded-full p-1 text-success">
                         <CheckCircle className="h-4 w-4" />
                       </div>
                     )}
