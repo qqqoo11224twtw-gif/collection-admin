@@ -7,6 +7,12 @@ export const Route = createFileRoute('/design/')({
 
 const SECTIONS = [
   {
+    to: '/design/scale',
+    label: 'Type scale',
+    blurb:
+      'The same screen rendered with adjacent versus skipped type steps. No token changes — only which step each role picks.',
+  },
+  {
     to: '/design/patterns',
     label: 'Patterns',
     blurb:
@@ -47,7 +53,7 @@ function DesignIndex() {
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {SECTIONS.map((s) => (
           <Link
             key={s.to}

@@ -16,6 +16,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DesignIndexRouteImport } from './routes/design/index'
 import { Route as ExamplesSsrRouteImport } from './routes/examples/ssr'
 import { Route as DesignTokensRouteImport } from './routes/design/tokens'
+import { Route as DesignScaleRouteImport } from './routes/design/scale'
 import { Route as DesignPatternsRouteImport } from './routes/design/patterns'
 import { Route as DesignComponentsRouteImport } from './routes/design/components'
 import { Route as ExamplesComponentsTodosRouteImport } from './routes/examples/components/todos'
@@ -57,6 +58,11 @@ const DesignTokensRoute = DesignTokensRouteImport.update({
   path: '/tokens',
   getParentRoute: () => DesignRoute,
 } as any)
+const DesignScaleRoute = DesignScaleRouteImport.update({
+  id: '/scale',
+  path: '/scale',
+  getParentRoute: () => DesignRoute,
+} as any)
 const DesignPatternsRoute = DesignPatternsRouteImport.update({
   id: '/patterns',
   path: '/patterns',
@@ -92,6 +98,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/design/components': typeof DesignComponentsRoute
   '/design/patterns': typeof DesignPatternsRoute
+  '/design/scale': typeof DesignScaleRoute
   '/design/tokens': typeof DesignTokensRoute
   '/examples/ssr': typeof ExamplesSsrRoute
   '/design/': typeof DesignIndexRoute
@@ -105,6 +112,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/design/components': typeof DesignComponentsRoute
   '/design/patterns': typeof DesignPatternsRoute
+  '/design/scale': typeof DesignScaleRoute
   '/design/tokens': typeof DesignTokensRoute
   '/examples/ssr': typeof ExamplesSsrRoute
   '/design': typeof DesignIndexRoute
@@ -120,6 +128,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/design/components': typeof DesignComponentsRoute
   '/design/patterns': typeof DesignPatternsRoute
+  '/design/scale': typeof DesignScaleRoute
   '/design/tokens': typeof DesignTokensRoute
   '/examples/ssr': typeof ExamplesSsrRoute
   '/design/': typeof DesignIndexRoute
@@ -136,6 +145,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/design/components'
     | '/design/patterns'
+    | '/design/scale'
     | '/design/tokens'
     | '/examples/ssr'
     | '/design/'
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/design/components'
     | '/design/patterns'
+    | '/design/scale'
     | '/design/tokens'
     | '/examples/ssr'
     | '/design'
@@ -163,6 +174,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/design/components'
     | '/design/patterns'
+    | '/design/scale'
     | '/design/tokens'
     | '/examples/ssr'
     | '/design/'
@@ -229,6 +241,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignTokensRouteImport
       parentRoute: typeof DesignRoute
     }
+    '/design/scale': {
+      id: '/design/scale'
+      path: '/scale'
+      fullPath: '/design/scale'
+      preLoaderRoute: typeof DesignScaleRouteImport
+      parentRoute: typeof DesignRoute
+    }
     '/design/patterns': {
       id: '/design/patterns'
       path: '/patterns'
@@ -270,6 +289,7 @@ declare module '@tanstack/react-router' {
 interface DesignRouteChildren {
   DesignComponentsRoute: typeof DesignComponentsRoute
   DesignPatternsRoute: typeof DesignPatternsRoute
+  DesignScaleRoute: typeof DesignScaleRoute
   DesignTokensRoute: typeof DesignTokensRoute
   DesignIndexRoute: typeof DesignIndexRoute
 }
@@ -277,6 +297,7 @@ interface DesignRouteChildren {
 const DesignRouteChildren: DesignRouteChildren = {
   DesignComponentsRoute: DesignComponentsRoute,
   DesignPatternsRoute: DesignPatternsRoute,
+  DesignScaleRoute: DesignScaleRoute,
   DesignTokensRoute: DesignTokensRoute,
   DesignIndexRoute: DesignIndexRoute,
 }

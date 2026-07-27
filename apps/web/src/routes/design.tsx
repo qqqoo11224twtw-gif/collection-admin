@@ -8,6 +8,11 @@ export const Route = createFileRoute('/design')({
 
 const SECTIONS = [
   {
+    to: '/design/scale',
+    label: 'Type scale',
+    blurb: 'Which steps each role picks, compared side by side',
+  },
+  {
     to: '/design/patterns',
     label: 'Patterns',
     blurb: 'Page-level layouts: tables, headers, empty states, danger zones',
