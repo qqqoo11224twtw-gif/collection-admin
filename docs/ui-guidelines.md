@@ -1,5 +1,19 @@
 # UI Guidelines
 
+> **Scope: application UI.** Dashboards, settings, tables, forms — surfaces
+> people return to and work in, where the goals are density, scannability and
+> muscle memory across screens.
+>
+> **These rules do not apply to marketing pages.** A landing page has to
+> convince a stranger in one visit: it wants a much wider type range (well past
+> `text-2xl`), generous whitespace, and the freedom to look different on every
+> page. Several rules below — retiring `text-xs`, capping the scale at four
+> steps, preferring density — are actively wrong there.
+>
+> If a fork of this template grows a marketing site, give it its own typography
+> and spacing rules rather than stretching these. The two surfaces share the
+> brand (font family, brand color, logo) and nothing else.
+
 ## `@saasflare-dev/ui` Package Rules
 
 - Install shadcn components with: `pnpm dlx shadcn@latest add <component> -c packages/ui` (run from root folder)
