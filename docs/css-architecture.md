@@ -143,12 +143,23 @@ shadcn run so far.
 
 Declaring `--color-success` in `:root` alone will **not** generate `bg-success`.
 
-Keep the block to variable assignments. If a selector-based override becomes
-unavoidable (e.g. `[data-slot="table-cell"] { ... }` for density), put it in a
-separate `overrides.css` and `@import` it — selector overrides compete on
-specificity and are not subject to the ordering constraint above. Its line count
-is then the honest answer to "how much are we overriding"; ideally the file does
-not exist.
+**Keep the block to variable assignments — a selector rule appended here does
+not reach the browser at all.** Measured on a sibling project: appending
+`:root { --success: … }` to this file arrives, appending
+`[data-slot="table-cell"] { … }` or any other selector rule does not, whether
+wrapped in `@layer components`, `@layer utilities`, or left unlayered. It is
+not a specificity contest; the rule is simply absent from
+`document.styleSheets`.
+
+So there is no mechanism for overriding a size that a component hardcodes
+(`p-2`, `h-9`). Override it at the call site with `className`, which is what
+shadcn does itself — `dashboard-01` writes `px-4` on each table cell rather
+than patching the component or adding a global rule.
+
+> When debugging this, note that `curl .../@fs/<abs-path>/globals.css` returns
+> Vite's **HMR module** (CSS wrapped in JS), which is not what the page's
+> `<link>` loads. A rule can be present in the former and absent from the
+> latter. Only `document.styleSheets` in the browser settles it.
 
 ---
 
