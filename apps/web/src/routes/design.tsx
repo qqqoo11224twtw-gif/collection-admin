@@ -7,6 +7,11 @@ export const Route = createFileRoute('/design')({
 
 const SECTIONS = [
   {
+    to: '/design/overview',
+    label: 'Overview',
+    blurb: 'A full dashboard at real density, built from these tokens',
+  },
+  {
     to: '/design/scale',
     label: 'Type scale',
     blurb: 'Which steps each role picks, compared side by side',

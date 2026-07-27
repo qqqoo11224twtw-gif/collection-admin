@@ -95,3 +95,6 @@ apps/web/playwright/.cache/
 
 # Playwright MCP browser session artifacts
 .playwright-mcp/
+
+# TanStack Start build cache (generated)
+apps/web/.tanstack/
