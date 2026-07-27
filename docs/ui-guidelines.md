@@ -109,11 +109,16 @@ of 1.17 and 1.14, which reads as noise rather than hierarchy. Pick these:
   `p-2`, whose 8px of horizontal padding leaves columns nearly touching once a
   table carries five or more of them. shadcn's own `dashboard-01` overrides it
   the same way rather than using the default.
-- **Leave the vertical padding alone.** Row height is set by the tallest thing
-  in the row, not by the cell: a row with a `size="sm"` button measures 49px
-  against 8px padding, because the button's `h-8` already exceeds the text.
-  Raising it to `py-4` would push rows to ~64px and cost several rows per
-  screen for nothing.
+- **Leave the vertical padding alone — the row's tallest child sets its height,
+  not the cell.** With 8px padding a text-only row is 36px, but one containing a
+  `size="sm"` button is 49px, because `h-8` already exceeds the line box.
+  Raising padding to `py-4` would push rows past 60px and cost several rows per
+  screen while fixing nothing.
+- **Action buttons in a table take `size="sm" className="h-7"`**, which brings
+  the row to 45px. The stock `h-8` is tuned for buttons standing on their own;
+  in a table the button silently becomes the row-height control. Do not reach
+  for `size="xs"` instead — it also drops the label to 12px, which the type
+  rules rule out.
 - There is no way to apply this once globally — a selector rule added to
   `packages/ui/src/styles/globals.css` never reaches the browser (see
   [css-architecture.md](css-architecture.md)). It goes on each cell.
