@@ -18,7 +18,7 @@ import {
 } from '@saasflare-dev/ui/components/table';
 import { cn } from '@saasflare-dev/ui/lib/utils';
 import { createFileRoute } from '@tanstack/react-router';
-import { Receipt, Trash2 } from 'lucide-react';
+import { CreditCard, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import {
   formatAmount,
@@ -161,51 +161,24 @@ function PatternsPage() {
 
       <Pattern
         title="Empty state"
-        rationale="An empty table is the first thing a new user sees, so it should teach rather than apologise: name what belongs here, say how to create the first one, put the action in reach. Never ship a bare 'No data'. Note that the type stays at 18/14 in both sizes below — what changes is the padding. The component's default p-12 is sized for an empty page; inside a card it leaves the content stranded in whitespace and reads as 'small text' when the real problem is proportion."
+        rationale="An empty table is the first thing a new user sees, so it should teach rather than apologise: name what belongs here, say how to create the first one, put the action in reach. Never ship a bare 'No data'. Type stays at 18/14 — only the padding changes with context: p-6 nested in a card as shown here, the component's p-12 default when the empty state is the whole page. Pick the icon for legibility at 40px; dense glyphs turn to mush at that size."
         avoid="the emptiness is temporary — while loading, show a skeleton of the eventual layout instead, so the page does not jump."
       >
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">
-              In a card or panel — <code className="font-mono">p-6</code>
-            </span>
-            <Empty className="p-6">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <Receipt />
-                </EmptyMedia>
-                <EmptyTitle>No payments yet</EmptyTitle>
-                <EmptyDescription>
-                  Payments appear here once your first charge succeeds.
-                </EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                <Button size="sm">Create a test payment</Button>
-              </EmptyContent>
-            </Empty>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">
-              As a whole page — default <code className="font-mono">p-12</code>
-            </span>
-            <Empty>
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <Receipt />
-                </EmptyMedia>
-                <EmptyTitle>No payments yet</EmptyTitle>
-                <EmptyDescription>
-                  Payments appear here once your first charge succeeds. Test
-                  mode charges show up immediately.
-                </EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                <Button size="sm">Create a test payment</Button>
-              </EmptyContent>
-            </Empty>
-          </div>
-        </div>
+        <Empty className="p-6">
+          <EmptyHeader>
+            <EmptyMedia>
+              <CreditCard className="size-10 text-muted-foreground" />
+            </EmptyMedia>
+            <EmptyTitle>No payments yet</EmptyTitle>
+            <EmptyDescription>
+              Payments appear here once your first charge succeeds. Test mode
+              charges show up immediately.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button size="sm">Create a test payment</Button>
+          </EmptyContent>
+        </Empty>
       </Pattern>
 
       <Pattern
