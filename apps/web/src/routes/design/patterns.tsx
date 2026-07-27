@@ -74,26 +74,28 @@ function PaymentsTable() {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Date</TableHead>
-          <TableHead>ID</TableHead>
-          <TableHead>Customer</TableHead>
-          <TableHead>Method</TableHead>
+          <TableHead className="px-4">Date</TableHead>
+          <TableHead className="px-4">ID</TableHead>
+          <TableHead className="px-4">Customer</TableHead>
+          <TableHead className="px-4">Method</TableHead>
           {/* Numeric column: right-aligned so magnitudes line up */}
-          <TableHead className="text-right">Amount</TableHead>
-          <TableHead>Status</TableHead>
+          <TableHead className="px-4 text-right">Amount</TableHead>
+          <TableHead className="px-4">Status</TableHead>
           {/* Action column: fixed narrow, never grows with content */}
-          <TableHead className="w-px" />
+          <TableHead className="px-4 w-px" />
         </TableRow>
       </TableHeader>
       <TableBody>
         {PAYMENTS.map((p) => (
           <TableRow key={p.id}>
-            <TableCell className="whitespace-nowrap text-muted-foreground">
+            <TableCell className="px-4 whitespace-nowrap text-muted-foreground">
               {p.createdAt}
             </TableCell>
-            <TableCell className="font-mono">{p.id}</TableCell>
-            <TableCell className="font-medium">{p.customer}</TableCell>
-            <TableCell className="text-muted-foreground">{p.method}</TableCell>
+            <TableCell className="px-4 font-mono">{p.id}</TableCell>
+            <TableCell className="px-4 font-medium">{p.customer}</TableCell>
+            <TableCell className="px-4 text-muted-foreground">
+              {p.method}
+            </TableCell>
             <TableCell
               className={cn(
                 // Tabular figures keep digits in vertical columns; without
@@ -104,12 +106,12 @@ function PaymentsTable() {
             >
               {formatAmount(p.amountCents)}
             </TableCell>
-            <TableCell>
+            <TableCell className="px-4">
               <Badge className={STATUS_STYLE[p.status]}>
                 {STATUS_LABEL[p.status]}
               </Badge>
             </TableCell>
-            <TableCell className="text-right">
+            <TableCell className="px-4 text-right">
               <Button variant="ghost" size="sm">
                 View
               </Button>

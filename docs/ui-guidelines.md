@@ -103,6 +103,26 @@ of 1.17 and 1.14, which reads as noise rather than hierarchy. Pick these:
 - Stick to a few font weights (`font-normal`, `font-medium`, `font-semibold`).
 - Use `tabular-nums` on any column of figures so digits line up vertically.
 
+### Tables
+
+- **Put `px-4` on every `TableHead` and `TableCell`.** The component ships
+  `p-2`, whose 8px of horizontal padding leaves columns nearly touching once a
+  table carries five or more of them. shadcn's own `dashboard-01` overrides it
+  the same way rather than using the default.
+- **Leave the vertical padding alone.** Row height is set by the tallest thing
+  in the row, not by the cell: a row with a `size="sm"` button measures 49px
+  against 8px padding, because the button's `h-8` already exceeds the text.
+  Raising it to `py-4` would push rows to ~64px and cost several rows per
+  screen for nothing.
+- There is no way to apply this once globally — a selector rule added to
+  `packages/ui/src/styles/globals.css` never reaches the browser (see
+  [css-architecture.md](css-architecture.md)). It goes on each cell.
+- Right-align figure columns and give them `tabular-nums` so digits stack.
+- Give the action column a fixed narrow width (`w-px` plus `text-right`) so it
+  never grows with content.
+- Secondary fields (timestamps, methods) recede with `text-muted-foreground`,
+  staying at `text-sm`.
+
 #### Whether a section needs a heading
 
 **Drop the heading when the content says what it is; keep it when a reader
