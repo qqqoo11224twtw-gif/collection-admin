@@ -154,6 +154,46 @@ not exist.
 
 ## 5. Known traps
 
+### Class names must appear literally in source
+
+Tailwind scans source files as **plain text** at build time and never parses
+them as code, so a class assembled from parts does not exist:
+
+> Since Tailwind scans your source files as plain text, it has no way of
+> understanding string concatenation or interpolation.
+> — [Detecting classes in source files](https://tailwindcss.com/docs/detecting-classes-in-source-files)
+
+```tsx
+className={`text-${step}`}          // ✗ produces no CSS at all
+className={`bg-${color}-600`}       // ✗ same
+```
+
+Map to complete class names instead:
+
+```tsx
+const STEPS = [ { key: 'sm', cls: 'text-sm' }, … ];   // ✓
+const STATUS = { succeeded: 'bg-success/10 text-success', … };
+```
+
+No `@source` setting changes this. `@source` picks which *files* get scanned;
+a string that only exists at runtime is in no file. This has bitten twice here:
+once rendering a type-scale table from `text-${step}`, once "verifying" tokens
+in a browser probe.
+
+**Corollary — how to check whether a utility exists.** Building an element at
+runtime and reading `getComputedStyle` cannot tell you: that measures whether
+a rule is in the stylesheet, and the rule's existence was decided at build time
+from text the probe never contributed to. Check the compiled output, or use the
+class once in real source:
+
+```bash
+curl -s "http://localhost:3000/@fs/$PWD/packages/ui/src/styles/globals.css" \
+  | grep -c '\.bg-success'
+```
+
+A utility legitimately reports 0 when nothing in the codebase uses it yet —
+generation is on demand, so absence there is not a broken token.
+
 ### Fonts are the only property with two competing paths
 
 Everything else (size, radius, color) reaches elements through utilities only.
