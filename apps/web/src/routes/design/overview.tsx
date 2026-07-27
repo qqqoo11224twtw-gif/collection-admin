@@ -1,5 +1,14 @@
 import { Badge } from '@saasflare-dev/ui/components/badge';
 import { Button } from '@saasflare-dev/ui/components/button';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@saasflare-dev/ui/components/card';
 import { cn } from '@saasflare-dev/ui/lib/utils';
 import { createFileRoute } from '@tanstack/react-router';
 import {
@@ -137,75 +146,78 @@ function OverviewPage() {
             {/* Metrics: the one place the type budget gets spent */}
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {METRICS.map((m) => (
-                <div
-                  key={m.label}
-                  className="flex flex-col gap-1 rounded-lg border border-border p-4"
-                >
-                  <span className="text-muted-foreground text-sm">
-                    {m.label}
-                  </span>
-                  <span className="font-semibold text-2xl tabular-nums">
-                    {m.value}
-                  </span>
-                  <span
-                    className={cn(
-                      'flex items-center gap-1 text-sm',
-                      m.up ? 'text-success' : 'text-muted-foreground',
-                    )}
-                  >
-                    <ArrowUpRight
-                      className={cn('size-3.5', !m.up && 'rotate-90')}
-                    />
-                    {m.delta} vs last month
-                  </span>
-                </div>
+                <Card key={m.label}>
+                  <CardHeader>
+                    <CardDescription>{m.label}</CardDescription>
+                    <CardTitle className="font-semibold text-2xl tabular-nums">
+                      {m.value}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardFooter>
+                    <span
+                      className={cn(
+                        'flex items-center gap-1',
+                        m.up ? 'text-success' : 'text-muted-foreground',
+                      )}
+                    >
+                      <ArrowUpRight
+                        className={cn('size-3.5', !m.up && 'rotate-90')}
+                      />
+                      {m.delta} vs last month
+                    </span>
+                  </CardFooter>
+                </Card>
               ))}
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
               {/* Chart: plain CSS bars. A charting library is a product
                   decision, not something to smuggle in via a design page. */}
-              <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-medium text-sm">Monthly volume</span>
-                  <span className="text-muted-foreground text-sm">2026</span>
-                </div>
-                {/* Bars and labels are separate rows: a percentage height only
+              <Card>
+                <CardHeader>
+                  <CardTitle>Monthly volume</CardTitle>
+                  <CardDescription>2026</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {/* Bars and labels are separate rows: a percentage height only
                     resolves against a parent with a definite height, so the
                     bars need their own flex-1 track with nothing else in it. */}
-                <div className="flex h-40 flex-col gap-1.5">
-                  <div className="flex flex-1 items-end gap-1.5">
-                    {TREND.map((v, i) => (
-                      <div
-                        key={MONTHS[i]}
-                        className="flex-1 rounded-t-sm bg-chart-1"
-                        style={{ height: `${v * 100}%` }}
-                      />
-                    ))}
+                  <div className="flex h-40 flex-col gap-1.5">
+                    <div className="flex flex-1 items-end gap-1.5">
+                      {TREND.map((v, i) => (
+                        <div
+                          key={MONTHS[i]}
+                          className="flex-1 rounded-t-sm bg-chart-1"
+                          style={{ height: `${v * 100}%` }}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex gap-1.5">
+                      {MONTHS.map((m) => (
+                        <span
+                          key={m}
+                          className="flex-1 text-center text-muted-foreground text-sm"
+                        >
+                          {m}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex gap-1.5">
-                    {MONTHS.map((m) => (
-                      <span
-                        key={m}
-                        className="flex-1 text-center text-muted-foreground text-sm"
-                      >
-                        {m}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
 
               {/* Recent activity: a list, not a table — five rows with two
                   fields each do not need column headers. */}
-              <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-medium text-sm">Recent payments</span>
-                  <span className="cursor-pointer text-muted-foreground text-sm hover:text-foreground">
-                    View all
-                  </span>
-                </div>
-                <div className="flex flex-col">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent payments</CardTitle>
+                  <CardAction>
+                    <Button variant="link" size="sm" className="h-auto p-0">
+                      View all
+                    </Button>
+                  </CardAction>
+                </CardHeader>
+                <CardContent className="flex flex-col">
                   {PAYMENTS.slice(0, 5).map((p) => (
                     <div
                       key={p.id}
@@ -229,8 +241,8 @@ function OverviewPage() {
                       </div>
                     </div>
                   ))}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             </div>
           </main>
         </div>
