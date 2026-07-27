@@ -66,9 +66,17 @@ The `tsconfig.json` path mapping `@saasflare-dev/ui/*` points to `packages/ui/sr
 
 ### Color
 
-- Use the semantic tokens (`text-foreground`, `text-muted-foreground`, `bg-card`,
-  `border-border`, `bg-destructive`…), never a raw palette class such as
-  `text-slate-800` or `text-red-600`. The tokens are theme-aware; raw classes are not.
+- Reach for the semantic tokens first: `text-foreground`, `text-muted-foreground`,
+  `bg-card`, `border-border`, `bg-destructive`. They exist so that one meaning
+  has one value.
+- **Anything with a status meaning — error, success, warning, info — should go
+  through a token, not a palette class.** The failure mode is not "someone used
+  `text-red-600`", it is the same red arriving as `red-500` in one file,
+  `red-600` in another and `red-700` in a third, until nothing matches. Picking
+  a shade is a decision that should be made once.
+- Palette classes are fine for things that carry no status: chart series,
+  illustrations, one-off decorative accents. Do not invent a token for a color
+  used once.
 - Use the primary color for primary actions only.
 
 ### Typography
@@ -84,12 +92,13 @@ of 1.17 and 1.14, which reads as noise rather than hierarchy. Pick these:
 | Section heading — only when needed, see below | `text-lg` | 18px |
 | Everything else: body, table cells, labels, form text | `text-sm` | 14px |
 
-- **Do not use `text-xs`.** Secondary text stays at `text-sm` and recedes with
-  `text-muted-foreground` instead of shrinking. 12px is the first step to break
-  in dense CJK text, and shrinking is a weaker signal than contrast anyway.
-  (Badges are the one place it may still earn its keep.)
-- **Never use `text-sm` + caps as a section heading.** That puts the label at
-  the same size as the content it labels, so size contributes nothing and the
+- **`text-xs` is not the default for secondary text — `text-sm` plus
+  `text-muted-foreground` is.** Lowering contrast is a stronger signal than
+  shrinking, and 12px is the first step to break in dense CJK. It stays
+  available for genuinely incidental text (badges, dense metadata columns);
+  just don't reach for it by reflex whenever something is secondary.
+- **Avoid `text-sm` + caps as a section heading.** That puts the label at the
+  same size as the content it labels, so size contributes nothing and the
   hierarchy rests entirely on letter-spacing tricks.
 - Stick to a few font weights (`font-normal`, `font-medium`, `font-semibold`).
 - Use `tabular-nums` on any column of figures so digits line up vertically.
