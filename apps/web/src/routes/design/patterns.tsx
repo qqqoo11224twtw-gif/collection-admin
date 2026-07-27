@@ -52,7 +52,7 @@ function Pattern({
       <div className="rounded-lg border border-border bg-card p-4">
         {children}
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         <span className="font-medium text-foreground">Don't use it when:</span>{' '}
         {avoid}
       </p>
@@ -119,9 +119,36 @@ function PaymentsTable() {
   );
 }
 
+const METRICS = [
+  { label: 'Gross volume', value: '24,318.00', note: 'across 412 payments' },
+  { label: 'Refunded', value: '445.00', note: '2 refunds' },
+  { label: 'Failed', value: '765.50', note: '1 declined card' },
+] as const;
+
 function PatternsPage() {
   return (
     <div className="flex flex-col gap-12">
+      <Pattern
+        title="Metric cards"
+        rationale="The one place a dashboard should spend its type budget. The number jumps straight from 14px to 24px — no intermediate step — so the eye lands on the figure before reading the label above it. The label stays at body size and recedes through color, and the note underneath explains what the number is made of."
+        avoid="the figure needs context to mean anything on its own — a number that is only meaningful as a trend belongs in a chart, where the shape carries the message."
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          {METRICS.map((m) => (
+            <div
+              key={m.label}
+              className="flex flex-col gap-1 rounded-lg border border-border p-4"
+            >
+              <span className="text-sm text-muted-foreground">{m.label}</span>
+              <span className="text-2xl font-semibold tabular-nums">
+                {m.value}
+              </span>
+              <span className="text-sm text-muted-foreground">{m.note}</span>
+            </div>
+          ))}
+        </div>
+      </Pattern>
+
       <Pattern
         title="Data table"
         rationale="The densest surface in any dashboard, and the one that exposes type-scale problems first. Dates and secondary fields recede to muted-foreground, the identifier is monospace, and the amount column is right-aligned with tabular figures so digits stack. The action column is fixed-width so it never widens with content."
@@ -164,7 +191,7 @@ function PatternsPage() {
           <div className="flex items-center justify-between gap-4 px-4 py-3">
             <div className="flex flex-col gap-0.5">
               <span className="text-sm font-medium">Delete this workspace</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 Removes all payments, members and API keys. This cannot be
                 undone.
               </span>
