@@ -1,9 +1,109 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { CircleCheck, CircleX, Clock, Info } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export const Route = createFileRoute('/design/tokens')({
   component: TokensPage,
 });
+
+/*
+ * Candidate values for the semantic colors this project does not have yet.
+ * Only --destructive exists today, which is why every non-error status in the
+ * app currently renders as the same grey.
+ *
+ * Both sets are stock Tailwind steps rather than invented values, because
+ * --destructive already *is* Tailwind red-600 — matching that step keeps the
+ * whole set at one perceptual lightness. Values are inline here on purpose:
+ * nothing is committed to a token until one set is chosen.
+ */
+const SEMANTIC_SETS = [
+  {
+    name: 'A · Primary hues',
+    note: 'green / amber / blue at the 600 step — the same step --destructive already uses. Highest chroma, so statuses read strongly at badge size.',
+    colors: {
+      danger: 'oklch(0.577 0.245 27.325)',
+      success: 'oklch(0.627 0.194 149.214)',
+      warning: 'oklch(0.666 0.179 58.318)',
+      info: 'oklch(0.546 0.245 262.881)',
+    },
+  },
+  {
+    name: 'B · Muted hues',
+    note: 'emerald / yellow / sky at the same step. Lower chroma reads calmer in a table where several rows carry a status at once.',
+    colors: {
+      danger: 'oklch(0.577 0.245 27.325)',
+      success: 'oklch(0.596 0.145 163.225)',
+      warning: 'oklch(0.681 0.162 75.834)',
+      info: 'oklch(0.588 0.158 241.966)',
+    },
+  },
+] as const;
+
+const SEMANTIC_ROLES = [
+  { key: 'success', label: 'Succeeded', Icon: CircleCheck },
+  { key: 'warning', label: 'Pending', Icon: Clock },
+  { key: 'danger', label: 'Failed', Icon: CircleX },
+  { key: 'info', label: 'Refunded', Icon: Info },
+] as const;
+
+function SemanticSet({ set }: { set: (typeof SEMANTIC_SETS)[number] }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h3 className="text-lg font-medium tracking-tight">{set.name}</h3>
+        <p className="text-sm text-muted-foreground">{set.note}</p>
+      </div>
+
+      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+        {/* Soft badges — how a status column actually renders */}
+        <div className="flex flex-wrap gap-2">
+          {SEMANTIC_ROLES.map(({ key, label, Icon }) => {
+            const c = set.colors[key];
+            return (
+              <span
+                key={key}
+                className="inline-flex h-5 items-center gap-1 rounded-4xl px-2 text-xs font-medium"
+                style={{
+                  color: c,
+                  background: `color-mix(in oklch, ${c} 12%, transparent)`,
+                }}
+              >
+                <Icon className="size-3" />
+                {label}
+              </span>
+            );
+          })}
+        </div>
+
+        {/* Solid — for the rare case a status needs to shout */}
+        <div className="flex flex-wrap gap-2">
+          {SEMANTIC_ROLES.map(({ key, label }) => (
+            <span
+              key={key}
+              className="inline-flex h-5 items-center rounded-4xl px-2 text-xs font-medium text-white"
+              style={{ background: set.colors[key] }}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+
+        {/* On body text, which is where contrast against 14px matters */}
+        <div className="flex flex-col gap-1">
+          {SEMANTIC_ROLES.map(({ key, label }) => (
+            <span
+              key={key}
+              className="text-sm"
+              style={{ color: set.colors[key] }}
+            >
+              {label} — the charge could not be completed.
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /*
  * Class names are spelled out in full on purpose. Tailwind scans source text
@@ -186,8 +286,19 @@ function TokensPage() {
       </Section>
 
       <Section
+        title="Semantic colors — pick a set"
+        note="Not yet committed to a token. Today only --destructive exists, which is why every non-error status in the app renders as the same grey. Both candidate sets use stock Tailwind steps at the same lightness as --destructive (which is itself Tailwind red-600), so the four statuses sit at one perceptual weight."
+      >
+        <div className="grid gap-6 lg:grid-cols-2">
+          {SEMANTIC_SETS.map((set) => (
+            <SemanticSet key={set.name} set={set} />
+          ))}
+        </div>
+      </Section>
+
+      <Section
         title="Color"
-        note="Semantic names only — never a raw palette class such as text-slate-800. Note what is missing: there is no success, warning or info token, so status colors are currently hand-rolled at each call site."
+        note="The tokens that exist today. Semantic names only — reach for these before a palette class, so one meaning keeps one value."
       >
         <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
           {COLOR_TOKENS.map((token) => (
