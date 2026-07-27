@@ -7,6 +7,12 @@ export const Route = createFileRoute('/design/')({
 
 const SECTIONS = [
   {
+    to: '/design/overview',
+    label: 'Overview',
+    blurb:
+      'A complete dashboard assembled from these tokens. A gallery shows the parts are right; only a filled page shows whether they add up.',
+  },
+  {
     to: '/design/scale',
     label: 'Type scale',
     blurb:
