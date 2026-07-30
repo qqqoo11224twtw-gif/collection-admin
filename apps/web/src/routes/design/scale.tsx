@@ -8,10 +8,9 @@ export const Route = createFileRoute('/design/scale')({
 });
 
 /**
- * Three ways to assign type steps to the same screen. No token is modified —
- * every column renders with the stock Tailwind scale, and the only variable is
- * which step each role picks. The scale is a palette to choose from, not a
- * ladder to climb one rung at a time.
+ * How application screens assign type steps. No token is modified on this
+ * page: every specimen renders with Tailwind's stock scale. The standard is
+ * about role assignment, not inventing new font sizes.
  *
  * Class names are written out in full because Tailwind scans source text
  * statically and would emit nothing for an interpolated class.
@@ -50,9 +49,9 @@ const LIFTED: Spec = {
 };
 
 const SHADCN: Spec = {
-  name: "B · shadcn's own",
+  name: 'B · Chinese-friendly dashboard',
   summary:
-    'How dashboard-01 actually does it: no section headings at all — grouping comes from whitespace — and only two steps in play. The metric jumps straight from 14px to 24px, and the block uses text-xs zero times.',
+    'The default direction for SaaSFlare apps: body and secondary text stay at 14px, 12px is avoided in readable copy, and larger steps are reserved for tabs, real headings and metrics.',
   steps: '14 · 24',
   ratios: '1.71',
   sectionTitles: false,
@@ -66,6 +65,39 @@ const SHADCN: Spec = {
 };
 
 const ROWS = PAYMENTS.slice(0, 4);
+
+const TYPE_RULES = [
+  {
+    role: 'Page title',
+    className: 'text-2xl',
+    size: '24px',
+    use: 'Top-level screen title and major dashboard metric values.',
+  },
+  {
+    role: 'Section heading',
+    className: 'text-lg',
+    size: '18px',
+    use: 'Only when the content below is not self-explanatory.',
+  },
+  {
+    role: 'Tabs / prominent card title',
+    className: 'text-base',
+    size: '16px',
+    use: 'Route tabs, important settings card titles, and strong local headings.',
+  },
+  {
+    role: 'Body / table / form',
+    className: 'text-sm',
+    size: '14px',
+    use: 'Default floor for application UI: copy, labels, descriptions, table cells.',
+  },
+  {
+    role: 'Compact metadata',
+    className: 'text-xs',
+    size: '12px',
+    use: 'Badges, counts, timestamps, short monospace ids. Not explanatory copy.',
+  },
+] as const;
 
 /** One screen fragment, identical apart from the type steps it picks. */
 function Specimen({ spec }: { spec: Spec }) {
@@ -169,18 +201,49 @@ function ScalePage() {
     <div className="flex flex-col gap-8">
       <div className="flex max-w-3xl flex-col gap-2">
         <p className="text-sm text-muted-foreground">
-          Both columns use the stock Tailwind scale — no token is modified, only
-          the assignment differs. Page title and table rows are identical in
-          each, so neither is simply "bigger"; what moves is the middle of the
-          hierarchy. They agree on dropping 12px entirely and on keeping
-          secondary text at 14px, receding through color rather than size.
+          Application UI uses Tailwind's named type steps only. Do not introduce
+          arbitrary sizes such as <code className="font-mono">text-[15px]</code>
+          for normal product surfaces; if the hierarchy needs a stronger step,
+          move to the next token and reduce weight or contrast instead.
         </p>
         <p className="text-sm text-muted-foreground">
-          The disagreement is whether section headings should exist. B mirrors
-          shadcn's dashboard-01, whose entire type census is text-sm ×8,
-          text-2xl ×4, text-3xl ×4 (the same metric, enlarged by container query
-          once the card exceeds 250px), text-base ×1 — and text-xs never.
+          The body floor is 14px. Secondary text stays 14px and recedes through
+          <code className="font-mono"> text-muted-foreground</code>; 12px is
+          reserved for compact metadata only. This keeps Chinese text readable
+          without making dashboards feel like content pages.
         </p>
+      </div>
+
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-muted-foreground">
+              <th className="px-4 py-2.5 text-left font-medium">Role</th>
+              <th className="px-4 py-2.5 text-left font-medium">Class</th>
+              <th className="px-4 py-2.5 text-left font-medium">Size</th>
+              <th className="px-4 py-2.5 text-left font-medium">Use for</th>
+            </tr>
+          </thead>
+          <tbody>
+            {TYPE_RULES.map((rule) => (
+              <tr
+                key={rule.role}
+                className="border-b border-border last:border-0"
+              >
+                <td className="px-4 py-3 font-medium">{rule.role}</td>
+                <td className="px-4 py-3">
+                  <code className="font-mono text-sm">{rule.className}</code>
+                </td>
+                <td className="px-4 py-3 font-mono tabular-nums">
+                  {rule.size}
+                </td>
+                <td className="max-w-xl px-4 py-3 text-muted-foreground">
+                  {rule.use}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -189,10 +252,9 @@ function ScalePage() {
       </div>
 
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-4">
-        <h2 className="text-sm font-semibold">The rule</h2>
+        <h2 className="text-base font-semibold">Operational rules</h2>
         <p className="text-sm text-muted-foreground">
-          Neither column wins outright — the heading is not a style choice but a
-          content one.{' '}
+          Section headings are a content decision, not decoration.{' '}
           <span className="text-foreground">
             Drop the heading when the content says what it is; keep it when a
             reader could be unsure what they are looking at.
@@ -202,11 +264,14 @@ function ScalePage() {
           their place scrolling.
         </p>
         <p className="text-sm text-muted-foreground">
-          Everything else is already settled and applies either way: 12px is not
-          used, secondary text stays at 14px and recedes through color, the page
-          title is 24px, and table rows are 14px. When a heading is warranted it
-          is 18px — never 14px caps, which puts it at the same size as the
-          content it labels.
+          Do not use arbitrary font-size utilities in app UI. The normal set is{' '}
+          <code className="font-mono">text-xs</code>,{' '}
+          <code className="font-mono">text-sm</code>,{' '}
+          <code className="font-mono">text-base</code>,{' '}
+          <code className="font-mono">text-lg</code>, and{' '}
+          <code className="font-mono">text-2xl</code>. If a value outside that
+          set seems necessary, first check whether color, weight, spacing, or
+          layout is carrying the wrong job.
         </p>
       </div>
     </div>

@@ -193,6 +193,11 @@ function TokensPage() {
                   : '…'}
               </span>
               <span className={cls}>The quick brown fox 敏捷的棕色狐狸</span>
+              {key === 'xs' && (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  metadata only
+                </span>
+              )}
             </div>
           ))}
         </div>

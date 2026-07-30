@@ -51,7 +51,7 @@ function DesignLayout() {
             Design System
           </h1>
         </div>
-        <p className="text-muted-foreground text-sm">
+        <p className="max-w-3xl text-muted-foreground text-sm leading-6">
           The reference for how application screens are built. Values shown here
           are the live ones — if it looks wrong here, it is wrong in the
           product.
@@ -79,7 +79,7 @@ function DesignLayout() {
             <Link
               key={s.to}
               to={s.to}
-              className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
+              className="rounded-md border px-3 py-2 text-base font-medium transition-colors"
               activeProps={{
                 className: 'border-foreground bg-foreground text-background',
               }}

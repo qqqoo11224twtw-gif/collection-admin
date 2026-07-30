@@ -190,7 +190,9 @@ function PatternsPage() {
       >
         <div className="rounded-lg border border-destructive/30">
           <div className="border-b border-destructive/20 px-4 py-3">
-            <h3 className="text-sm font-medium text-foreground">Danger zone</h3>
+            <h3 className="text-base font-medium text-foreground">
+              Danger zone
+            </h3>
           </div>
           <div className="flex items-center justify-between gap-4 px-4 py-3">
             <div className="flex flex-col gap-0.5">

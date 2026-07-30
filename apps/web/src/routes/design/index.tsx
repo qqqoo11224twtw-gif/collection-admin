@@ -70,7 +70,9 @@ function DesignIndex() {
               {s.label}
               <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
             </span>
-            <span className="text-xs text-muted-foreground">{s.blurb}</span>
+            <span className="text-sm leading-6 text-muted-foreground">
+              {s.blurb}
+            </span>
           </Link>
         ))}
       </section>

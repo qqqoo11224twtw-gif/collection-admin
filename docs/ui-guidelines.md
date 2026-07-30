@@ -81,26 +81,42 @@ The `tsconfig.json` path mapping `@saasflare-dev/ui/*` points to `packages/ui/sr
 
 ### Typography
 
-Tailwind's scale is a palette to pick from, not a ladder to climb one rung at a
-time. Picking adjacent steps (`text-xs` → `text-sm` → `text-base`) gives ratios
-of 1.17 and 1.14, which reads as noise rather than hierarchy. Pick these:
+Application UI uses Tailwind's named type steps only. Do **not** introduce
+arbitrary font sizes such as `text-[15px]` for normal product surfaces. If a
+screen feels off, first adjust role assignment, weight, color, spacing, or
+layout.
 
-| Role | Class | Size |
-|---|---|---|
-| Page title | `text-2xl` | 24px |
-| Metric / headline number | `text-2xl` | 24px |
-| Section heading — only when needed, see below | `text-lg` | 18px |
-| Everything else: body, table cells, labels, form text | `text-sm` | 14px |
+The default standard is the **Chinese-friendly dashboard** scale:
 
-- **`text-xs` is not the default for secondary text — `text-sm` plus
-  `text-muted-foreground` is.** Lowering contrast is a stronger signal than
-  shrinking, and 12px is the first step to break in dense CJK. It stays
-  available for genuinely incidental text (badges, dense metadata columns);
-  just don't reach for it by reflex whenever something is secondary.
+| Element | Class | Size | Notes |
+|---|---|---:|---|
+| Page title | `text-2xl` | 24px | Top-level screen title. |
+| Dashboard metric value | `text-2xl` | 24px | Can go larger only when the metric is the whole card's purpose. |
+| Section heading | `text-lg` | 18px | Only when the content below is not self-explanatory. |
+| Tabs | `text-base` | 16px | Use `font-medium`, not `font-semibold`, unless the surrounding UI is very quiet. |
+| Prominent card title | `text-base` | 16px | Settings cards, important form groups, and strong local headings. |
+| Normal card title | `text-sm` | 14px | Dense dashboard cards where the value/content carries the emphasis. |
+| Body copy | `text-sm` | 14px | The floor for readable application text. |
+| Table cells | `text-sm` | 14px | Use muted color, not smaller type, for secondary columns. |
+| Form label | `text-sm font-medium` | 14px | Labels stay readable; don't shrink them to make forms look dense. |
+| Form description / help text | `text-sm text-muted-foreground` | 14px | Explanatory copy is still body text. |
+| Sidebar item | `text-sm` | 14px | Matches shadcn Sidebar defaults. |
+| Badge / count / compact metadata | `text-xs` | 12px | Short status labels, counts, timestamps, and dense metadata only. |
+| Short monospace id / key fragment | `text-xs font-mono` | 12px | Use `text-sm font-mono` when the value is important or must be copied. |
+| Code block | `text-xs font-mono` | 12px | Acceptable because code is scanned differently and usually wrapped in a block. |
+
+- **14px is the body floor.** Do not use `text-xs` for explanatory copy, form
+  help, table content, card descriptions, or Chinese sentences.
+- **Secondary text is usually `text-sm text-muted-foreground`, not `text-xs`.**
+  Lowering contrast is a stronger and more readable signal than shrinking.
+- **`text-xs` is for compact metadata only.** Good uses: badges, counts,
+  timestamps, short ids, chart axis labels, tiny helper labels inside a dense
+  technical display.
 - **Avoid `text-sm` + caps as a section heading.** That puts the label at the
-  same size as the content it labels, so size contributes nothing and the
-  hierarchy rests entirely on letter-spacing tricks.
-- Stick to a few font weights (`font-normal`, `font-medium`, `font-semibold`).
+  same size as the content it labels, so hierarchy rests entirely on styling
+  tricks.
+- Stick to a few font weights: `font-normal`, `font-medium`, `font-semibold`.
+  Prefer moving up one type token before stacking many weights.
 - Use `tabular-nums` on any column of figures so digits line up vertically.
 
 #### Whether a section needs a heading
