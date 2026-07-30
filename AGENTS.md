@@ -49,11 +49,11 @@ Read these docs based on the task at hand:
 | **App design system: type scale, spacing, density, page patterns, `/design` showcase** | [docs/design-system-plan.md](docs/design-system-plan.md) |
 | **How the CSS is wired: Tailwind v4 mechanics, where tokens live, cascade pitfalls** | [docs/css-architecture.md](docs/css-architecture.md) |
 | Code style, TypeScript rules | [docs/coding-standards.md](docs/coding-standards.md) |
-| Env vars, deployment config | [docs/deploy.md](docs/deploy.md) + the `*.env.example` files |
+| What a specific env var does, and whether you must set it | the `*.env.example` files (source of truth) |
 | **Frontend: TanStack Start** | [docs/rules-tanstack.md](docs/rules-tanstack.md) |
 | Writing or running tests | [docs/testing.md](docs/testing.md) |
 | Debugging UI issues | [docs/debugging.md](docs/debugging.md) |
-| Deploying, first-time setup, or CI | [docs/deploy.md](docs/deploy.md) |
+| Deploying, CI, env file layering, derived bindings | [docs/deploy.md](docs/deploy.md) |
 | Changing local dev ports | [docs/ports.md](docs/ports.md) |
 | Renaming the product after cloning the template | [docs/quickstart.md](docs/quickstart.md) |
 

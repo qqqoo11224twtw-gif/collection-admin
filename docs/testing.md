@@ -177,13 +177,13 @@ test.describe('Smoke tests', () => {
 PLAYWRIGHT_BASE_URL unset (local) → playwright auto-starts `pnpm run dev`,
                                      hits http://localhost:3000
 
-PLAYWRIGHT_BASE_URL set (CI)     → playwright skips webServer, hits the
-                                     deployed stage URL
-                                     (https://<dev-frontend-url> for dev,
-                                      https://<prod-frontend-url> for prod)
+PLAYWRIGHT_BASE_URL set          → playwright skips webServer, hits the
+                                     deployed stage URL you gave it
 ```
 
-So locally just run `pnpm test:e2e` — the dev server is bootstrapped automatically. In CI the deploy job runs first and passes its URL to the e2e job.
+So locally just run `pnpm test:e2e` — the dev server is bootstrapped
+automatically. Nothing sets `PLAYWRIGHT_BASE_URL` for you: CI has no e2e job,
+so you export it by hand when you want to test a deployed stage.
 
 ### Selector best practices
 
@@ -223,7 +223,7 @@ E2E tests run against the **deployed** app, so all RPC calls go to the real back
 1. Create `apps/web/e2e/<feature>.spec.ts`
 2. Use `test.describe('<feature>', () => { ... })` to group
 3. Locally: `pnpm test:e2e` (or `pnpm exec playwright test e2e/<feature>.spec.ts` from `apps/web/`)
-4. Inspect failures via the auto-saved `apps/web/playwright-report/` (also uploaded as a CI artifact on failure)
+4. Inspect failures via the auto-saved `apps/web/playwright-report/` (local only — no CI job uploads it)
 
 ### Running a single test
 
@@ -240,14 +240,20 @@ pnpm exec playwright test --debug    # step through
 ## CI pipeline
 
 ```
-PR (any branch)         →  test                                  (lint/typecheck/unit)
-push dev                →  test  →  deploy(dev)  →  e2e          (against <dev-frontend-url>)
-push main               →  test  →  deploy(prod) →  e2e          (against <prod-frontend-url>)
+PR (any branch)         →  test                     (lint/typecheck/unit)
+push dev                →  test  →  deploy(dev)
+push main               →  test  →  deploy(prod)
 ```
 
-- A failing `test` job blocks deploy
-- E2E runs **after** deploy (Alchemy convention: tests target the deployed stage, not local emulation)
-- A failing E2E does NOT roll back — dev/prod stage tolerates the failed deploy and the next push fixes it
+- A failing `test` job blocks deploy (`deploy` declares `needs: test`)
+- **E2E does not run in CI.** The job was removed — Playwright installs kept
+  hanging in Actions and burning minutes. Run it yourself against a deployed
+  stage instead:
+  ```bash
+  PLAYWRIGHT_BASE_URL=https://<stage-frontend-url> pnpm --filter web test:e2e
+  ```
+  Note the auth and API-key specs skip themselves against a remote target —
+  they need the local dev-only OTP endpoint.
 
 The full workflow is `.github/workflows/deploy.yml`.
 
