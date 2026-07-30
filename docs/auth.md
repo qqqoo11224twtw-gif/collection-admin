@@ -67,9 +67,10 @@ default: OTP codes print to the server console and are readable at
 | `RESEND_API_KEY` + `EMAIL_FROM` | — | ✅ required | ✅ required | Resend REST API; `EMAIL_FROM` must be a verified sender domain |
 | `ADMIN_EMAILS` | — | ✅ required | ✅ required | admin-only: empty = nobody can sign in; open: empty = no admin channel |
 
-When you add/remove any of these, update `docs/environment.md`,
-`.local.env.example`, and `scripts/sync-secrets.sh` in the same commit
-(house rule at the top of environment.md).
+When you add/remove any of these, update `apps/server/.local.env.example` in
+the same commit — that file is the source of truth for what each variable does.
+`docs/deploy.md` only needs a change if the *mechanism* changed (file
+layering, sync path, derived bindings).
 
 ## 3. Route protection — every route picks one, explicitly
 
@@ -195,8 +196,8 @@ pilot before being extracted into this template:
 
 1. `pnpm test && pnpm typecheck && pnpm exec biome ci .` — all green.
 2. Did you add a route? It names its protection level explicitly (§3).
-3. Did you touch env? environment.md + `.local.env.example` +
-   `sync-secrets.sh` updated in the same commit (§2).
+3. Did you touch env? `apps/server/.local.env.example` updated in the same
+   commit (§2).
 4. Could an OTP, session token, or key plaintext reach a log, an error
    message, the URL, or the query cache? (grep your diff for `console.log`.)
 5. Products cloned from starter: renamed `API_KEY_PREFIX`? Set your own

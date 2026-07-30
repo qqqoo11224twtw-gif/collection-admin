@@ -5,13 +5,14 @@ Runbook for deploying saasflare starter to Cloudflare via alchemy.
 ## Can this be auto-run?
 
 Mostly. An agent (or you with a script) can drive every step **except A2**,
-which needs three human-provided secrets:
+which needs two human-provided secrets:
 
 | Step | Auto-runnable? | Why / why not |
 |---|---|---|
+| A0 rename the fork | ✅ | edit one JSON block, but get it right before the first deploy |
 | A1 preflight | ✅ | scripted checks |
 | A2 fill `.alchemy.env` | ❌ | CF token **must** be minted via `pnpm dlx alchemy util create-cloudflare-token` (interactive browser OAuth). The dashboard "Edit Cloudflare Workers" template lacks D1, R2 Data, and other scopes alchemy needs — using it will fail at the first D1/R2 resource. Agent cannot drive the OAuth flow, so the user runs the helper and pastes the token back. |
-| A3 per-app `.env` | ❌ if domains/R2 desired | needs human choices |
+| A3 per-app `.env` | ⚠️ partly | the files themselves are **mandatory** (a deploy dies without them) and can be created empty; filling in domains/R2/auth needs human choices |
 | A4 sync secrets | ✅ | `pnpm sync:secrets` |
 | A5 push | ✅ | `git push` |
 | A6 verify | ✅ | curl + jq |
@@ -41,23 +42,55 @@ user's language and plain words (no jargon), then continue.
   `.alchemy.env` so child alchemy processes inherit the control-plane
   env. Per-app `--env-file .{stage}.env` adds domain + R2 keys on top.
 - **State store**: alchemy uses `CloudflareStateStore` (remote KV) when
-  `CLOUDFLARE_API_TOKEN` is in the env (it always is, since
-  `.alchemy.env` is sourced).
+  `CLOUDFLARE_API_TOKEN` is in the env — i.e. whenever `.alchemy.env`
+  exists, since `scripts/deploy.sh` sources it. Without the file (Path B
+  after `alchemy login`), state stays in a local `.alchemy/` directory
+  instead. Resources are `adopt: true`, so a stage deployed both ways
+  re-adopts by name rather than duplicating — but the two paths track
+  state separately.
 
 ## Env files
 
+Two layers, never mixed:
+
+```text
+.alchemy.env                                    control plane, repo root
+apps/{server,web}/.local.env / .dev.env / .prod.env   per-app Worker config
+```
+
+Each app runs its own alchemy process with its own `--env-file`, and
+nothing is shared between the two runs. A value both apps need —
+`WEB_DOMAIN` and `SERVER_DOMAIN` — must be written into both files.
+Control-plane credentials live at the root because `scripts/deploy.sh`
+sources that file into the shell, where every child process inherits it.
+
 | File | Scope | Contents | Synced to GitHub as |
 |---|---|---|---|
-| `.alchemy.env` | root, all stages, both apps | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_EMAIL`, `ALCHEMY_STATE_TOKEN` | `ENV_ALCHEMY` |
+| `.alchemy.env` | root, all stages, both apps | `CLOUDFLARE_API_TOKEN`, `ALCHEMY_STATE_TOKEN` | `ENV_ALCHEMY` |
 | `apps/server/.local.env` | server, local stage | R2 keys for local testing | — (local-only) |
 | `apps/web/.local.env`    | web, local stage    | future `NEXT_PUBLIC_*` for local | — (local-only) |
-| `apps/server/.dev.env`   | server, dev + every `pr-<N>` | `WEB_DOMAIN`, `SERVER_DOMAIN`, R2 keys | `ENV_SERVER_DEV` |
-| `apps/web/.dev.env`      | web, dev + every `pr-<N>`    | `WEB_DOMAIN`, `SERVER_DOMAIN`, `NEXT_PUBLIC_*` | `ENV_WEB_DEV` |
+| `apps/server/.dev.env`   | server, dev + every `pr-<N>` | `WEB_DOMAIN`, `SERVER_DOMAIN`, auth, R2 keys | `ENV_SERVER_DEV` |
+| `apps/web/.dev.env`      | web, dev + every `pr-<N>`    | `WEB_DOMAIN`, `SERVER_DOMAIN` | `ENV_WEB_DEV` |
 | `apps/server/.prod.env`  | server, prod | same as dev | `ENV_SERVER_PROD` |
 | `apps/web/.prod.env`     | web, prod    | same as dev | `ENV_WEB_PROD` |
 
-All files are gitignored. Examples: `.alchemy.env.example`,
-`apps/{server,web}/.local.env.example`.
+All files are gitignored; only `*.example` is committed. What each
+variable does, and how to generate a value, lives in the example files —
+they are the source of truth:
+
+- `.alchemy.env.example`
+- `apps/server/.local.env.example`
+- `apps/web/.local.env.example`
+
+> **🛑 A missing `--env-file` target is fatal.** The process dies with a
+> non-zero exit rather than falling back, and every `dev` / `deploy:*` script passes
+> `--env-file` unconditionally. So `pnpm dev` needs both `.local.env`
+> files, `deploy:dev` needs both `.dev.env` files, and `deploy:prod`
+> needs both `.prod.env` files — **even when you have nothing to put in
+> them.** Empty files are enough. (`destroy:dev` / `destroy:prod` are the
+> exception: they pass no `--env-file` at all, so a destroy re-runs
+> `alchemy.run.ts` without the domains or auth mode and resolves
+> different URLs than the deploy did.)
 
 ## Deploy flows
 
@@ -71,6 +104,29 @@ All files are gitignored. Examples: `.alchemy.env.example`,
 ---
 
 ## Path A — CI-first
+
+### A0. Rename the fork (do this before the first deploy)
+
+Every Cloudflare resource is named `${projectName}-{kind}-${stage}`, from
+the `saasflare` block in the root `package.json`:
+
+```json
+"saasflare": {
+  "projectName": "my-app",       // Worker/D1/KV resource names
+  "displayName": "My App",       // <title>, console/login headings
+  "appId": "my-app",             // <html data-app> and the E2E guard
+  "apiKeyPrefix": "myapp_"       // better-auth key prefix
+}
+```
+
+> **🛑 Deploying under a name another project already uses on the same
+> Cloudflare account adopts and overwrites its Workers and database** —
+> every resource is declared `adopt: true`. `projectName` is validated
+> (`^[a-z][a-z0-9-]*$`) and throws on a bad format, but it cannot tell
+> that a *valid* name is already someone else's. Leaving it as `starter`
+> and deploying is the easiest way to clobber a sibling project.
+
+Full field-by-field breakdown: [docs/quickstart.md](quickstart.md).
 
 ### A1. Preflight
 
@@ -86,16 +142,15 @@ test -d node_modules || pnpm install
 
 ```bash
 cp .alchemy.env.example .alchemy.env
-# fill in the three values:
+# fill in the two values:
 #   CLOUDFLARE_API_TOKEN — see "Getting the CF token" below
-#   CLOUDFLARE_EMAIL     — your CF account email
 #   ALCHEMY_STATE_TOKEN  — openssl rand -hex 32 (or reuse from another
 #                          saasflare project on this CF account — MUST match)
 ```
 
 > **🛑 AGENT PAUSE — the CF token step is interactive (browser OAuth), so
 > the agent cannot run it. Tell the user to do it themselves, then collect
-> the three values:**
+> the two values:**
 >
 > 1. **CF token.** Say: *"The Cloudflare token step needs a browser login,
 >    so I can't run it for you. Please run this in your terminal:*
@@ -113,14 +168,15 @@ cp .alchemy.env.example .alchemy.env
 >    `401 Authentication error`. The helper mints a token with the full
 >    scope set; insist on it.
 >    Wait for the token before continuing.
-> 2. **CF email.** Ask: *"What email is your Cloudflare account under?"*
-> 3. **State token.** Ask: *"Is this your first saasflare project on this
+> 2. **State token.** Ask: *"Is this your first saasflare project on this
 >    Cloudflare account? If you have other saasflare projects on the same
 >    account, paste their `ALCHEMY_STATE_TOKEN` here — it must match. If
 >    this is the first one, just say 'first' and I'll generate one for
 >    you with `openssl rand -hex 32`."*
 >
-> Then write all three into `.alchemy.env` and move on.
+> Then write both into `.alchemy.env` and move on. If the user mentions
+> having more than one Cloudflare account, also ask for the Account ID
+> and set `CLOUDFLARE_ACCOUNT_ID` — see below.
 
 #### Getting the CF token
 
@@ -154,8 +210,16 @@ pnpm dlx alchemy login -p personal
 pnpm dlx alchemy util create-cloudflare-token -p saasflare
 ```
 
-Profiles are stored under `~/.config/.alchemy/credentials/<profile>/`.
-`pnpm dlx alchemy whoami -p <profile>` shows who's logged in there.
+Profiles live in `~/.alchemy/config.json`, with their credentials under
+`~/.alchemy/credentials/<profile>/`. `pnpm dlx alchemy whoami -p <profile>`
+shows who's logged in there.
+
+> **🛑 If a deploy lands in the wrong account, the profile is not your
+> fix.** When credentials can see several accounts, alchemy lists them,
+> **uses the first one**, and only prints a warning. Set
+> `CLOUDFLARE_ACCOUNT_ID` in `.alchemy.env` to skip that guess entirely
+> (dashboard → any domain → Overview → Account ID). Profiles only affect
+> which account you mint the *token* from — see the note below.
 
 > **Why not the dashboard "Edit Cloudflare Workers" template?** It looks
 > close but omits D1, Workers R2 Data, and a few other scopes alchemy
@@ -169,6 +233,17 @@ Profiles are stored under `~/.config/.alchemy/credentials/<profile>/`.
 > credentials — so you never need to pass `--profile` to `deploy:*`.
 
 ### A3. Create per-app `.{stage}.env` files
+
+**The four files must exist before you deploy**, even if every one of
+them is empty — `deploy:dev` / `deploy:prod` pass `--env-file`
+unconditionally and the process dies on a missing target:
+
+```bash
+touch apps/server/.dev.env apps/web/.dev.env
+touch apps/server/.prod.env apps/web/.prod.env
+```
+
+Everything below is what you optionally put *inside* them.
 
 **Auth is opt-in on deployed stages** — unset `AUTH_MODE` deploys with
 auth disabled and needs zero env. Enabling sign-in requires all four
@@ -204,9 +279,9 @@ Domains and R2 remain optional — skip them and the apps deploy on
 > 2. *"Do you need file storage (Cloudflare R2) for the server? If yes,
 >    paste your R2 access key ID and secret access key. If no, skip."*
 >
-> If both answers are no → skip A3 entirely.
-> Otherwise only write the keys the user actually provided into the
-> matching `.dev.env` / `.prod.env` files.
+> If both answers are no → still create the four empty files above, then
+> move on. Otherwise only write the keys the user actually provided into
+> the matching `.dev.env` / `.prod.env` files.
 
 ```bash
 # Custom domains (zone must be on Cloudflare DNS)
@@ -338,6 +413,14 @@ Uploads `.alchemy.env` (as `ENV_ALCHEMY`) and the four
 `apps/{server,web}/.{dev,prod}.env` files (as `ENV_{SERVER,WEB}_{DEV,PROD}`).
 Missing files are skipped with a warning.
 
+Those five are the only repository secrets the workflows read, apart from
+the Actions-provided `GITHUB_TOKEN`. There is no standalone
+`CLOUDFLARE_API_TOKEN` or `ALCHEMY_STATE_TOKEN` secret — they travel
+inside `ENV_ALCHEMY`. CI writes each secret back to its original path
+before deploying.
+
+Secrets are snapshots: re-run `pnpm sync:secrets` after every local edit.
+
 ### A5. Push and watch
 
 ```bash
@@ -345,7 +428,13 @@ git push origin dev
 gh run watch
 ```
 
-`deploy.yml` runs test → deploy dev → resolve URL → e2e.
+`deploy.yml` runs test → deploy. (There is no e2e job — Playwright
+installs kept hanging in Actions. Run `pnpm --filter web test:e2e`
+locally against a deployed URL instead.)
+
+The preview workflow additionally injects `PR_STAGE` (`pr-<number>`),
+which the `deploy:pr` script consumes through shell expansion — so a
+`process.env` grep will not find it.
 
 ### A6. Verify
 
@@ -419,6 +508,44 @@ Same as A6.
 
 ---
 
+## Derived bindings — never set these by hand
+
+Computed in `alchemy.run.ts`. Putting them in an env file does nothing.
+
+| Binding | Value |
+|---|---|
+| `CORS_ORIGIN` | `localhost:3000`–`:3009` locally, else `WEB_DOMAIN` or workers.dev |
+| `SERVER_URL` | The server's own public URL; better-auth uses it as `baseURL` |
+| `R2_PUBLIC_DOMAIN` | `BUCKET.devDomain` |
+| `R2_ACCOUNT_ID` | Fetched at deploy time via `AccountId()` |
+| `R2_BUCKET_NAME` | `${app.name}-bucket-${app.stage}` |
+| `BUCKET` / `KV` / `DB` | Resource bindings created by alchemy |
+| `NEXT_PUBLIC_SERVER_URL` | Web only. **Assigned unconditionally on every stage** — a value set in an env file is silently discarded |
+
+Binding *types* need no maintenance: `apps/server/env.d.ts` is generated
+from `typeof server.Env`. What the type system cannot express is which
+bindings are derived, hence this table.
+
+## Adding a new env var
+
+1. Add the binding in the relevant `apps/*/alchemy.run.ts`:
+   ```ts
+   bindings: {
+     ...,
+     MY_VAR: process.env.MY_VAR || '',
+   }
+   ```
+2. Add it to your `.local.env`, `.dev.env`, and `.prod.env`.
+3. Document it in `apps/<app>/.local.env.example` — that file is the
+   source of truth, not this document.
+4. `pnpm sync:secrets`, then push.
+5. Restart `pnpm dev` so `env.d.ts` regenerates.
+
+Client-bundle variables follow different rules — see the `NEXT_PUBLIC_`
+section of `apps/web/.local.env.example`.
+
+---
+
 ## Common issues
 
 - **Deploy aborts with `stage "<stage>" requires env: BETTER_AUTH_SECRET,
@@ -445,8 +572,8 @@ Same as A6.
   `pnpm sync:secrets`, and re-push.
 
 - **`pnpm run deploy:dev` says CF auth missing locally**: confirm
-  `.alchemy.env` exists at the repo root and has all three keys filled
-  in. The wrapper sources it but doesn't validate contents.
+  `.alchemy.env` exists at the repo root and has both keys filled in.
+  The wrapper sources it but doesn't validate contents.
 
 - **Custom domain stuck "pending"**: zone must be on Cloudflare DNS. If
   registered elsewhere, change nameservers at the registrar or transfer
@@ -459,8 +586,14 @@ Same as A6.
   `alchemy destroy --stage <stage>` to start clean.
 
 - **`pnpm sync:secrets` skips files**: by design — missing
-  `.{stage}.env` files emit a warning, not an error. Create them if you
-  want them synced.
+  `.{stage}.env` files emit a warning, not an error. But the deploy
+  itself does **not** tolerate them missing (see the callout in
+  [Env files](#env-files)), so create them even if empty.
+
+- **Deploy dies with `node: .dev.env: not found`** (exit 9, or exit 1
+  with alchemy's own `Environment file ... does not exist`): `deploy:*`
+  passes `--env-file` unconditionally. `touch` the four
+  `apps/{server,web}/.{dev,prod}.env` files; empty is fine.
 
 - **PR preview ignores my custom domain**: by design —
   `apps/{server,web}/alchemy.run.ts` checks `app.stage.startsWith('pr-')`
