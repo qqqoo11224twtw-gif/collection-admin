@@ -36,7 +36,7 @@ unnoticed. Verify locally, not from a green CI badge.
 - Header comments naming the ports: `apps/server/alchemy.run.ts`,
   `apps/web/alchemy.run.ts`, `apps/web/playwright.config.ts`
 - `apps/web/e2e/global-setup.ts` — the abort message and its `lsof -nP -iTCP:3000` hint
-- Docs: `README.md`, `AGENTS.md`, `docs/environment.md`, `docs/deploy.md`,
+- Docs: `README.md`, `AGENTS.md`, `docs/deploy.md`,
   `docs/debugging.md`, `docs/testing.md`
 
 ## Deliberately left at :3000

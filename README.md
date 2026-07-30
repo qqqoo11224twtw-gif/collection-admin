@@ -55,7 +55,7 @@ starter/
 
 ### Prerequisites
 
-- Node.js (v20+)
+- Node.js (v23.6+ — the project runs `.ts` files directly via Node)
 - pnpm (`npm i -g pnpm`)
 - Cloudflare Account
 
@@ -71,12 +71,14 @@ pnpm install
 
 ### 2. Development
 
-No env file needed for the default local stack — `alchemy dev --stage local`
-hardcodes `http://localhost:3000` / `:4000` for CORS and the client bundle.
-Copy the example only if you want R2 locally:
+Both apps launch with `--env-file .local.env` and **fail to start if that file is
+missing**, so create both before the first run. Empty files are fine —
+`alchemy dev --stage local` hardcodes `http://localhost:3000` / `:4000` for
+CORS and the client bundle, and every other value has a working local default.
 
 ```bash
 cp apps/server/.local.env.example apps/server/.local.env
+cp apps/web/.local.env.example    apps/web/.local.env
 
 pnpm dev
 ```
@@ -112,8 +114,9 @@ pnpm run deploy:prod
 > **One-shot deploy.** URLs are resolved automatically inside `alchemy.run.ts`
 > (via `computeWorkerDevDomain`), so `NEXT_PUBLIC_SERVER_URL` and `CORS_ORIGIN`
 > never need to be filled in by hand — `deploy:dev` / `deploy:prod` work first
-> time. All deploy config lives in `apps/{server,web}/.{stage}.env` (control-
-> plane tokens + optional `WEB_DOMAIN` / `SERVER_DOMAIN` + R2 keys). See
+> time. Control-plane credentials live in `.alchemy.env` at the repo root;
+> per-app deploy config (optional `WEB_DOMAIN` / `SERVER_DOMAIN`, auth, R2 keys)
+> lives in `apps/{server,web}/.{stage}.env`. See
 > [docs/deploy.md](docs/deploy.md) for the full runbook.
 
 #### Automated CI/CD Deployment
@@ -125,13 +128,15 @@ This project ships two GitHub Actions workflows:
 
 ##### Required Secrets
 
-To enable automated deployment, add the following **Repository Secrets** in your GitHub repository (*Settings -> Secrets and variables -> Actions -> New repository secret*):
+The workflows read exactly five **Repository Secrets** (*Settings -> Secrets and variables -> Actions -> New repository secret*). Each is the full content of a local env file, which CI writes back to its original path before deploying:
 
-1. **`CLOUDFLARE_API_TOKEN`**: Your Cloudflare API Token. Generate one mirroring your permissions by running: `pnpm dlx alchemy util create-cloudflare-token`.
-2. **`ALCHEMY_STATE_TOKEN`**: A random 32-character hex string for Alchemy state management. Generate via: `openssl rand -hex 32`. Must be the same across all projects under the same Cloudflare account.
-3. **`CLOUDFLARE_EMAIL`**: Your Cloudflare account login email.
-4. **`ENV_SERVER_DEV` / `ENV_SERVER_PROD`**: The full content of `apps/server/.dev.env` / `apps/server/.prod.env`.
-5. **`ENV_WEB_DEV` / `ENV_WEB_PROD`**: The full content of `apps/web/.dev.env` / `apps/web/.prod.env`.
+| Secret | Local file | Contents |
+| :--- | :--- | :--- |
+| **`ENV_ALCHEMY`** | `.alchemy.env` | Control-plane credentials (`CLOUDFLARE_API_TOKEN`, `ALCHEMY_STATE_TOKEN`). Required — Actions cannot run the interactive `alchemy login`. |
+| **`ENV_SERVER_DEV`** / **`ENV_SERVER_PROD`** | `apps/server/.dev.env` / `.prod.env` | Server Worker config |
+| **`ENV_WEB_DEV`** / **`ENV_WEB_PROD`** | `apps/web/.dev.env` / `.prod.env` | Web deploy config |
+
+There is no standalone `CLOUDFLARE_API_TOKEN` or `ALCHEMY_STATE_TOKEN` repository secret — those travel inside `ENV_ALCHEMY`. See [`.alchemy.env.example`](.alchemy.env.example) for how to generate them.
 
 ##### Upload env files to GitHub Secrets
 
@@ -144,6 +149,7 @@ pnpm sync:secrets
 Manual equivalent:
 
 ```bash
+gh secret set ENV_ALCHEMY < .alchemy.env
 gh secret set ENV_SERVER_DEV < apps/server/.dev.env
 gh secret set ENV_SERVER_PROD < apps/server/.prod.env
 gh secret set ENV_WEB_DEV < apps/web/.dev.env
@@ -213,7 +219,7 @@ starter/
 
 ### 前置要求
 
-- Node.js (v20+)
+- Node.js (v23.6+ — the project runs `.ts` files directly via Node)
 - pnpm (`npm i -g pnpm`)
 - Cloudflare 账号
 
@@ -229,10 +235,11 @@ pnpm install
 
 ### 2. 开发
 
-本地默认无需 env 文件 — `alchemy dev --stage local` 把 CORS 和客户端 bundle 都写死成 `http://localhost:3000` / `:4000`。只在需要本地用 R2 时复制 example：
+两个 app 启动时都会传 `--env-file .local.env`，**文件不存在会直接启动失败**，所以首次运行前两个都要建。内容可以完全为空 —— `alchemy dev --stage local` 把 CORS 和客户端 bundle 都写死成 `http://localhost:3000` / `:4000`，其余每一项本地都有可用的默认值。
 
 ```bash
 cp apps/server/.local.env.example apps/server/.local.env
+cp apps/web/.local.env.example    apps/web/.local.env
 
 pnpm dev
 ```
@@ -265,7 +272,7 @@ pnpm run deploy:dev
 pnpm run deploy:prod
 ```
 
-> **一次部署即可。** `alchemy.run.ts` 通过 `computeWorkerDevDomain` 自动解析 URL，`NEXT_PUBLIC_SERVER_URL` 和 `CORS_ORIGIN` 不需要手填，`deploy:dev` / `deploy:prod` 首次运行就能跑通。所有部署相关 env（CF 控制面 token + 可选 `WEB_DOMAIN`/`SERVER_DOMAIN` + R2 keys）放在 `apps/{server,web}/.{stage}.env`。完整流程见 [docs/deploy.md](docs/deploy.md)。
+> **一次部署即可。** `alchemy.run.ts` 通过 `computeWorkerDevDomain` 自动解析 URL，`NEXT_PUBLIC_SERVER_URL` 和 `CORS_ORIGIN` 不需要手填，`deploy:dev` / `deploy:prod` 首次运行就能跑通。控制面凭证放在仓库根目录的 `.alchemy.env`；各 app 的部署配置（可选 `WEB_DOMAIN`/`SERVER_DOMAIN`、auth、R2 keys）放在 `apps/{server,web}/.{stage}.env`。完整流程见 [docs/deploy.md](docs/deploy.md)。
 
 #### 自动化 CI/CD 部署
 
@@ -276,13 +283,15 @@ pnpm run deploy:prod
 
 ##### 所需 Secrets
 
-要启用自动部署，请在您的 GitHub 仓库中添加以下 **Repository Secrets** (*Settings -> Secrets and variables -> Actions -> New repository secret*)：
+工作流实际只读取五个 **Repository Secrets** (*Settings -> Secrets and variables -> Actions -> New repository secret*)。每个 secret 都是某个本地 env 文件的完整内容，CI 会在部署前把它写回原路径：
 
-1. **`CLOUDFLARE_API_TOKEN`**: Cloudflare API 令牌。运行 `pnpm dlx alchemy util create-cloudflare-token` 生成一个包含当前权限的令牌。
-2. **`ALCHEMY_STATE_TOKEN`**: 用于 Alchemy 状态管理的随机字符串。可通过 `openssl rand -hex 32` 生成, 如果 cloudflare 下有多个项目必须相同。
-3. **`CLOUDFLARE_EMAIL`**: 您的 Cloudflare 账号登录邮箱。
-4. **`ENV_SERVER_DEV` / `ENV_SERVER_PROD`**: 分别对应 `apps/server/.dev.env` / `apps/server/.prod.env` 的完整内容。
-5. **`ENV_WEB_DEV` / `ENV_WEB_PROD`**: 分别对应 `apps/web/.dev.env` / `apps/web/.prod.env` 的完整内容。
+| Secret | 本地文件 | 内容 |
+| :--- | :--- | :--- |
+| **`ENV_ALCHEMY`** | `.alchemy.env` | 控制面凭证（`CLOUDFLARE_API_TOKEN`、`ALCHEMY_STATE_TOKEN`）。必需 —— Actions 跑不了交互式的 `alchemy login`。 |
+| **`ENV_SERVER_DEV`** / **`ENV_SERVER_PROD`** | `apps/server/.dev.env` / `.prod.env` | server Worker 配置 |
+| **`ENV_WEB_DEV`** / **`ENV_WEB_PROD`** | `apps/web/.dev.env` / `.prod.env` | web 部署配置 |
+
+没有独立的 `CLOUDFLARE_API_TOKEN` / `ALCHEMY_STATE_TOKEN` repository secret —— 它们随 `ENV_ALCHEMY` 一起传入。生成方式见 [`.alchemy.env.example`](.alchemy.env.example)。
 
 ##### 上传 env 文件到 GitHub Secrets
 
@@ -295,6 +304,7 @@ pnpm sync:secrets
 手动等价：
 
 ```bash
+gh secret set ENV_ALCHEMY < .alchemy.env
 gh secret set ENV_SERVER_DEV < apps/server/.dev.env
 gh secret set ENV_SERVER_PROD < apps/server/.prod.env
 gh secret set ENV_WEB_DEV < apps/web/.dev.env

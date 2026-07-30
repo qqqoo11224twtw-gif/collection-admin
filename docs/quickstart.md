@@ -8,7 +8,7 @@ never deploy by hand again.
 Deep dives live elsewhere — this page is the happy path:
 [docs/deploy.md](deploy.md) (full deploy runbook + troubleshooting),
 [docs/auth.md](auth.md) (auth configuration), [docs/ports.md](ports.md)
-(renumbering local dev ports), [docs/environment.md](environment.md) (every env var).
+(renumbering local dev ports), the `*.env.example` files (every env var).
 
 ## 0 · What you're about to deploy
 
@@ -227,7 +227,7 @@ file, uploaded as a secret:
 cp .alchemy.env.example .alchemy.env
 ```
 
-Fill the three values per [deploy.md A2](deploy.md#a2-create-alchemyenv)
+Fill the two values per [deploy.md A2](deploy.md#a2-create-alchemyenv)
 (canonical: the token **must** come from
 `pnpm dlx alchemy util create-cloudflare-token`, never the dashboard;
 one `ALCHEMY_STATE_TOKEN` shared across all your forks on the same CF
@@ -243,16 +243,9 @@ gh repo set-default    # once, pick your repo
 pnpm sync:secrets
 ```
 
-`sync:secrets` uploads your local env files as repository secrets
-(missing files are skipped with a warning):
-
-| Local file | GitHub secret | Used by |
-|---|---|---|
-| `.alchemy.env` | `ENV_ALCHEMY` | every deploy job |
-| `apps/server/.dev.env` | `ENV_SERVER_DEV` | `dev` + every `pr-<N>` |
-| `apps/web/.dev.env` | `ENV_WEB_DEV` | `dev` + every `pr-<N>` |
-| `apps/server/.prod.env` | `ENV_SERVER_PROD` | `prod` |
-| `apps/web/.prod.env` | `ENV_WEB_PROD` | `prod` |
+`sync:secrets` uploads your five local env files as repository secrets
+(missing files are skipped with a warning). Which file maps to which
+secret, and which stage reads it: [deploy.md — Env files](deploy.md#env-files).
 
 Secrets are **snapshots**: whenever you edit an env file locally, run
 `pnpm sync:secrets` again before pushing.
@@ -296,7 +289,8 @@ Everything else (401 dashboard-token, missing workers.dev subdomain,
 | Topic | Doc |
 |---|---|
 | Configure auth modes, admin, API keys | [docs/auth.md](auth.md) |
-| Every env var, and the sync rules | [docs/environment.md](environment.md) |
+| Every env var | the `*.env.example` files |
+| Env file layering, sync rules, derived bindings | [docs/deploy.md](deploy.md) |
 | Add API endpoints / DB tables | [docs/api-development.md](api-development.md), [docs/database-d1.md](database-d1.md) |
 | Full deploy runbook (domains, www redirect, R2 keys) | [docs/deploy.md](deploy.md) |
 | Agent onboarding index | [AGENTS.md](../AGENTS.md) |

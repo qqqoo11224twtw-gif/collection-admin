@@ -49,7 +49,7 @@ Read these docs based on the task at hand:
 | **App design system: type scale, spacing, density, page patterns, `/design` showcase** | [docs/design-system-plan.md](docs/design-system-plan.md) |
 | **How the CSS is wired: Tailwind v4 mechanics, where tokens live, cascade pitfalls** | [docs/css-architecture.md](docs/css-architecture.md) |
 | Code style, TypeScript rules | [docs/coding-standards.md](docs/coding-standards.md) |
-| Env vars, deployment config | [docs/environment.md](docs/environment.md) |
+| Env vars, deployment config | [docs/deploy.md](docs/deploy.md) + the `*.env.example` files |
 | **Frontend: TanStack Start** | [docs/rules-tanstack.md](docs/rules-tanstack.md) |
 | Writing or running tests | [docs/testing.md](docs/testing.md) |
 | Debugging UI issues | [docs/debugging.md](docs/debugging.md) |
