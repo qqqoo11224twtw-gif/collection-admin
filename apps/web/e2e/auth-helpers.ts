@@ -5,13 +5,13 @@ import { expect, type Page } from '@playwright/test';
  * it reads the OTP back from the server's dev-only /api/dev/otp endpoint,
  * which does not exist when a mail key is configured (all deployed stages).
  *
- * In the default `open` mode any email may sign up, so no server-side
- * whitelist setup is needed. To exercise admin flows, add E2E_ADMIN_EMAIL to
- * the local server's ADMIN_EMAILS (see apps/server/.local.env.example).
+ * In the default `open` mode any email may sign up, so no server-side setup
+ * is needed. Admin-only flows have no e2e coverage — they would need an
+ * ADMIN_EMAILS entry matching the address below.
  */
 
-export const USER_EMAIL = process.env.E2E_USER_EMAIL ?? 'e2e-user@test.dev';
-export const SERVER_URL = process.env.E2E_SERVER_URL ?? 'http://localhost:4000';
+export const USER_EMAIL = 'e2e-user@test.dev';
+export const SERVER_URL = 'http://localhost:4000';
 
 /** True when running against a deployed URL (no dev OTP endpoint there). */
 export const isRemote = !!process.env.PLAYWRIGHT_BASE_URL;
