@@ -1,379 +1,160 @@
 # Testing Guide
 
-How testing is set up in this scaffold, and how to add tests for new code in your fork.
+What is non-obvious about testing in this scaffold. Commands live in
+`package.json`; test patterns live in the test files themselves. This document
+covers only what you would otherwise have to discover the hard way.
 
 ## Mental model
 
-There are **two test types** with very different costs and guarantees:
+Two test types, no unit tests, **no mocks** — mocking Cloudflare bindings
+diverges from the real runtime, so everything runs against miniflare instead.
 
-| Type | Tool | Where it runs | What it covers | When to use |
-|---|---|---|---|---|
-| **Integration** | Vitest + `@cloudflare/vitest-pool-workers` | Real miniflare Worker runtime, in-process | Hono routes · oRPC procedures · D1 / KV / R2 bindings · full request chain | Backend logic — anything the server does |
-| **E2E** | Playwright (Chromium) | Real browser hitting a deployed URL (CI) or local dev server | User-visible flows: page loads, clicks, form submits, navigation | Frontend behavior worth a real browser |
+| Type | Tool | Runs in | Covers |
+|---|---|---|---|
+| **Integration** | Vitest + `@cloudflare/vitest-pool-workers` | Real miniflare Worker runtime, in-process | Hono routes · oRPC procedures · D1/KV/R2 bindings |
+| **E2E** | Playwright (Chromium) | Local dev server, or a deployed URL you point it at | User-visible flows worth a real browser |
 
-**No unit tests, no mocks**. Mocking Cloudflare bindings is fragile (mock divergence is a known foot-gun); we always test against the real runtime via miniflare.
+Backend tests go in `apps/server/tests/`, frontend tests in `apps/web/e2e/`.
+The other workspaces have none on purpose: `packages/api` handlers all need
+Cloudflare bindings and are covered transitively by the server tests,
+`packages/db` is schema only, `packages/ui` is vendored shadcn, `packages/config`
+is tsconfig.
 
-## Workspace layout
+## Start from an existing test, not from a snippet
 
-| Workspace | Tests? | Why |
-|---|---|---|
-| `apps/server` | ✅ Vitest integration | Runs the Hono app in miniflare with real D1/KV |
-| `apps/web` | ✅ Playwright E2E | Browser-driven tests against built app |
-| `packages/api` | ❌ | All handlers need Cloudflare bindings — covered transitively by `apps/server` tests |
-| `packages/db` | ❌ | Schema only, no runtime logic |
-| `packages/ui` | ❌ | Vendored shadcn — covered transitively by E2E |
-| `packages/config` | ❌ | tsconfig only |
+- Server: `apps/server/tests/server.test.ts`
+- E2E: `apps/web/e2e/smoke.spec.ts`
 
-This means: **add backend tests in `apps/server/tests/`, frontend tests in `apps/web/e2e/`**. You won't normally touch other workspaces' test config.
+Copy the nearest one. Snippets pasted into docs rot — this file used to carry a
+sample asserting `'Hello nn stack server!'`, a product name that had been gone
+for months.
 
-## Commands
+## Server tests — the parts that surprise people
 
-```bash
-pnpm test              # vitest run (server integration)
-pnpm test:e2e          # playwright test (auto-starts dev server locally)
-pnpm typecheck         # tsc --noEmit across all workspaces
-pnpm exec biome ci     # lint + format + import-sort, read-only (what CI runs)
+**oRPC wraps everything.** Inputs go over the wire as `{ json: input }` and
+come back as `{ json: output }`, so SuperJSON and binary encodings stay
+transparent. Asserting on the raw body gives you the wrapper, not your data.
+`server.test.ts` has an `rpc()` helper that hides this and maps
+`todos.createTodo` → `POST /rpc/todos/createTodo`; use it.
+
+**`new Request()` needs an absolute URL** but Hono only routes on the path, so
+tests use `http://localhost/...` as a placeholder. No HTTP server is started.
+
+**D1 and KV come from `apps/server/vitest.config.ts`**, which declares the
+miniflare bindings, and `tests/setup.ts`, which applies migrations before each
+test file via `applyD1Migrations(env.DB, env.TEST_MIGRATIONS)`.
+
+`TEST_MIGRATIONS` is the one binding worth understanding: the Worker sandbox has
+no Node `fs`, so the `.sql` files from `packages/db/migrations/` cannot be read
+at runtime. `vitest.config.ts` loads them into a binding instead. It exists only
+for tests and never reaches a deployed Worker. Anything else your tests need
+from disk has to arrive the same way.
+
+**D1 and KV state persists from one test to the next inside a file** — it is
+miniflare's in-memory SQLite, not a fresh store per test, and nothing rolls it
+back. So never assert on a whole-table count or a list length. The todos test
+shows the pattern: it keeps the id it created and asserts with
+`.some((t) => t.id === todo.id)`, which is true regardless of what else is in
+the table. `tests/setup.ts` is a `setupFile`, so migrations re-run per file, not
+per test.
+
+**R2 is exercisable without network.** `vitest.config.ts` binds a `BUCKET` plus
+dummy `R2_*` credentials, because `presign` signs URLs locally — fake values
+still exercise the whole AWS SDK path.
+
+### Pitfalls
+
+- Using `GET` for an oRPC procedure — oRPC is always POST
+- Reading a file with Node `fs` — no `fs` in the Worker sandbox, pass data via a
+  binding (see `TEST_MIGRATIONS`)
+- Asserting on the `{ json: ... }` wrapper instead of unwrapping
+
+## E2E — local vs deployed
+
+`apps/web/playwright.config.ts` switches on one variable:
+
+```
+PLAYWRIGHT_BASE_URL unset  → playwright auto-starts `pnpm run dev`, hits :3000
+PLAYWRIGHT_BASE_URL set    → skips webServer, hits the URL you gave it
 ```
 
-CI runs all of the above on every PR; deploys are blocked until they pass.
+Nothing sets it for you. Locally, `pnpm test:e2e` bootstraps the dev server and
+you need nothing else. To test a deployed stage, export it by hand:
 
-## Package-upgrade smoke test
+```bash
+PLAYWRIGHT_BASE_URL=https://<stage-frontend-url> pnpm --filter web test:e2e
+```
 
-Two broad "does everything still work" tests act as the safety net for dependency bumps (Hono, oRPC, Zod, Drizzle, `@aws-sdk/*`, TanStack Start/Query, Vite, the Cloudflare runtime, ...):
+Against a remote target the auth and API-key specs **skip themselves** — they
+read login codes from `/api/dev/otp`, which only exists when `RESEND_API_KEY` is
+unset. The smoke spec is the one that runs everywhere.
+
+A guard in `e2e/global-setup.ts` aborts the suite if the target URL serves a
+different app. Playwright reuses whatever is already on `:3000`, and every
+saasflare product defaults to that port, so without the guard a run against a
+sibling product would fail confusingly — or quietly pass.
+
+Tests hitting a deployed stage share its real D1: use throwaway data, assert on
+what the test created, never on initial state.
+
+## Package-upgrade smoke net
+
+Two tests deliberately cover breadth over depth, one happy path per feature:
 
 | File | Covers |
 |---|---|
-| `apps/server/tests/server.test.ts` | Every binding (D1 · KV · R2) and every RPC procedure, in the real miniflare runtime |
-| `apps/web/e2e/smoke.spec.ts` | App renders + the frontend → oRPC → backend round-trip, read-only against the deployed stage |
+| `apps/server/tests/server.test.ts` | Hono routing, all four `healthCheck.*` binding probes (D1 · KV · R2), and the planet / todos / storage procedures |
+| `apps/web/e2e/smoke.spec.ts` | App renders, plus the frontend → oRPC → backend round-trip |
 
-After upgrading any underlying package, run `pnpm test` (and `pnpm test:e2e` for frontend bumps) — a regression in any layer fails here loudly instead of leaking to prod. They favor **breadth over depth** (one happy path per feature); keep edge cases in dedicated test files.
+Auth, API keys and `config.status` are **not** in that file — they have
+dedicated suites (`auth-modes`, `api-keys`, `config-status`, `dev-otp`,
+`todos-ownership`) because they need to mutate `env.AUTH_MODE` per test.
 
-To make R2 fully exercisable in miniflare, `apps/server/vitest.config.ts` binds a `BUCKET` R2 bucket and a set of dummy `R2_*` credentials — `presign` signs URLs locally (no network), so fake values exercise the AWS SDK path end-to-end. When you add a feature, extend these two files so the upgrade net keeps covering 100% of the surface.
+After bumping Hono, oRPC, Zod, Drizzle, `@aws-sdk/*`, TanStack, Vite or the
+Cloudflare runtime, run these — a regression in any layer fails loudly here
+instead of reaching prod. When you add a feature, extend these two files so the
+net keeps covering the whole surface. Edge cases belong in dedicated files.
 
----
-
-## Writing server integration tests
-
-### Anatomy of a test
-
-The pattern is **import the app, call `app.fetch()`**:
-
-```ts
-// apps/server/tests/server.test.ts
-import { describe, expect, it } from 'vitest';
-import app from '../src/index';
-
-it('GET / returns hello message', async () => {
-  const res = await app.fetch(new Request('http://localhost/'));
-  expect(res.status).toBe(200);
-  expect(await res.text()).toBe('Hello nn stack server!');
-});
-```
-
-`http://localhost/...` is a placeholder URL — `new Request()` requires an absolute URL but Hono only routes on the path. No real HTTP server is started.
-
-### Testing oRPC endpoints
-
-Use the `rpc()` helper at the top of `server.test.ts`:
-
-```ts
-async function rpc(path: string, input?: unknown) {
-  const urlPath = path.replace(/\./g, '/');  // 'todos.createTodo' → 'todos/createTodo'
-  const resp = await app.fetch(
-    new Request(`http://localhost/rpc/${urlPath}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ json: input }),  // oRPC wire format
-    }),
-  );
-  const raw = (await resp.json()) as { json?: unknown };
-  return { status: resp.status, body: raw.json };
-}
-
-it('creates a todo', async () => {
-  const { status, body } = await rpc('todos.createTodo', { text: 'hi' });
-  expect(status).toBe(200);
-  expect((body as { text: string }).text).toBe('hi');
-});
-```
-
-**Why the wrapping**: oRPC sends inputs as `{ json: input }` and outputs as `{ json: output }` to support SuperJSON / binary encodings transparently. The helper hides this.
-
-### How D1 / KV are available
-
-`apps/server/vitest.config.ts` declares miniflare bindings:
-
-```ts
-miniflare: {
-  bindings: { CORS_ORIGIN: 'http://localhost:3000', TEST_MIGRATIONS: migrations },
-  d1Databases: { DB: { id: 'test-db' } },
-  kvNamespaces:  { KV: { id: 'test-kv' } },
-}
-```
-
-`tests/setup.ts` runs once before each test file, applying D1 migrations:
-
-```ts
-import { applyD1Migrations } from 'cloudflare:test';
-import { env } from 'cloudflare:workers';
-await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
-```
-
-`TEST_MIGRATIONS` is the `.sql` files from `packages/db/migrations/`, loaded into a binding by `vitest.config.ts` (because the Worker sandbox has no Node `fs`).
-
-### Database state between tests
-
-D1 lives in miniflare's in-memory SQLite. **State persists across tests within a single run**, so if you depend on isolation, either:
-
-- Generate unique data per test (e.g. random IDs, timestamps)
-- Reset the table inside the test
-- Use vitest's `beforeEach` for cleanup
-
-The current todos test does the random-data approach implicitly — no cleanup needed.
-
-### Adding a test for a new endpoint
-
-1. Add the procedure in `packages/api/src/<area>.ts` and wire it into `appRouter`
-2. Add a test in `apps/server/tests/server.test.ts` (or a new `<area>.test.ts`):
-   ```ts
-   it('POST /rpc/<area>/<procedure> ...', async () => {
-     const { status, body } = await rpc('<area>.<procedure>', { ...input });
-     expect(status).toBe(200);
-     expect(body).toEqual(/* expected */);
-   });
-   ```
-3. `pnpm test` to verify
-
-### Common pitfalls
-
-- **Forgot `import app from '../src/index'`** — needed once per file
-- **Used `GET` for an oRPC procedure** — oRPC always uses POST. Test name should say POST.
-- **Tried to read a file with Node `fs`** — won't work inside the Worker sandbox; pass data via miniflare bindings instead (see `TEST_MIGRATIONS`)
-- **Asserted on a `{ json: ... }` wrapper** — use the `rpc()` helper or unwrap manually
-
----
-
-## Writing E2E tests
-
-### Anatomy of a smoke test
-
-```ts
-// apps/web/e2e/smoke.spec.ts
-import { expect, test } from '@playwright/test';
-
-test.describe('Smoke tests', () => {
-  test('homepage loads', async ({ page }) => {
-    await page.goto('/');
-    await expect(page).toHaveTitle(/tanstack/i);
-  });
-});
-```
-
-### Local vs CI mode
-
-`apps/web/playwright.config.ts` has two behaviors driven by `PLAYWRIGHT_BASE_URL`:
+## CI
 
 ```
-PLAYWRIGHT_BASE_URL unset (local) → playwright auto-starts `pnpm run dev`,
-                                     hits http://localhost:3000
-
-PLAYWRIGHT_BASE_URL set          → playwright skips webServer, hits the
-                                     deployed stage URL you gave it
+PR (any branch)  →  test                     (biome ci · typecheck · vitest)
+push dev         →  test  →  deploy(dev)
+push main        →  test  →  deploy(prod)
 ```
 
-So locally just run `pnpm test:e2e` — the dev server is bootstrapped
-automatically. Nothing sets `PLAYWRIGHT_BASE_URL` for you: CI has no e2e job,
-so you export it by hand when you want to test a deployed stage.
+A failing `test` blocks the deploy — `deploy` declares `needs: test`.
 
-### Selector best practices
+**E2E does not run in CI.** The job was removed: Playwright installs kept
+hanging in Actions and burning minutes. Run it locally against a deployed stage
+as shown above. Full workflow: `.github/workflows/deploy.yml`.
 
-Prefer **semantic role-based locators**:
+## Generating E2E tests in natural language
 
-```ts
-// Good — survives DOM refactors
-await page.getByRole('button', { name: 'Create todo' }).click();
-await page.getByLabel('Email').fill('a@b.com');
-await page.getByText('Welcome back').click();
+Three sub-agents defined in `.claude/agents/` drive a real browser through the
+`playwright-test` MCP server (declared in `.mcp.json`, approve on first use).
+Read those agent files for what each one does; the workflow is:
 
-// Fragile — breaks on every CSS tweak
-await page.locator('.btn-primary').click();
-await page.locator('#email-input').fill('a@b.com');
-```
+**plan** → a reviewable markdown spec in `apps/web/e2e/specs/<feature>.md`
+→ **generate** → a `.spec.ts` whose selectors came from real browser
+exploration → **heal** → repairs selector drift after UI changes.
 
-When the DOM lacks accessible labels, add `data-testid` attributes — they're explicit anchors not coupled to styling:
+They need `pnpm dev` running. Generated tests are plain Playwright — no AI runs
+in CI.
 
-```tsx
-<button data-testid="create-todo">Create</button>
-```
+The spec markdown is the source of truth, not the generated code: when
+requirements change, edit the spec and regenerate. `e2e/seed.spec.ts` is
+committed on purpose — the agents read it every run for shared setup.
 
-```ts
-await page.getByTestId('create-todo').click();
-```
+Worth it for a new feature with several flows, for backfilling coverage on an
+existing area, or when tests keep breaking on CSS changes. Hand-write instead
+for a short smoke check, for anything needing fine control over timing or
+network mocking, and for critical infra like auth — there you want full
+ownership.
 
-### Interacting with oRPC-backed UI
+The healer marks a test `test.fixme()` with an explanation as a last resort. It
+must never silently delete an assertion; if it does, that is a bug worth fixing
+in the agent prompt.
 
-E2E tests run against the **deployed** app, so all RPC calls go to the real backend. This means:
-
-- Tests should use throwaway data (random titles, unique emails)
-- Don't assume initial state — assert on what the test created
-- D1 in dev/prod stage persists; tests that mutate need to clean up or accept residue
-
-### Adding a new E2E test
-
-1. Create `apps/web/e2e/<feature>.spec.ts`
-2. Use `test.describe('<feature>', () => { ... })` to group
-3. Locally: `pnpm test:e2e` (or `pnpm exec playwright test e2e/<feature>.spec.ts` from `apps/web/`)
-4. Inspect failures via the auto-saved `apps/web/playwright-report/` (local only — no CI job uploads it)
-
-### Running a single test
-
-```bash
-cd apps/web
-pnpm exec playwright test e2e/smoke.spec.ts
-pnpm exec playwright test --grep "homepage loads"
-pnpm exec playwright test --headed   # see the browser
-pnpm exec playwright test --debug    # step through
-```
-
----
-
-## CI pipeline
-
-```
-PR (any branch)         →  test                     (lint/typecheck/unit)
-push dev                →  test  →  deploy(dev)
-push main               →  test  →  deploy(prod)
-```
-
-- A failing `test` job blocks deploy (`deploy` declares `needs: test`)
-- **E2E does not run in CI.** The job was removed — Playwright installs kept
-  hanging in Actions and burning minutes. Run it yourself against a deployed
-  stage instead:
-  ```bash
-  PLAYWRIGHT_BASE_URL=https://<stage-frontend-url> pnpm --filter web test:e2e
-  ```
-  Note the auth and API-key specs skip themselves against a remote target —
-  they need the local dev-only OTP endpoint.
-
-The full workflow is `.github/workflows/deploy.yml`.
-
----
-
-## Writing tests with natural language (Playwright Test Agents)
-
-Three Claude sub-agents in `.claude/agents/` drive a real browser via the `playwright-test` MCP server (declared in `.mcp.json`). You describe what you want in plain language; they explore the app, write the spec, generate the code, and repair drift.
-
-| Agent | What it does | What you give it | What you get |
-|---|---|---|---|
-| `playwright-test-planner` | Open the running app, click around, capture flows | A goal like "test the todo creation flow" | Markdown plan in `apps/web/e2e/specs/<feature>.md` |
-| `playwright-test-generator` | Replay each plan step in a browser, learn real selectors, emit code | Path to a spec markdown file | `.spec.ts` in `apps/web/e2e/<feature>.spec.ts` |
-| `playwright-test-healer` | Run failing tests, snapshot DOM, fix selectors/assertions | "tests are failing, fix them" | Edited `.spec.ts` files |
-
-These run **only when you ask Claude Code** (or another agent harness) — generated tests run as plain Playwright in CI, no AI in the hot path.
-
-### Prerequisites
-
-1. **Local dev server up**: `pnpm dev` (planner/generator drive a live browser at `http://localhost:3000`)
-2. **MCP server**: `.mcp.json` already declares `playwright-test`. Approve it in Claude Code on first use.
-3. **Seed file**: `apps/web/e2e/seed.spec.ts` exists — agents reference it for shared setup. Edit it if your tests need login or seeded data.
-
-### Step 1 — Plan: "test feature X"
-
-In Claude Code, ask in natural language. Example:
-
-> "Use the planner agent to map the todo creation flow at /examples/components/todos. Cover happy path, empty input validation, and the optimistic-update revert when the API errors."
-
-The planner will:
-
-1. Open the page in a browser
-2. Inspect the DOM (via `browser_snapshot` — no screenshots, just accessibility tree)
-3. Click through the flows to verify they work
-4. Save a markdown plan to `apps/web/e2e/specs/<feature>.md`
-
-The plan is **human-readable**, structured as `### Scenario` blocks with numbered steps. Review and edit it — this is your source of truth, not the generated code.
-
-### Step 2 — Generate: "turn this plan into tests"
-
-Once you're happy with the plan:
-
-> "Generate Playwright tests for each scenario in specs/todo-creation.md."
-
-The generator will:
-
-1. Read each scenario from the plan
-2. Set up the browser with `generator_setup_page`
-3. **Manually execute each step** in a real browser (via Playwright MCP tools)
-4. Record the actual selectors and timings used
-5. Write a `.spec.ts` file with one `test()` per scenario, with each step preserved as a comment
-
-Output looks like:
-
-```ts
-// spec: specs/todo-creation.md
-// seed: e2e/seed.spec.ts
-import { test, expect } from '@playwright/test';
-
-test.describe('Adding New Todos', () => {
-  test('Add Valid Todo', async ({ page }) => {
-    // 1. Click in the input and type "Buy milk"
-    await page.getByRole('textbox', { name: /what needs/i }).fill('Buy milk');
-    // 2. Press Enter
-    await page.keyboard.press('Enter');
-    // 3. The todo appears in the list
-    await expect(page.getByText('Buy milk')).toBeVisible();
-  });
-});
-```
-
-Selectors come from real browser exploration → robust by default (role-based, accessible-name-based).
-
-### Step 3 — Heal: "fix the failing tests"
-
-After UI changes, when `pnpm test:e2e` reports failures:
-
-> "Run the test healer — fix any selector drift in the e2e suite."
-
-The healer will:
-
-1. `test_run` to identify failures
-2. `test_debug` to pause at the failure and inspect DOM
-3. Compare current snapshot to expected step
-4. Edit the `.spec.ts` to use updated locators or assertions
-5. Re-run until green
-6. As last resort, mark the test `test.fixme()` with a comment explaining the regression — never silently delete a check
-
-This replaces the "spend 20 minutes hunting for the right CSS selector" loop.
-
-### When to use this vs hand-write
-
-| Use natural-language agents when... | Hand-write when... |
-|---|---|
-| Testing a brand-new feature with multiple flows | A single smoke check (< 20 lines) |
-| Onboarding tests for an existing area | You need fine control over timing / network mocking |
-| Generating regression coverage after a redesign | The test is critical infra (auth, billing) — you want full ownership |
-| Tests keep breaking from CSS changes | Performance / specific browser-API tests |
-
-### Tips
-
-- **One feature per spec** — keep `specs/*.md` focused; easier to plan, easier to regenerate
-- **Edit the spec, not the test** — when requirements change, update the markdown and re-run the generator
-- **Commit the seed file** — `e2e/seed.spec.ts` is intentionally committed; agents read it on every run
-- **Don't approve random MCP servers** — only `playwright-test` (in `.mcp.json`) and any you've explicitly added. Treat unapproved servers as untrusted.
-
----
-
-## Quick reference
-
-```bash
-# Add a backend test → apps/server/tests/<name>.test.ts, then:
-pnpm test
-
-# Add a frontend test → apps/web/e2e/<name>.spec.ts, then:
-pnpm test:e2e
-
-# See type errors → pnpm typecheck
-# See lint/format issues → pnpm exec biome ci
-# Format your changes → pnpm format    (biome check --write .)
-```
-
-For the runtime details of `cloudflare:test` and `applyD1Migrations`, see [Cloudflare's vitest pool docs](https://developers.cloudflare.com/workers/testing/vitest-integration/get-started/).
+> **Only approve MCP servers you added deliberately** — `playwright-test` here.
+> Treat any other server that asks for approval as untrusted.
