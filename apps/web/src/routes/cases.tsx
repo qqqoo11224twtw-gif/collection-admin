@@ -1,6 +1,7 @@
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
 import { AuthGate } from '~/components/auth-gate';
 import { useCasePermissions } from '~/components/cases/management-hooks';
+import { ReviewNotice } from '~/components/cases/review-notice';
 import { UserMenu } from '~/components/user-menu';
 
 export const Route = createFileRoute('/cases')({ component: CaseWorkspace });
@@ -18,6 +19,7 @@ function CaseWorkspace() {
             ← Starter console
           </Link>
           <div className="flex flex-wrap items-center gap-3">
+            <ReviewNotice />
             {permissions.can('collector.manage') && (
               <Link
                 to="/cases/collectors"

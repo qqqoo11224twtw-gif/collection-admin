@@ -16,6 +16,8 @@ export const PERMISSIONS = [
   'report.view',
   'report.create',
   'report.edit',
+  'review.view',
+  'review.resolve',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 interface Policy {
@@ -33,6 +35,17 @@ const ROLE_POLICIES: Record<string, Policy> = {
   },
   user: {
     permissions: ['case.view', 'media.view', 'report.view', 'report.create'],
+    scope: 'assigned',
+  },
+  reviewer: {
+    permissions: [
+      'case.view',
+      'case.edit',
+      'report.view',
+      'report.edit',
+      'review.view',
+      'review.resolve',
+    ],
     scope: 'assigned',
   },
 };

@@ -12,6 +12,8 @@ export default defineConfig({
   globalSetup: './e2e/global-setup.ts',
   timeout: 30000,
   retries: 1,
+  // Local specs share demo identities; serial workers avoid consuming each other's OTPs.
+  workers: isRemote ? undefined : 1,
   expect: { timeout: 10000 },
   // HTML report → apps/web/playwright-report/ (the dir referenced in docs/testing.md).
   // Not generated unless the html reporter is enabled; open: 'never' keeps CI non-interactive.

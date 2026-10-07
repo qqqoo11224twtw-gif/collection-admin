@@ -2,6 +2,10 @@ import { ORPCError } from '@orpc/server';
 import type { Context } from './context';
 
 export type AuditAction =
+  | 'review.created'
+  | 'review.approved'
+  | 'review.corrected'
+  | 'review.rejected'
   | 'report.created'
   | 'report.edited'
   | 'case.created'
@@ -18,6 +22,8 @@ export type AuditAction =
   | 'collector.deactivated';
 // Explicit allow-list: no free-form notes, names, addresses, credentials or image bytes.
 export interface AuditMetadata {
+  reviewId?: string;
+  entityId?: string | null;
   reportId?: string;
   fields?: string[];
   mediaIds?: string[];

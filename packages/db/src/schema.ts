@@ -3,6 +3,7 @@ import {
   check,
   index,
   integer,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
@@ -317,7 +318,9 @@ export const auditLogs = sqliteTable(
     id: text('id').primaryKey(),
     userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
     action: text('action').notNull(),
-    entityType: text('entity_type', { enum: ['case', 'collector'] }).notNull(),
+    entityType: text('entity_type', {
+      enum: ['case', 'collector', 'review'],
+    }).notNull(),
     entityId: text('entity_id').notNull(),
     metadata: text('metadata').notNull(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
@@ -408,5 +411,103 @@ export const reports = sqliteTable(
       sql`${t.paymentDetected} IN (0,1) AND (${t.paymentAmount} IS NULL OR (${t.paymentDetected}=1 AND ${t.paymentAmount} BETWEEN 0 AND 1000000000000))`,
     ),
     check('reports_dates_check', sql`${t.updatedAt} >= ${t.createdAt}`),
+  ],
+);
+
+export const REVIEW_TYPES = [
+  'report_classification',
+  'case_match',
+  'image_extraction',
+  'payment_detection',
+] as const;
+export const REVIEW_STATUSES = [
+  'pending',
+  'approved',
+  'corrected',
+  'rejected',
+] as const;
+export const REVIEW_SOURCES = [
+  'manual',
+  'ai',
+  'telegram',
+  'historical_import',
+] as const;
+export const reviewItems = sqliteTable(
+  'review_items',
+  {
+    id: text('id').primaryKey(),
+    reviewType: text('review_type', { enum: REVIEW_TYPES }).notNull(),
+    entityType: text('entity_type', {
+      enum: ['report', 'case', 'intake'],
+    }).notNull(),
+    entityId: text('entity_id'),
+    caseId: text('case_id').references(() => cases.id, {
+      onDelete: 'restrict',
+    }),
+    status: text('status', { enum: REVIEW_STATUSES })
+      .notNull()
+      .default('pending'),
+    priority: text('priority', { enum: ['low', 'normal', 'high'] })
+      .notNull()
+      .default('normal'),
+    source: text('source', { enum: REVIEW_SOURCES }).notNull(),
+    proposedData: text('proposed_data').notNull(),
+    confirmedData: text('confirmed_data'),
+    reason: text('reason').notNull(),
+    confidence: real('confidence'),
+    createdByUserId: text('created_by_user_id').references(() => user.id, {
+      onDelete: 'restrict',
+    }),
+    resolvedByUserId: text('resolved_by_user_id').references(() => user.id, {
+      onDelete: 'restrict',
+    }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    resolvedAt: integer('resolved_at', { mode: 'timestamp_ms' }),
+    dedupeKey: text('dedupe_key').notNull(),
+    version: integer('version').notNull().default(0),
+    writeToken: text('write_token').notNull().default(''),
+  },
+  (t) => [
+    uniqueIndex('review_items_dedupe_idx').on(t.dedupeKey),
+    index('review_items_status_type_time_idx').on(
+      t.status,
+      t.reviewType,
+      t.createdAt,
+      t.id,
+    ),
+    index('review_items_case_time_idx').on(t.caseId, t.createdAt),
+    index('review_items_entity_idx').on(t.entityType, t.entityId, t.status),
+    check(
+      'review_items_type_check',
+      sql`${t.reviewType} IN ('report_classification','case_match','image_extraction','payment_detection')`,
+    ),
+    check(
+      'review_items_entity_check',
+      sql`${t.entityType} IN ('report','case','intake')`,
+    ),
+    check(
+      'review_items_status_check',
+      sql`${t.status} IN ('pending','approved','corrected','rejected')`,
+    ),
+    check(
+      'review_items_priority_check',
+      sql`${t.priority} IN ('low','normal','high')`,
+    ),
+    check(
+      'review_items_source_check',
+      sql`${t.source} IN ('manual','ai','telegram','historical_import')`,
+    ),
+    check(
+      'review_items_json_check',
+      sql`json_valid(${t.proposedData}) AND (${t.confirmedData} IS NULL OR json_valid(${t.confirmedData}))`,
+    ),
+    check(
+      'review_items_confidence_check',
+      sql`${t.confidence} IS NULL OR ${t.confidence} BETWEEN 0 AND 1`,
+    ),
+    check(
+      'review_items_resolution_check',
+      sql`(${t.status}='pending' AND ${t.resolvedAt} IS NULL AND ${t.resolvedByUserId} IS NULL AND ${t.confirmedData} IS NULL) OR (${t.status}<>'pending' AND ${t.resolvedAt} IS NOT NULL AND ${t.resolvedByUserId} IS NOT NULL)`,
+    ),
   ],
 );

@@ -4,6 +4,10 @@ import { useCasePermissions } from './management-hooks';
 import { CaseError, LoadingCases, timestamp } from './presentation';
 
 const actionLabels: Record<string, string> = {
+  'review.created': 'Review created',
+  'review.approved': 'Review approved',
+  'review.corrected': 'Review corrected',
+  'review.rejected': 'Review rejected',
   'report.created': 'Report created',
   'report.edited': 'Report edited',
   'case.created': 'Case created',

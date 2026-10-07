@@ -135,7 +135,7 @@ describe('Report workflow', () => {
     ).toBe(200);
     expect(await detail(id)).toMatchObject({
       status: 'pending',
-      revisitStatus: 'observe',
+      revisitStatus: 'pending',
     });
     expect(reportCaseStatus('needs_review')).toBeNull();
   });

@@ -1,5 +1,11 @@
 import { ORPCError } from '@orpc/server';
-import { assignments, collectors, reports, user } from '@saasflare-dev/db';
+import {
+  assignments,
+  collectors,
+  reports,
+  reviewItems,
+  user,
+} from '@saasflare-dev/db';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { atomicCaseWrite, auditStatement } from './audit';
 import { requireCaseAccess } from './case-access';
@@ -16,6 +22,7 @@ import {
   reportCreateSchema,
   reportEditSchema,
 } from './report-classification';
+import { pendingReportReviewStatements } from './review-service';
 
 async function validatedFields(input: ReportFields) {
   const classification = await classifyReport(new ManualClassifier(), {
@@ -96,7 +103,7 @@ export async function createReport(
       input.expectedCaseVersion,
       token,
       fields,
-      true,
+      fields.status !== 'needs_review',
     ),
     context.env.DB.prepare(
       `INSERT INTO reports (id,case_id,assignment_id,collector_id,created_by_user_id,content,status,revisit_status,revisit_reason,payment_detected,payment_amount,source,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM cases WHERE id=? AND write_token=?)`,
@@ -126,6 +133,17 @@ export async function createReport(
       { reportId: id },
       token,
     ),
+    ...(fields.status === 'needs_review'
+      ? pendingReportReviewStatements(
+          context,
+          id,
+          input.caseId,
+          0,
+          fields,
+          token,
+          source === 'telegram' ? 'telegram' : 'manual',
+        )
+      : []),
   ]);
   return { id };
 }
@@ -187,6 +205,18 @@ export const reportsApi = {
         .orderBy(desc(reports.createdAt), desc(reports.id))
         .limit(1);
       const fields = await validatedFields(input);
+      const [pendingReview] = await context.DB.select({ id: reviewItems.id })
+        .from(reviewItems)
+        .where(
+          and(
+            eq(reviewItems.entityType, 'report'),
+            eq(reviewItems.entityId, record.id),
+            eq(reviewItems.reviewType, 'report_classification'),
+            eq(reviewItems.status, 'pending'),
+          ),
+        )
+        .limit(1);
+      const needsReview = fields.status === 'needs_review' || !!pendingReview;
       const token = crypto.randomUUID();
       // Older report edits never overwrite the current case summary.
       await atomicCaseWrite(context, [
@@ -196,14 +226,14 @@ export const reportsApi = {
           input.expectedCaseVersion,
           token,
           fields,
-          latest.id === input.id,
+          latest.id === input.id && !needsReview,
           { id: record.id, version: input.expectedVersion },
         ),
         context.env.DB.prepare(
           `UPDATE reports SET content=?,status=?,revisit_status=?,revisit_reason=?,payment_detected=?,payment_amount=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND EXISTS (SELECT 1 FROM cases WHERE id=? AND write_token=?)`,
         ).bind(
           fields.content,
-          fields.status,
+          needsReview ? 'needs_review' : fields.status,
           fields.revisitStatus,
           fields.revisitReason,
           Number(fields.paymentDetected),
@@ -232,6 +262,17 @@ export const reportsApi = {
           },
           token,
         ),
+        ...(needsReview
+          ? pendingReportReviewStatements(
+              context,
+              input.id,
+              input.caseId,
+              record.version + 1,
+              fields,
+              token,
+              record.source === 'telegram' ? 'telegram' : 'manual',
+            )
+          : []),
       ]);
       return { id: input.id };
     }),

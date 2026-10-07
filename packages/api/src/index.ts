@@ -7,6 +7,7 @@ import { configApi } from './config';
 import { connection, db, kv, r2 } from './health-check';
 import { planetApi } from './planet';
 import { caseLookupApi, reportsApi } from './reports';
+import { reviewsApi } from './reviews';
 import { storageApi } from './storage';
 import { todosApi } from './todos';
 
@@ -18,6 +19,7 @@ export const appRouter = {
     lookup: caseLookupApi,
   },
   reports: reportsApi,
+  reviews: reviewsApi,
   collectors: collectorsApi,
   healthCheck: {
     connection,
