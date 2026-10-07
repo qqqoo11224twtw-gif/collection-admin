@@ -39,3 +39,50 @@ export const caseMediaInputSchema = z.object({
   sortOrder: z.number().int().min(0),
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
 });
+
+export const caseCreateSchema = caseInputSchema
+  .omit({ caseNo: true, assignedAgentId: true })
+  .strict();
+export const caseEditSchema = caseCreateSchema
+  .omit({ source: true })
+  .extend({
+    id: z.string().min(1).max(128),
+    expectedVersion: z.number().int().min(0),
+  })
+  .strict();
+export const collectorCreateSchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(120),
+    code: z.string().trim().min(1).max(60),
+    isActive: z.boolean(),
+    userId: z.string().min(1).max(128).nullable(),
+  })
+  .strict();
+export const collectorEditSchema = collectorCreateSchema
+  .extend({
+    id: z.string().min(1).max(128),
+    expectedVersion: z.number().int().min(0),
+  })
+  .strict();
+export const assignmentSchema = z
+  .object({
+    caseId: z.string().min(1).max(128),
+    collectorId: z.string().min(1).max(128).nullable(),
+    expectedVersion: z.number().int().min(0),
+    note: z.string().trim().max(1000).nullable(),
+  })
+  .strict();
+export const mediaDeleteSchema = z
+  .object({
+    caseId: z.string().min(1).max(128),
+    mediaId: z.string().min(1).max(128),
+    expectedVersion: z.number().int().min(0),
+  })
+  .strict();
+export const mediaOrderSchema = z
+  .object({
+    caseId: z.string().min(1).max(128),
+    ids: z.array(z.string().min(1).max(128)).min(1).max(100),
+    expectedVersion: z.number().int().min(0),
+  })
+  .strict();

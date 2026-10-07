@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { onError } from '@orpc/server';
+import { ORPCError, onError } from '@orpc/server';
 // orpc
 import { RPCHandler } from '@orpc/server/fetch';
 // api routes
@@ -11,6 +11,7 @@ import {
   verifyApiKey,
 } from '@saasflare-dev/api/auth';
 import { caseImageResponse } from '@saasflare-dev/api/case-image';
+import { uploadCaseImages } from '@saasflare-dev/api/case-media-management';
 import { createContext } from '@saasflare-dev/api/context';
 import { verification } from '@saasflare-dev/db';
 import { desc, eq } from 'drizzle-orm';
@@ -170,5 +171,23 @@ app.get('/api/cases/:caseId/media/:mediaId/image', async (c) =>
     c.req.param('mediaId'),
   ),
 );
+
+app.post('/api/cases/:caseId/media', async (c) => {
+  try {
+    const result = await uploadCaseImages(
+      await createContext(c),
+      c.req.param('caseId'),
+      c.req.raw,
+    );
+    return c.json(result, 201);
+  } catch (error: unknown) {
+    if (error instanceof ORPCError)
+      return Response.json(
+        { error: error.code, message: error.message },
+        { status: error.status },
+      );
+    return c.json({ error: 'UPLOAD_UNAVAILABLE' }, 503);
+  }
+});
 
 export default app;

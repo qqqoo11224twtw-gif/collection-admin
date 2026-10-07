@@ -18,7 +18,7 @@ export async function caseImageResponse(
   try {
     if (authMode() === 'disabled' || !context.user || !context.session)
       throw new ORPCError('UNAUTHORIZED');
-    await requireCaseAccess(context, caseId);
+    await requireCaseAccess(context, caseId, 'media.view');
     const [media] = await context.DB.select()
       .from(caseMedia)
       .where(and(eq(caseMedia.id, mediaId), eq(caseMedia.caseId, caseId)))

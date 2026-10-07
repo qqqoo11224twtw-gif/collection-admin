@@ -9,7 +9,13 @@ import {
   privateCaseStorage,
   R2CaseStorage,
 } from '@saasflare-dev/api/case-storage';
-import { caseMedia, cases, user } from '@saasflare-dev/db';
+import {
+  assignments,
+  caseMedia,
+  cases,
+  collectors,
+  user,
+} from '@saasflare-dev/db';
 import { DEMO_CASES, DEMO_MEDIA } from '@saasflare-dev/db/demo-cases';
 import { drizzle } from 'drizzle-orm/d1';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -41,13 +47,31 @@ beforeAll(async () => {
         .bind('case-agent@example.test')
         .first<{ id: string }>()
     )?.id ?? '';
-  for (const record of DEMO_CASES)
+  await db.insert(collectors).values({
+    id: 'phase-one-agent',
+    displayName: 'Fictional agent',
+    code: 'PHASE-ONE-AGENT',
+    isActive: true,
+    userId: agentId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  for (const record of DEMO_CASES) {
     await db.insert(cases).values({
       ...record,
       assignedAgentId: record.assignedAgentId ? agentId : null,
       createdAt: new Date(record.createdAt),
       updatedAt: new Date(record.updatedAt),
     });
+    if (record.assignedAgentId)
+      await db.insert(assignments).values({
+        id: `phase-one-${record.id}`,
+        caseId: record.id,
+        collectorId: 'phase-one-agent',
+        assignedByUserId: agentId,
+        assignedAt: new Date(record.updatedAt),
+      });
+  }
   for (const { fixture: _fixture, ...media } of DEMO_MEDIA)
     await db
       .insert(caseMedia)

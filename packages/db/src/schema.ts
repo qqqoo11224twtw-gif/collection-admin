@@ -187,6 +187,8 @@ export const cases = sqliteTable(
     }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(0),
+    writeToken: text('write_token').notNull().default(''),
   },
   (t) => [
     uniqueIndex('cases_case_no_idx').on(sql`${t.caseNo} COLLATE NOCASE`),
@@ -247,5 +249,84 @@ export const caseMedia = sqliteTable(
       'case_media_sha_check',
       sql`length(${t.sha256}) = 64 AND ${t.sha256} NOT GLOB '*[^0-9a-f]*'`,
     ),
+  ],
+);
+
+export const collectors = sqliteTable(
+  'collectors',
+  {
+    id: text('id').primaryKey(),
+    displayName: text('display_name').notNull(),
+    code: text('code').notNull(),
+    isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+    // Optional login identity. No Telegram identifiers in this phase.
+    userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(0),
+    writeToken: text('write_token').notNull().default(''),
+  },
+  (t) => [
+    uniqueIndex('collectors_code_idx').on(sql`${t.code} COLLATE NOCASE`),
+    uniqueIndex('collectors_user_idx').on(t.userId),
+    index('collectors_active_idx').on(t.isActive, t.displayName),
+    check(
+      'collectors_name_check',
+      sql`length(trim(${t.displayName})) > 0 AND length(trim(${t.code})) > 0`,
+    ),
+    check('collectors_active_check', sql`${t.isActive} IN (0, 1)`),
+  ],
+);
+
+export const assignments = sqliteTable(
+  'assignments',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => cases.id, { onDelete: 'restrict' }),
+    collectorId: text('collector_id')
+      .notNull()
+      .references(() => collectors.id, { onDelete: 'restrict' }),
+    assignedByUserId: text('assigned_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    assignedAt: integer('assigned_at', { mode: 'timestamp_ms' }).notNull(),
+    unassignedAt: integer('unassigned_at', { mode: 'timestamp_ms' }),
+    note: text('note'),
+  },
+  (t) => [
+    uniqueIndex('assignments_current_case_idx')
+      .on(t.caseId)
+      .where(sql`${t.unassignedAt} IS NULL`),
+    index('assignments_case_time_idx').on(t.caseId, t.assignedAt),
+    index('assignments_collector_idx').on(t.collectorId, t.unassignedAt),
+    check(
+      'assignments_dates_check',
+      sql`${t.unassignedAt} IS NULL OR ${t.unassignedAt} >= ${t.assignedAt}`,
+    ),
+  ],
+);
+
+export const auditLogs = sqliteTable(
+  'audit_logs',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+    action: text('action').notNull(),
+    entityType: text('entity_type', { enum: ['case', 'collector'] }).notNull(),
+    entityId: text('entity_id').notNull(),
+    metadata: text('metadata').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    index('audit_logs_entity_time_idx').on(
+      t.entityType,
+      t.entityId,
+      t.createdAt,
+      t.id,
+    ),
+    index('audit_logs_user_time_idx').on(t.userId, t.createdAt),
+    check('audit_logs_json_check', sql`json_valid(${t.metadata})`),
   ],
 );

@@ -22,6 +22,11 @@ const statements = [
     ({ fixture: _fixture, ...record }) =>
       `INSERT INTO case_media (id, case_id, storage_key, original_filename, media_type, sort_order, sha256, created_at) VALUES (${Object.values(record).map(literal).join(',')}) ON CONFLICT DO NOTHING;`,
   ),
+  `INSERT INTO collectors (id,display_name,code,is_active,user_id,created_at,updated_at) VALUES ('demo-collector','Demo Agent','DEMO-AGENT',1,'${DEMO_AGENT_ID}',1790841600000,1790841600000) ON CONFLICT DO NOTHING;`,
+  ...DEMO_CASES.filter((record) => record.assignedAgentId).map(
+    (record) =>
+      `INSERT INTO assignments (id,case_id,collector_id,assigned_by_user_id,assigned_at,note) SELECT ${literal(`demo-assignment-${record.id}`)},${literal(record.id)},id,'${DEMO_AGENT_ID}',${record.updatedAt},'Fictional demo assignment' FROM collectors WHERE user_id='${DEMO_AGENT_ID}' AND NOT EXISTS (SELECT 1 FROM assignments WHERE case_id=${literal(record.id)}) ON CONFLICT DO NOTHING;`,
+  ),
 ];
 const directory = new URL('../apps/server/.wrangler/', import.meta.url);
 mkdirSync(directory, { recursive: true });

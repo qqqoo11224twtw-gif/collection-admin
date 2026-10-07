@@ -3,6 +3,7 @@ import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { caseVisibility, requireCaseAccess } from './case-access';
 import { caseIdSchema, caseListSchema } from './case-contract';
 import { protectedProcedure } from './middleware';
+import { permissionPolicy, requirePermission } from './permissions';
 
 function searchCondition(query: string) {
   if (!query) return undefined;
@@ -26,6 +27,7 @@ export const casesApi = {
   list: protectedProcedure
     .input(caseListSchema)
     .handler(async ({ context, input }) => {
+      requirePermission(context, 'case.view');
       const where = and(caseVisibility(context), searchCondition(input.query));
       const [totals, items] = await context.DB.batch([
         context.DB.select({ total: count() }).from(cases).where(where),
@@ -37,7 +39,7 @@ export const casesApi = {
           .offset((input.page - 1) * input.pageSize),
       ]);
       return {
-        items,
+        items: items.map(({ writeToken: _writeToken, ...record }) => record),
         total: totals[0].total,
         page: input.page,
         pageSize: input.pageSize,
@@ -45,11 +47,17 @@ export const casesApi = {
     }),
   detail: protectedProcedure
     .input(caseIdSchema)
-    .handler(({ context, input }) => requireCaseAccess(context, input.id)),
+    .handler(async ({ context, input }) => {
+      const { writeToken: _writeToken, ...record } = await requireCaseAccess(
+        context,
+        input.id,
+      );
+      return record;
+    }),
   media: protectedProcedure
     .input(caseIdSchema)
     .handler(async ({ context, input }) => {
-      await requireCaseAccess(context, input.id);
+      await requireCaseAccess(context, input.id, 'media.view');
       // Storage keys and hashes stay on the server. The browser only gets media IDs.
       return context.DB.select({
         id: caseMedia.id,
@@ -63,4 +71,7 @@ export const casesApi = {
         .where(eq(caseMedia.caseId, input.id))
         .orderBy(asc(caseMedia.sortOrder), asc(caseMedia.id));
     }),
+  permissions: protectedProcedure.handler(
+    ({ context }) => permissionPolicy(context).permissions,
+  ),
 };

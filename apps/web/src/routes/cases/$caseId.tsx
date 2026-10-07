@@ -7,6 +7,10 @@ import {
 } from '@saasflare-dev/ui/components/tabs';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { AssignmentPanel } from '~/components/cases/assignment-panel';
+import { AuditTimeline } from '~/components/cases/audit-timeline';
+import { CaseEditor } from '~/components/cases/case-editor';
+import { useCasePermissions } from '~/components/cases/management-hooks';
 import {
   CaseError,
   LoadingCases,
@@ -22,10 +26,8 @@ export const Route = createFileRoute('/cases/$caseId')({
   component: CaseDetail,
 });
 const placeholders = [
-  { value: 'assignments', label: 'Assignment history' },
   { value: 'reports', label: 'Report history' },
   { value: 'payments', label: 'Payment history' },
-  { value: 'activity', label: 'Activity log' },
 ];
 const sources = {
   manual: 'Manual',
@@ -39,6 +41,7 @@ const revisit = {
   not_required: 'Not required',
 };
 function CaseDetail() {
+  const permissions = useCasePermissions();
   const { caseId } = Route.useParams();
   const { data: session } = useSession();
   const options = orpc.cases.detail.queryOptions({ input: { id: caseId } });
@@ -75,14 +78,17 @@ function CaseDetail() {
       </Link>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="mb-2 text-sm font-mono text-muted-foreground">
+          <p className="mb-2 break-all text-sm font-mono text-muted-foreground">
             {record.caseNo}
           </p>
           <h1 className="text-2xl font-semibold tracking-tight">
             {record.customerName}
           </h1>
         </div>
-        <StatusBadge status={record.status} />
+        <div className="flex items-center gap-3">
+          <StatusBadge status={record.status} />
+          {permissions.can('case.edit') && <CaseEditor record={record} />}
+        </div>
       </div>
       <Tabs defaultValue="overview" key={caseId} className="space-y-6">
         <div className="overflow-x-auto pb-2">
@@ -102,6 +108,14 @@ function CaseDetail() {
                 {tab.label}
               </TabsTrigger>
             ))}
+            <TabsTrigger value="assignments" className="text-base">
+              Assignment history
+            </TabsTrigger>
+            {permissions.can('audit_log.view') && (
+              <TabsTrigger value="activity" className="text-base">
+                Activity log
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
         <TabsContent value="overview">
@@ -127,7 +141,7 @@ function CaseDetail() {
           </Card>
         </TabsContent>
         <TabsContent value="images">
-          <PrivateImages caseId={caseId} />
+          <PrivateImages caseId={caseId} version={record.version} />
         </TabsContent>
         {placeholders.map((tab) => (
           <TabsContent key={tab.value} value={tab.value}>
@@ -139,6 +153,12 @@ function CaseDetail() {
             </div>
           </TabsContent>
         ))}
+        <TabsContent value="assignments">
+          <AssignmentPanel caseId={caseId} version={record.version} />
+        </TabsContent>
+        <TabsContent value="activity">
+          <AuditTimeline caseId={caseId} />
+        </TabsContent>
       </Tabs>
     </div>
   );

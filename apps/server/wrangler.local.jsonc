@@ -9,7 +9,7 @@
     "SERVER_URL": "http://localhost:4000",
     "AUTH_MODE": "open",
     "BETTER_AUTH_SECRET": "local-dev-secret-not-for-prod",
-    "ADMIN_EMAILS": "admin@example.test",
+    "ADMIN_EMAILS": "admin@example.test,phase2-admin@example.test",
     "RESEND_API_KEY": "",
     "EMAIL_FROM": "",
     "CASE_STORAGE_MODE": "demo"
@@ -23,5 +23,8 @@
     }
   ],
   "kv_namespaces": [{ "binding": "KV", "id": "local-kv" }],
-  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "starter-local-bucket" }]
+  "r2_buckets": [
+    { "binding": "BUCKET", "bucket_name": "starter-local-bucket" },
+    { "binding": "CASE_BUCKET", "bucket_name": "cases-private-local" }
+  ]
 }

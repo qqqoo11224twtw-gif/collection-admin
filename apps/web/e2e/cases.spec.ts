@@ -7,7 +7,7 @@ test.describe('Local case workspace', () => {
   test('admin lists, paginates, filters and handles an empty result', async ({
     page,
   }, testInfo) => {
-    await page.goto('/cases');
+    await page.goto('/cases?query=DEMO-');
     await expect(page).toHaveURL(/\/login/);
     await signIn(page, 'admin@example.test');
     await expect(
@@ -61,12 +61,7 @@ test.describe('Local case workspace', () => {
     ])
       await expect(panel.getByText(label, { exact: true })).toBeVisible();
     await expect(panel.getByText('Recommended', { exact: true })).toBeVisible();
-    for (const name of [
-      'Assignment history',
-      'Report history',
-      'Payment history',
-      'Activity log',
-    ]) {
+    for (const name of ['Report history', 'Payment history']) {
       await page.getByRole('tab', { name, exact: true }).click();
       await expect(
         page.getByText('This section is reserved for the next phase.'),

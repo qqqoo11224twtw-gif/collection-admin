@@ -66,6 +66,7 @@ export default defineConfig(async () => {
             },
           },
           r2Buckets: {
+            CASE_BUCKET: { id: 'case-private-test' },
             BUCKET: {
               id: 'test-bucket',
             },

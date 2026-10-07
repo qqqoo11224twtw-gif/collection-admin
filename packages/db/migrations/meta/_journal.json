@@ -29,6 +29,20 @@
       "when": 1791389892496,
       "tag": "0003_curly_bushwacker",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791391406495,
+      "tag": "0004_aromatic_ronan",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791391466293,
+      "tag": "0005_assignment_upgrade",
+      "breakpoints": true
     }
   ]
 }

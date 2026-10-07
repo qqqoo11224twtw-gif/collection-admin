@@ -11,6 +11,8 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ChevronLeft, ChevronRight, FolderOpen } from 'lucide-react';
+import { CaseEditor } from '~/components/cases/case-editor';
+import { useCasePermissions } from '~/components/cases/management-hooks';
 import {
   CaseError,
   LoadingCases,
@@ -29,6 +31,7 @@ export const Route = createFileRoute('/cases/')({
   component: CasesPage,
 });
 function CasesPage() {
+  const permissions = useCasePermissions();
   const { page, query } = Route.useSearch();
   const navigate = Route.useNavigate();
   const { data: session } = useSession();
@@ -52,6 +55,7 @@ function CasesPage() {
             A clear view of your assigned work and next follow-up.
           </p>
         </div>
+        {permissions.can('case.create') && <CaseEditor />}
         <Input
           aria-label="Filter cases"
           placeholder="Filter name, code, case no. or address"

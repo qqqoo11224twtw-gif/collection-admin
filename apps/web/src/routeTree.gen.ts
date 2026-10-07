@@ -22,6 +22,7 @@ import { Route as DesignScaleRouteImport } from './routes/design/scale'
 import { Route as DesignPatternsRouteImport } from './routes/design/patterns'
 import { Route as DesignOverviewRouteImport } from './routes/design/overview'
 import { Route as DesignComponentsRouteImport } from './routes/design/components'
+import { Route as CasesCollectorsRouteImport } from './routes/cases/collectors'
 import { Route as CasesCaseIdRouteImport } from './routes/cases/$caseId'
 import { Route as ExamplesComponentsTodosRouteImport } from './routes/examples/components/todos'
 import { Route as ExamplesComponentsR2UploadRouteImport } from './routes/examples/components/r2-upload'
@@ -92,6 +93,11 @@ const DesignComponentsRoute = DesignComponentsRouteImport.update({
   path: '/components',
   getParentRoute: () => DesignRoute,
 } as any)
+const CasesCollectorsRoute = CasesCollectorsRouteImport.update({
+  id: '/collectors',
+  path: '/collectors',
+  getParentRoute: () => CasesRoute,
+} as any)
 const CasesCaseIdRoute = CasesCaseIdRouteImport.update({
   id: '/$caseId',
   path: '/$caseId',
@@ -122,6 +128,7 @@ export interface FileRoutesByFullPath {
   '/examples': typeof ExamplesRouteWithChildren
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
+  '/cases/collectors': typeof CasesCollectorsRoute
   '/design/components': typeof DesignComponentsRoute
   '/design/overview': typeof DesignOverviewRoute
   '/design/patterns': typeof DesignPatternsRoute
@@ -139,6 +146,7 @@ export interface FileRoutesByTo {
   '/examples': typeof ExamplesRouteWithChildren
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
+  '/cases/collectors': typeof CasesCollectorsRoute
   '/design/components': typeof DesignComponentsRoute
   '/design/overview': typeof DesignOverviewRoute
   '/design/patterns': typeof DesignPatternsRoute
@@ -159,6 +167,7 @@ export interface FileRoutesById {
   '/examples': typeof ExamplesRouteWithChildren
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
+  '/cases/collectors': typeof CasesCollectorsRoute
   '/design/components': typeof DesignComponentsRoute
   '/design/overview': typeof DesignOverviewRoute
   '/design/patterns': typeof DesignPatternsRoute
@@ -180,6 +189,7 @@ export interface FileRouteTypes {
     | '/examples'
     | '/login'
     | '/cases/$caseId'
+    | '/cases/collectors'
     | '/design/components'
     | '/design/overview'
     | '/design/patterns'
@@ -197,6 +207,7 @@ export interface FileRouteTypes {
     | '/examples'
     | '/login'
     | '/cases/$caseId'
+    | '/cases/collectors'
     | '/design/components'
     | '/design/overview'
     | '/design/patterns'
@@ -216,6 +227,7 @@ export interface FileRouteTypes {
     | '/examples'
     | '/login'
     | '/cases/$caseId'
+    | '/cases/collectors'
     | '/design/components'
     | '/design/overview'
     | '/design/patterns'
@@ -330,6 +342,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignComponentsRouteImport
       parentRoute: typeof DesignRoute
     }
+    '/cases/collectors': {
+      id: '/cases/collectors'
+      path: '/collectors'
+      fullPath: '/cases/collectors'
+      preLoaderRoute: typeof CasesCollectorsRouteImport
+      parentRoute: typeof CasesRoute
+    }
     '/cases/$caseId': {
       id: '/cases/$caseId'
       path: '/$caseId'
@@ -363,11 +382,13 @@ declare module '@tanstack/react-router' {
 
 interface CasesRouteChildren {
   CasesCaseIdRoute: typeof CasesCaseIdRoute
+  CasesCollectorsRoute: typeof CasesCollectorsRoute
   CasesIndexRoute: typeof CasesIndexRoute
 }
 
 const CasesRouteChildren: CasesRouteChildren = {
   CasesCaseIdRoute: CasesCaseIdRoute,
+  CasesCollectorsRoute: CasesCollectorsRoute,
   CasesIndexRoute: CasesIndexRoute,
 }
 

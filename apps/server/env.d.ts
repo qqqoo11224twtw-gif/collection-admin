@@ -3,7 +3,7 @@
 
 import type { server } from './alchemy.run.ts';
 
-export type ServerEnv = typeof server.Env;
+export type ServerEnv = typeof server.Env & { CASE_BUCKET?: R2Bucket };
 
 declare module 'cloudflare:workers' {
   namespace Cloudflare {
