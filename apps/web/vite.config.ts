@@ -17,7 +17,11 @@ export default defineConfig({
       prefix: 'NEXT_PUBLIC_',
       defineOn: 'import.meta.env',
     }),
-    alchemy(),
+    alchemy(
+      process.env.LOCAL_ONLY === '1'
+        ? { configPath: './wrangler.local.jsonc' }
+        : undefined,
+    ),
     tanstackStart(),
     viteReact(),
     tailwindcss(),

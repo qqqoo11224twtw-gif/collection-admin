@@ -1,0 +1,26 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "starter-server-offline",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
+  "vars": {
+    "CORS_ORIGIN": "http://localhost:3000",
+    "SERVER_URL": "http://localhost:4000",
+    "AUTH_MODE": "open",
+    "BETTER_AUTH_SECRET": "local-dev-secret-not-for-prod",
+    "ADMIN_EMAILS": "admin@example.test",
+    "RESEND_API_KEY": "",
+    "EMAIL_FROM": ""
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "starter-local-db",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "../../packages/db/migrations"
+    }
+  ],
+  "kv_namespaces": [{ "binding": "KV", "id": "local-kv" }],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "starter-local-bucket" }]
+}
