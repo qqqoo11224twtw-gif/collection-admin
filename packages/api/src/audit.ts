@@ -2,6 +2,8 @@ import { ORPCError } from '@orpc/server';
 import type { Context } from './context';
 
 export type AuditAction =
+  | 'report.created'
+  | 'report.edited'
   | 'case.created'
   | 'case.edited'
   | 'assignment.created'
@@ -16,6 +18,7 @@ export type AuditAction =
   | 'collector.deactivated';
 // Explicit allow-list: no free-form notes, names, addresses, credentials or image bytes.
 export interface AuditMetadata {
+  reportId?: string;
   fields?: string[];
   mediaIds?: string[];
   collectorId?: string | null;

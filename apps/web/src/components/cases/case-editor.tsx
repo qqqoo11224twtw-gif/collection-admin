@@ -177,7 +177,14 @@ export function CaseEditor({ record }: { record?: CaseRecord }) {
                   className={selectClass}
                   defaultValue={record?.revisitStatus ?? 'pending'}
                 >
-                  {['pending', 'recommended', 'not_required'].map((value) => (
+                  {[
+                    'pending',
+                    'recommended',
+                    'not_required',
+                    'observe',
+                    'not_recommended',
+                    'not_needed',
+                  ].map((value) => (
                     <option key={value} value={value}>
                       {value.replaceAll('_', ' ')}
                     </option>

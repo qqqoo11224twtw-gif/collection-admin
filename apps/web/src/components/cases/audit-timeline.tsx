@@ -4,6 +4,8 @@ import { useCasePermissions } from './management-hooks';
 import { CaseError, LoadingCases, timestamp } from './presentation';
 
 const actionLabels: Record<string, string> = {
+  'report.created': 'Report created',
+  'report.edited': 'Report edited',
   'case.created': 'Case created',
   'case.edited': 'Case edited',
   'assignment.created': 'Case assigned',

@@ -1,0 +1,166 @@
+import { expect, test } from '@playwright/test';
+import { isRemote, signIn } from './auth-helpers';
+
+test.describe('Local case reports', () => {
+  test.skip(isRemote, 'Reports use fictional local data only');
+  test('admin creates and edits reports, synchronizes summary and preserves history', async ({
+    page,
+  }, testInfo) => {
+    await page.goto('/cases');
+    await expect(page).toHaveURL(/\/login/);
+    await signIn(page, 'phase3-admin@example.test');
+    await page.getByRole('button', { name: 'New case', exact: true }).click();
+    const create = page.getByRole('dialog');
+    await create.getByLabel('Customer name').fill('虛構三階段瀏覽器測試戶');
+    await create
+      .getByLabel('Code', { exact: true })
+      .fill(`REPORT-${Date.now()}`);
+    await create
+      .getByLabel('Address', { exact: true })
+      .fill('虛構市回報路（非真實地址）');
+    await create.getByLabel('Amount due (TWD)').fill('15000');
+    await create
+      .getByRole('button', { name: 'Create case', exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/cases\/[a-f0-9-]+$/);
+    await page
+      .getByRole('tab', { name: 'Report history', exact: true })
+      .click();
+    await expect(
+      page.getByText('No reports yet.', { exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'New report' }).click();
+    let dialog = page.getByRole('dialog');
+    await dialog
+      .getByLabel('Report content')
+      .fill('完全虛構：本次未尋獲，建議再訪。');
+    await dialog.getByLabel('Report status').selectOption('cannot_find');
+    await dialog
+      .getByLabel('Revisit recommendation')
+      .selectOption('recommended');
+    await dialog.getByLabel('Revisit reason').fill('虛構理由：下次再觀察');
+    await dialog
+      .getByRole('button', { name: 'Create report', exact: true })
+      .click();
+    await expect(dialog).toBeHidden();
+    await expect(
+      page.getByRole('tabpanel').getByText('Cannot find', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('tabpanel').getByText(/ · Admin$/),
+    ).toBeVisible();
+    await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+    await expect(
+      page.getByRole('tabpanel').getByText('Follow-up', { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole('tab', { name: 'Report history', exact: true })
+      .click();
+    await page.getByRole('button', { name: 'New report' }).click();
+    dialog = page.getByRole('dialog');
+    await dialog
+      .getByLabel('Report content')
+      .fill('完全虛構：第二次回報為分期觀察。');
+    await dialog.getByLabel('Report status').selectOption('installment');
+    await dialog.getByLabel('Revisit recommendation').selectOption('observe');
+    await dialog.getByLabel('Payment detected', { exact: true }).check();
+    await dialog.getByLabel('Reported payment amount (TWD)').fill('15000');
+    await dialog
+      .getByRole('button', { name: 'Create report', exact: true })
+      .click();
+    await expect(dialog).toBeHidden();
+    await expect(
+      page.getByRole('tabpanel').getByText('Installment', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('tabpanel').getByText('Recommended', { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Edit report', exact: true })
+      .first()
+      .click();
+    dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Report status').selectOption('settled');
+    await dialog
+      .getByLabel('Revisit recommendation')
+      .selectOption('not_needed');
+    await dialog
+      .getByRole('button', { name: 'Save report', exact: true })
+      .click();
+    await expect(dialog).toBeHidden();
+    await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+    await expect(
+      page.getByRole('tabpanel').getByText('Settled', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('tabpanel').getByText('Not needed', { exact: true }),
+    ).toBeVisible();
+    await page.getByRole('tab', { name: 'Activity log', exact: true }).click();
+    await expect(page.getByText('Report created', { exact: true })).toHaveCount(
+      2,
+    );
+    await expect(
+      page.getByText('Report edited', { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole('tab', { name: 'Report history', exact: true })
+      .click();
+    await page.screenshot({
+      path: testInfo.outputPath('reports-history.png'),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(
+      page.getByRole('button', { name: 'New report' }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: testInfo.outputPath('reports-mobile.png'),
+      fullPage: true,
+    });
+  });
+  test('collector creates a report for an assigned case and cannot edit or open another case', async ({
+    page,
+  }) => {
+    await page.goto('/cases');
+    await expect(page).toHaveURL(/\/login/);
+    await signIn(page, 'agent@example.test');
+    await expect(
+      page.getByRole('link', { name: 'API keys', exact: true }),
+    ).toBeVisible();
+    await page.goto('/cases/demo-case-004');
+    await page
+      .getByRole('tab', { name: 'Report history', exact: true })
+      .click();
+    await page.getByRole('button', { name: 'New report' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog
+      .getByLabel('Report content')
+      .fill(`完全虛構的外收回報 ${Date.now()}`);
+    await dialog.getByLabel('Report status').selectOption('needs_review');
+    await dialog
+      .getByRole('button', { name: 'Create report', exact: true })
+      .click();
+    await expect(dialog).toBeHidden();
+    await expect(
+      page
+        .getByRole('tabpanel')
+        .getByText('Collector portal', { exact: false })
+        .first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Edit report', exact: true }),
+    ).toHaveCount(0);
+    await page.goto('/cases/demo-case-002');
+    await expect(page.getByRole('button', { name: 'New report' })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByRole('alert').getByText(/Unable to load this content/),
+    ).toBeVisible();
+  });
+});

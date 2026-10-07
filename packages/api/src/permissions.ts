@@ -13,6 +13,9 @@ export const PERMISSIONS = [
   'media.delete',
   'collector.manage',
   'audit_log.view',
+  'report.view',
+  'report.create',
+  'report.edit',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 interface Policy {
@@ -28,7 +31,10 @@ const ROLE_POLICIES: Record<string, Policy> = {
     ),
     scope: 'all',
   },
-  user: { permissions: ['case.view', 'media.view'], scope: 'assigned' },
+  user: {
+    permissions: ['case.view', 'media.view', 'report.view', 'report.create'],
+    scope: 'assigned',
+  },
 };
 export function permissionPolicy(context: Pick<Context, 'user'>): Policy {
   if (!context.user) return { permissions: [], scope: 'assigned' };

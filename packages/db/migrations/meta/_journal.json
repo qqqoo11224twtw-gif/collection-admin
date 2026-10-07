@@ -43,6 +43,13 @@
       "when": 1791391466293,
       "tag": "0005_assignment_upgrade",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791392860930,
+      "tag": "0006_kind_lockjaw",
+      "breakpoints": true
     }
   ]
 }

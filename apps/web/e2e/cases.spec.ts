@@ -61,7 +61,7 @@ test.describe('Local case workspace', () => {
     ])
       await expect(panel.getByText(label, { exact: true })).toBeVisible();
     await expect(panel.getByText('Recommended', { exact: true })).toBeVisible();
-    for (const name of ['Report history', 'Payment history']) {
+    for (const name of ['Payment history']) {
       await page.getByRole('tab', { name, exact: true }).click();
       await expect(
         page.getByText('This section is reserved for the next phase.'),

@@ -6,11 +6,18 @@ import { casesApi } from './cases';
 import { configApi } from './config';
 import { connection, db, kv, r2 } from './health-check';
 import { planetApi } from './planet';
+import { caseLookupApi, reportsApi } from './reports';
 import { storageApi } from './storage';
 import { todosApi } from './todos';
 
 export const appRouter = {
-  cases: { ...casesApi, ...caseManagementApi, ...caseMediaManagementApi },
+  cases: {
+    ...casesApi,
+    ...caseManagementApi,
+    ...caseMediaManagementApi,
+    lookup: caseLookupApi,
+  },
+  reports: reportsApi,
   collectors: collectorsApi,
   healthCheck: {
     connection,

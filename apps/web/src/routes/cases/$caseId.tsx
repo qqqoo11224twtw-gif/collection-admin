@@ -19,16 +19,14 @@ import {
   timestamp,
 } from '~/components/cases/presentation';
 import { PrivateImages } from '~/components/cases/private-images';
+import { ReportsPanel } from '~/components/cases/reports-panel';
 import { useSession } from '~/lib/auth';
 import { orpc } from '~/lib/orpc';
 
 export const Route = createFileRoute('/cases/$caseId')({
   component: CaseDetail,
 });
-const placeholders = [
-  { value: 'reports', label: 'Report history' },
-  { value: 'payments', label: 'Payment history' },
-];
+const placeholders = [{ value: 'payments', label: 'Payment history' }];
 const sources = {
   manual: 'Manual',
   poster_builder: 'Poster builder',
@@ -39,6 +37,9 @@ const revisit = {
   pending: 'Pending review',
   recommended: 'Recommended',
   not_required: 'Not required',
+  observe: 'Observe',
+  not_recommended: 'Not recommended',
+  not_needed: 'Not needed',
 };
 function CaseDetail() {
   const permissions = useCasePermissions();
@@ -99,6 +100,9 @@ function CaseDetail() {
             <TabsTrigger value="images" className="text-base">
               Outsourcing images
             </TabsTrigger>
+            <TabsTrigger value="reports" className="text-base">
+              Report history
+            </TabsTrigger>
             {placeholders.map((tab) => (
               <TabsTrigger
                 key={tab.value}
@@ -142,6 +146,9 @@ function CaseDetail() {
         </TabsContent>
         <TabsContent value="images">
           <PrivateImages caseId={caseId} version={record.version} />
+        </TabsContent>
+        <TabsContent value="reports">
+          <ReportsPanel caseId={caseId} version={record.version} />
         </TabsContent>
         {placeholders.map((tab) => (
           <TabsContent key={tab.value} value={tab.value}>

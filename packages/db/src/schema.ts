@@ -162,6 +162,9 @@ export const REVISIT_STATUSES = [
   'pending',
   'recommended',
   'not_required',
+  'observe',
+  'not_recommended',
+  'not_needed',
 ] as const;
 
 export const cases = sqliteTable(
@@ -210,7 +213,7 @@ export const cases = sqliteTable(
     ),
     check(
       'cases_revisit_check',
-      sql`${t.revisitStatus} IN ('pending', 'recommended', 'not_required')`,
+      sql`${t.revisitStatus} IN ('pending', 'recommended', 'not_required', 'observe', 'not_recommended', 'not_needed')`,
     ),
     check(
       'cases_required_check',
@@ -328,5 +331,82 @@ export const auditLogs = sqliteTable(
     ),
     index('audit_logs_user_time_idx').on(t.userId, t.createdAt),
     check('audit_logs_json_check', sql`json_valid(${t.metadata})`),
+  ],
+);
+
+export const REPORT_STATUSES = [
+  'cannot_find',
+  'follow_up',
+  'installment',
+  'settled',
+  'unresolved',
+  'needs_review',
+] as const;
+export const REPORT_REVISIT_STATUSES = [
+  'recommended',
+  'observe',
+  'not_recommended',
+  'not_needed',
+] as const;
+export const REPORT_SOURCES = [
+  'admin',
+  'collector_portal',
+  'telegram',
+  'api',
+] as const;
+export const reports = sqliteTable(
+  'reports',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => cases.id, { onDelete: 'restrict' }),
+    assignmentId: text('assignment_id').references(() => assignments.id, {
+      onDelete: 'restrict',
+    }),
+    collectorId: text('collector_id').references(() => collectors.id, {
+      onDelete: 'restrict',
+    }),
+    createdByUserId: text('created_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    content: text('content').notNull(),
+    status: text('status', { enum: REPORT_STATUSES }).notNull(),
+    revisitStatus: text('revisit_status', { enum: REPORT_REVISIT_STATUSES }),
+    revisitReason: text('revisit_reason'),
+    paymentDetected: integer('payment_detected', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    paymentAmount: integer('payment_amount'),
+    source: text('source', { enum: REPORT_SOURCES }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(0),
+  },
+  (t) => [
+    index('reports_case_time_idx').on(t.caseId, t.createdAt, t.id),
+    index('reports_assignment_idx').on(t.assignmentId),
+    index('reports_collector_idx').on(t.collectorId),
+    check(
+      'reports_content_check',
+      sql`length(trim(${t.content})) BETWEEN 1 AND 10000`,
+    ),
+    check(
+      'reports_status_check',
+      sql`${t.status} IN ('cannot_find','follow_up','installment','settled','unresolved','needs_review')`,
+    ),
+    check(
+      'reports_revisit_check',
+      sql`${t.revisitStatus} IS NULL OR ${t.revisitStatus} IN ('recommended','observe','not_recommended','not_needed')`,
+    ),
+    check(
+      'reports_source_check',
+      sql`${t.source} IN ('admin','collector_portal','telegram','api')`,
+    ),
+    check(
+      'reports_payment_check',
+      sql`${t.paymentDetected} IN (0,1) AND (${t.paymentAmount} IS NULL OR (${t.paymentDetected}=1 AND ${t.paymentAmount} BETWEEN 0 AND 1000000000000))`,
+    ),
+    check('reports_dates_check', sql`${t.updatedAt} >= ${t.createdAt}`),
   ],
 );
