@@ -9,6 +9,7 @@ import {
   Scripts,
 } from '@tanstack/react-router';
 import { ThemeProvider } from 'next-themes';
+import { GlobalCaseSearch } from '~/components/cases/global-search';
 import { APP_DISPLAY_NAME, APP_ID } from '~/lib/brand';
 import globalsCss from '~/styles/globals.css?url';
 
@@ -56,6 +57,7 @@ function RootComponent() {
         <ThemeProvider attribute="class" forcedTheme="light">
           <TooltipProvider>
             <div className="min-h-svh w-full flex flex-col">
+              <GlobalCaseSearch />
               <Outlet />
             </div>
             <Toaster richColors />

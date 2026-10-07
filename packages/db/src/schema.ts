@@ -1,4 +1,12 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import {
+  check,
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 // ─── better-auth tables (passwordless email-OTP + admin plugin) ───
 // Hand-written (not CLI-generated). text id + timestamp_ms, matching the
@@ -134,4 +142,110 @@ export const todos = sqliteTable(
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   },
   (t) => [index('todos_user_idx').on(t.userId)],
+);
+
+export const CASE_STATUSES = [
+  'pending',
+  'assigned',
+  'follow_up',
+  'installment',
+  'settled',
+  'unresolved',
+] as const;
+export const CASE_SOURCES = [
+  'manual',
+  'poster_builder',
+  'telegram_ai',
+  'historical_import',
+] as const;
+export const REVISIT_STATUSES = [
+  'pending',
+  'recommended',
+  'not_required',
+] as const;
+
+export const cases = sqliteTable(
+  'cases',
+  {
+    id: text('id').primaryKey(),
+    caseNo: text('case_no').notNull(),
+    code: text('code').notNull(),
+    customerName: text('customer_name').notNull(),
+    address: text('address').notNull(),
+    // Phase one stores whole TWD dollars, never floating-point money.
+    amountDue: integer('amount_due').notNull(),
+    status: text('status', { enum: CASE_STATUSES })
+      .notNull()
+      .default('pending'),
+    revisitStatus: text('revisit_status', { enum: REVISIT_STATUSES })
+      .notNull()
+      .default('pending'),
+    revisitReason: text('revisit_reason').notNull().default(''),
+    source: text('source', { enum: CASE_SOURCES }).notNull().default('manual'),
+    assignedAgentId: text('assigned_agent_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('cases_case_no_idx').on(sql`${t.caseNo} COLLATE NOCASE`),
+    index('cases_code_idx').on(sql`${t.code} COLLATE NOCASE`),
+    index('cases_customer_name_idx').on(sql`${t.customerName} COLLATE NOCASE`),
+    index('cases_updated_idx').on(t.updatedAt, t.id),
+    index('cases_agent_updated_idx').on(t.assignedAgentId, t.updatedAt, t.id),
+    check(
+      'cases_amount_check',
+      sql`${t.amountDue} >= 0 AND ${t.amountDue} <= 1000000000000`,
+    ),
+    check(
+      'cases_status_check',
+      sql`${t.status} IN ('pending', 'assigned', 'follow_up', 'installment', 'settled', 'unresolved')`,
+    ),
+    check(
+      'cases_source_check',
+      sql`${t.source} IN ('manual', 'poster_builder', 'telegram_ai', 'historical_import')`,
+    ),
+    check(
+      'cases_revisit_check',
+      sql`${t.revisitStatus} IN ('pending', 'recommended', 'not_required')`,
+    ),
+    check(
+      'cases_required_check',
+      sql`length(trim(${t.caseNo})) > 0 AND length(trim(${t.code})) > 0 AND length(trim(${t.customerName})) > 0 AND length(trim(${t.address})) > 0`,
+    ),
+    check('cases_dates_check', sql`${t.updatedAt} >= ${t.createdAt}`),
+  ],
+);
+
+export const caseMedia = sqliteTable(
+  'case_media',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => cases.id, { onDelete: 'cascade' }),
+    storageKey: text('storage_key').notNull(),
+    originalFilename: text('original_filename').notNull(),
+    mediaType: text('media_type', {
+      enum: ['image/png', 'image/jpeg', 'image/webp'],
+    }).notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    sha256: text('sha256').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('case_media_storage_idx').on(t.storageKey),
+    index('case_media_case_sort_idx').on(t.caseId, t.sortOrder, t.id),
+    index('case_media_sha256_idx').on(t.sha256),
+    check('case_media_sort_check', sql`${t.sortOrder} >= 0`),
+    check(
+      'case_media_type_check',
+      sql`${t.mediaType} IN ('image/png', 'image/jpeg', 'image/webp')`,
+    ),
+    check(
+      'case_media_sha_check',
+      sql`length(${t.sha256}) = 64 AND ${t.sha256} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+  ],
 );

@@ -12,14 +12,17 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ExamplesRouteImport } from './routes/examples'
 import { Route as DesignRouteImport } from './routes/design'
+import { Route as CasesRouteImport } from './routes/cases'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DesignIndexRouteImport } from './routes/design/index'
+import { Route as CasesIndexRouteImport } from './routes/cases/index'
 import { Route as ExamplesSsrRouteImport } from './routes/examples/ssr'
 import { Route as DesignTokensRouteImport } from './routes/design/tokens'
 import { Route as DesignScaleRouteImport } from './routes/design/scale'
 import { Route as DesignPatternsRouteImport } from './routes/design/patterns'
 import { Route as DesignOverviewRouteImport } from './routes/design/overview'
 import { Route as DesignComponentsRouteImport } from './routes/design/components'
+import { Route as CasesCaseIdRouteImport } from './routes/cases/$caseId'
 import { Route as ExamplesComponentsTodosRouteImport } from './routes/examples/components/todos'
 import { Route as ExamplesComponentsR2UploadRouteImport } from './routes/examples/components/r2-upload'
 import { Route as ExamplesComponentsApiKeysRouteImport } from './routes/examples/components/api-keys'
@@ -39,6 +42,11 @@ const DesignRoute = DesignRouteImport.update({
   path: '/design',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CasesRoute = CasesRouteImport.update({
+  id: '/cases',
+  path: '/cases',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -48,6 +56,11 @@ const DesignIndexRoute = DesignIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => DesignRoute,
+} as any)
+const CasesIndexRoute = CasesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CasesRoute,
 } as any)
 const ExamplesSsrRoute = ExamplesSsrRouteImport.update({
   id: '/ssr',
@@ -79,6 +92,11 @@ const DesignComponentsRoute = DesignComponentsRouteImport.update({
   path: '/components',
   getParentRoute: () => DesignRoute,
 } as any)
+const CasesCaseIdRoute = CasesCaseIdRouteImport.update({
+  id: '/$caseId',
+  path: '/$caseId',
+  getParentRoute: () => CasesRoute,
+} as any)
 const ExamplesComponentsTodosRoute = ExamplesComponentsTodosRouteImport.update({
   id: '/components/todos',
   path: '/components/todos',
@@ -99,15 +117,18 @@ const ExamplesComponentsApiKeysRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/cases': typeof CasesRouteWithChildren
   '/design': typeof DesignRouteWithChildren
   '/examples': typeof ExamplesRouteWithChildren
   '/login': typeof LoginRoute
+  '/cases/$caseId': typeof CasesCaseIdRoute
   '/design/components': typeof DesignComponentsRoute
   '/design/overview': typeof DesignOverviewRoute
   '/design/patterns': typeof DesignPatternsRoute
   '/design/scale': typeof DesignScaleRoute
   '/design/tokens': typeof DesignTokensRoute
   '/examples/ssr': typeof ExamplesSsrRoute
+  '/cases/': typeof CasesIndexRoute
   '/design/': typeof DesignIndexRoute
   '/examples/components/api-keys': typeof ExamplesComponentsApiKeysRoute
   '/examples/components/r2-upload': typeof ExamplesComponentsR2UploadRoute
@@ -117,12 +138,14 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/examples': typeof ExamplesRouteWithChildren
   '/login': typeof LoginRoute
+  '/cases/$caseId': typeof CasesCaseIdRoute
   '/design/components': typeof DesignComponentsRoute
   '/design/overview': typeof DesignOverviewRoute
   '/design/patterns': typeof DesignPatternsRoute
   '/design/scale': typeof DesignScaleRoute
   '/design/tokens': typeof DesignTokensRoute
   '/examples/ssr': typeof ExamplesSsrRoute
+  '/cases': typeof CasesIndexRoute
   '/design': typeof DesignIndexRoute
   '/examples/components/api-keys': typeof ExamplesComponentsApiKeysRoute
   '/examples/components/r2-upload': typeof ExamplesComponentsR2UploadRoute
@@ -131,15 +154,18 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/cases': typeof CasesRouteWithChildren
   '/design': typeof DesignRouteWithChildren
   '/examples': typeof ExamplesRouteWithChildren
   '/login': typeof LoginRoute
+  '/cases/$caseId': typeof CasesCaseIdRoute
   '/design/components': typeof DesignComponentsRoute
   '/design/overview': typeof DesignOverviewRoute
   '/design/patterns': typeof DesignPatternsRoute
   '/design/scale': typeof DesignScaleRoute
   '/design/tokens': typeof DesignTokensRoute
   '/examples/ssr': typeof ExamplesSsrRoute
+  '/cases/': typeof CasesIndexRoute
   '/design/': typeof DesignIndexRoute
   '/examples/components/api-keys': typeof ExamplesComponentsApiKeysRoute
   '/examples/components/r2-upload': typeof ExamplesComponentsR2UploadRoute
@@ -149,15 +175,18 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/cases'
     | '/design'
     | '/examples'
     | '/login'
+    | '/cases/$caseId'
     | '/design/components'
     | '/design/overview'
     | '/design/patterns'
     | '/design/scale'
     | '/design/tokens'
     | '/examples/ssr'
+    | '/cases/'
     | '/design/'
     | '/examples/components/api-keys'
     | '/examples/components/r2-upload'
@@ -167,12 +196,14 @@ export interface FileRouteTypes {
     | '/'
     | '/examples'
     | '/login'
+    | '/cases/$caseId'
     | '/design/components'
     | '/design/overview'
     | '/design/patterns'
     | '/design/scale'
     | '/design/tokens'
     | '/examples/ssr'
+    | '/cases'
     | '/design'
     | '/examples/components/api-keys'
     | '/examples/components/r2-upload'
@@ -180,15 +211,18 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/cases'
     | '/design'
     | '/examples'
     | '/login'
+    | '/cases/$caseId'
     | '/design/components'
     | '/design/overview'
     | '/design/patterns'
     | '/design/scale'
     | '/design/tokens'
     | '/examples/ssr'
+    | '/cases/'
     | '/design/'
     | '/examples/components/api-keys'
     | '/examples/components/r2-upload'
@@ -197,6 +231,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CasesRoute: typeof CasesRouteWithChildren
   DesignRoute: typeof DesignRouteWithChildren
   ExamplesRoute: typeof ExamplesRouteWithChildren
   LoginRoute: typeof LoginRoute
@@ -225,6 +260,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cases': {
+      id: '/cases'
+      path: '/cases'
+      fullPath: '/cases'
+      preLoaderRoute: typeof CasesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -238,6 +280,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/design/'
       preLoaderRoute: typeof DesignIndexRouteImport
       parentRoute: typeof DesignRoute
+    }
+    '/cases/': {
+      id: '/cases/'
+      path: '/'
+      fullPath: '/cases/'
+      preLoaderRoute: typeof CasesIndexRouteImport
+      parentRoute: typeof CasesRoute
     }
     '/examples/ssr': {
       id: '/examples/ssr'
@@ -281,6 +330,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignComponentsRouteImport
       parentRoute: typeof DesignRoute
     }
+    '/cases/$caseId': {
+      id: '/cases/$caseId'
+      path: '/$caseId'
+      fullPath: '/cases/$caseId'
+      preLoaderRoute: typeof CasesCaseIdRouteImport
+      parentRoute: typeof CasesRoute
+    }
     '/examples/components/todos': {
       id: '/examples/components/todos'
       path: '/components/todos'
@@ -304,6 +360,18 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface CasesRouteChildren {
+  CasesCaseIdRoute: typeof CasesCaseIdRoute
+  CasesIndexRoute: typeof CasesIndexRoute
+}
+
+const CasesRouteChildren: CasesRouteChildren = {
+  CasesCaseIdRoute: CasesCaseIdRoute,
+  CasesIndexRoute: CasesIndexRoute,
+}
+
+const CasesRouteWithChildren = CasesRoute._addFileChildren(CasesRouteChildren)
 
 interface DesignRouteChildren {
   DesignComponentsRoute: typeof DesignComponentsRoute
@@ -346,6 +414,7 @@ const ExamplesRouteWithChildren = ExamplesRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CasesRoute: CasesRouteWithChildren,
   DesignRoute: DesignRouteWithChildren,
   ExamplesRoute: ExamplesRouteWithChildren,
   LoginRoute: LoginRoute,

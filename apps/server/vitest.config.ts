@@ -45,6 +45,7 @@ export default defineConfig(async () => {
             ADMIN_EMAILS: ' Boss@Test.dev ',
             RESEND_API_KEY: '',
             EMAIL_FROM: '',
+            CASE_STORAGE_MODE: 'demo',
             TEST_MIGRATIONS: migrations,
             // Dummy R2 credentials so storage.presign can be smoke-tested.
             // getSignedUrl() signs locally (no network), so fake values are

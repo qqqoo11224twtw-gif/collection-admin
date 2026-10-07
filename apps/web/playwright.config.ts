@@ -27,7 +27,7 @@ export default defineConfig({
   webServer: isRemote
     ? undefined
     : {
-        command: 'pnpm run dev',
+        command: 'pnpm run dev:local',
         cwd: '../../',
         url: 'http://localhost:3000',
         reuseExistingServer: true,

@@ -11,7 +11,8 @@
     "BETTER_AUTH_SECRET": "local-dev-secret-not-for-prod",
     "ADMIN_EMAILS": "admin@example.test",
     "RESEND_API_KEY": "",
-    "EMAIL_FROM": ""
+    "EMAIL_FROM": "",
+    "CASE_STORAGE_MODE": "demo"
   },
   "d1_databases": [
     {

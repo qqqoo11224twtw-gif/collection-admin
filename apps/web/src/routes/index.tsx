@@ -51,6 +51,17 @@ function Home() {
         <UserMenu />
       </div>
 
+      <Link
+        to="/cases"
+        search={{ query: '', page: 1 }}
+        className="rounded-xl bg-card p-5 shadow-xs ring-1 ring-foreground/10 hover:bg-muted"
+      >
+        <span className="text-lg font-medium">Case workspace →</span>
+        <span className="mt-2 block text-sm text-muted-foreground">
+          Browse fictional cases, search records and view private demo images.
+        </span>
+      </Link>
+
       <ConfigNotice status={configQuery.data} />
 
       {/* System Status */}

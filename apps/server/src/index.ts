@@ -10,6 +10,7 @@ import {
   isAdminEmail,
   verifyApiKey,
 } from '@saasflare-dev/api/auth';
+import { caseImageResponse } from '@saasflare-dev/api/case-image';
 import { createContext } from '@saasflare-dev/api/context';
 import { verification } from '@saasflare-dev/db';
 import { desc, eq } from 'drizzle-orm';
@@ -160,5 +161,14 @@ app.get('/', (c) => {
 });
 
 app.get('/health', (c) => c.json({ status: 'ok' }));
+
+// Session plus case-level authorization; never redirect to an object URL.
+app.get('/api/cases/:caseId/media/:mediaId/image', async (c) =>
+  caseImageResponse(
+    await createContext(c),
+    c.req.param('caseId'),
+    c.req.param('mediaId'),
+  ),
+);
 
 export default app;

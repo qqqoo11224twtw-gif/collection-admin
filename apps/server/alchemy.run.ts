@@ -180,6 +180,7 @@ export const server = await Worker('server', {
     // fail closed above), codes are logged to the worker console instead.
     RESEND_API_KEY: process.env.RESEND_API_KEY ?? '',
     EMAIL_FROM: process.env.EMAIL_FROM ?? '',
+    CASE_STORAGE_MODE: process.env.CASE_STORAGE_MODE ?? '',
     R2_PUBLIC_DOMAIN: BUCKET.devDomain || '',
     KV,
     DB,
