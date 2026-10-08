@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -21,6 +22,19 @@ export default defineConfig(async () => {
       cloudflareTest({
         main: './src/index.ts',
         miniflare: {
+          // External HTTP fixture; D1/KV/R2 still use real Workers bindings.
+          outboundService: 'telegram-api-fixture',
+          workers: [
+            {
+              name: 'telegram-api-fixture',
+              modules: true,
+              compatibilityDate: '2026-04-01',
+              script: readFileSync(
+                path.resolve(__dirname, 'tests/telegram-api-fixture.js'),
+                'utf8',
+              ),
+            },
+          ],
           compatibilityDate: '2025-01-01',
           // The pool force-enables the runner-support flags anyway and prints
           // a noisy `[vpw:debug] Adding …` line for each missing one — declare

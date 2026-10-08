@@ -14,6 +14,19 @@ export class TelegramFailure extends Error {
     super(code);
   }
 }
+// Only fixed categories are logged; exception messages can contain the bot URL.
+export function telegramExceptionKind(error: unknown) {
+  const name = error instanceof Error ? error.name : '';
+  const message = error instanceof Error ? error.message : '';
+  if (name === 'AbortError') return 'abort';
+  if (name === 'TimeoutError') return 'timeout';
+  if (/redirect/i.test(message)) return 'redirect';
+  if (/AbortSignal|signal/i.test(message)) return 'signal';
+  if (/DNS|resolve|hostname/i.test(message)) return 'dns';
+  if (/TLS|SSL|certificate/i.test(message)) return 'tls';
+  if (/network|fetch|connect/i.test(message)) return 'network';
+  return 'other';
+}
 export interface TelegramClient {
   sendMessage(input: TelegramMessagePayload): Promise<string>;
   answerCallbackQuery(id: string, text: string): Promise<void>;
@@ -65,6 +78,7 @@ export class BotApiTelegramClient implements TelegramClient {
     input: unknown,
     send = false,
   ): Promise<unknown> {
+    const started = Date.now();
     let response: Response;
     try {
       response = await fetch(
@@ -74,13 +88,37 @@ export class BotApiTelegramClient implements TelegramClient {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(input),
           signal: AbortSignal.timeout(10000),
-          redirect: 'error',
+          // Manual mode works in this Workers runtime and prevents token forwarding.
+          redirect: 'manual',
         },
       );
-    } catch {
+    } catch (error: unknown) {
+      const kind = telegramExceptionKind(error);
+      console.warn('telegram.diagnostic', {
+        stage:
+          kind === 'abort' || kind === 'timeout'
+            ? 'abort_timeout'
+            : 'fetch_exception',
+        method,
+        kind,
+        elapsedMs: Date.now() - started,
+      });
       throw new TelegramFailure(
         send ? 'DELIVERY_UNKNOWN' : 'API_TIMEOUT',
         !send,
+        send,
+      );
+    }
+    if (response.status >= 300 && response.status < 400) {
+      console.warn('telegram.diagnostic', {
+        stage: 'api_non_ok',
+        method,
+        httpStatus: response.status,
+        apiCode: null,
+      });
+      throw new TelegramFailure(
+        send ? 'DELIVERY_UNKNOWN' : 'API_REDIRECT',
+        false,
         send,
       );
     }
@@ -92,7 +130,15 @@ export class BotApiTelegramClient implements TelegramClient {
     };
     try {
       body = await response.json();
+      if (!body || typeof body !== 'object' || typeof body.ok !== 'boolean')
+        throw new Error('INVALID_API_RESPONSE');
     } catch {
+      console.warn('telegram.diagnostic', {
+        stage: 'invalid_json_response',
+        method,
+        httpStatus: response.status,
+        elapsedMs: Date.now() - started,
+      });
       throw new TelegramFailure(
         send ? 'DELIVERY_UNKNOWN' : 'INVALID_API_RESPONSE',
         !send,
@@ -101,6 +147,12 @@ export class BotApiTelegramClient implements TelegramClient {
     }
     if (!body.ok) {
       const code = body.error_code ?? response.status;
+      console.warn('telegram.diagnostic', {
+        stage: 'api_non_ok',
+        method,
+        httpStatus: response.status,
+        apiCode: typeof code === 'number' ? code : null,
+      });
       throw new TelegramFailure(
         `API_${code}`,
         code === 429 || (!send && code >= 500),
@@ -125,8 +177,13 @@ export class BotApiTelegramClient implements TelegramClient {
       },
       true,
     )) as { message_id?: number };
-    if (!Number.isSafeInteger(r?.message_id))
+    if (!Number.isSafeInteger(r?.message_id)) {
+      console.warn('telegram.diagnostic', {
+        stage: 'missing_message_id',
+        method: 'sendMessage',
+      });
       throw new TelegramFailure('DELIVERY_UNKNOWN', false, true);
+    }
     return String(r.message_id);
   }
   async downloadFile(fileId: string) {
@@ -144,7 +201,7 @@ export class BotApiTelegramClient implements TelegramClient {
     try {
       const r = await fetch(
         `https://api.telegram.org/file/bot${this.token}/${file.file_path}`,
-        { signal: AbortSignal.timeout(10000), redirect: 'error' },
+        { signal: AbortSignal.timeout(10000), redirect: 'manual' },
       );
       if (!r.ok) throw new TelegramFailure('DOWNLOAD_HTTP', true);
       const reader = r.body?.getReader();

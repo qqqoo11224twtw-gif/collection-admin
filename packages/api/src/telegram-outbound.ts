@@ -2,7 +2,11 @@ import { telegramOutboundJobs, telegramRoutes } from '@saasflare-dev/db';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Context } from './context';
 import { telegramAudit } from './telegram-adapter';
-import { type TelegramClient, TelegramFailure } from './telegram-client';
+import {
+  type TelegramClient,
+  TelegramFailure,
+  telegramExceptionKind,
+} from './telegram-client';
 import {
   backoff,
   type InlineKeyboard,
@@ -225,6 +229,12 @@ export async function processOutbound(
         ),
       ]);
     } catch (error: unknown) {
+      if (!(error instanceof TelegramFailure))
+        console.warn('telegram.diagnostic', {
+          stage: 'unexpected_outbound_exception',
+          jobId: job.id,
+          kind: telegramExceptionKind(error),
+        });
       const failure =
         error instanceof TelegramFailure
           ? error

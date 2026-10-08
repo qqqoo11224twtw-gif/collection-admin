@@ -19,7 +19,7 @@ import {
   receiveTelegramUpdate,
 } from '@saasflare-dev/api/telegram-processing';
 import { drizzle } from 'drizzle-orm/d1';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import app from '../src/index';
 import { adminCookie, rpc, userCookie } from './helpers';
 
@@ -870,6 +870,53 @@ describe('Telegram local integration', () => {
         .bind(row?.report_id, destinationId)
         .first(),
     ).toMatchObject({ status: 'failed', last_error_code: 'DELIVERY_UNKNOWN' });
+  });
+  it('unexpected sender exceptions are sanitized and never retried', async () => {
+    const c = await assignedCase();
+    await receive(reportFixture(600090, collectorChat, 900001, c.code));
+    await run();
+    const row = await updateRow(600090);
+    await env.DB.prepare(
+      "UPDATE telegram_outbound_jobs SET next_attempt_at=? WHERE status='pending' AND NOT (report_id=? AND route_id=?)",
+    )
+      .bind(tick() + 100000, row?.report_id, destinationId)
+      .run();
+    let calls = 0;
+    class UnexpectedSender extends FakeTelegramClient {
+      async sendMessage(): Promise<string> {
+        calls++;
+        throw new Error(
+          'fetch https://api.telegram.org/botTEST_SECRET/sendMessage',
+        );
+      }
+    }
+    const logs = vi.spyOn(console, 'warn');
+    try {
+      await processOutbound(base, new UnexpectedSender(), tick());
+      await processOutbound(base, new UnexpectedSender(), tick() + 10000);
+      expect(calls).toBe(1);
+      expect(logs.mock.calls).toContainEqual([
+        'telegram.diagnostic',
+        expect.objectContaining({
+          stage: 'unexpected_outbound_exception',
+          kind: 'network',
+        }),
+      ]);
+      expect(JSON.stringify(logs.mock.calls)).not.toContain('TEST_SECRET');
+      expect(JSON.stringify(logs.mock.calls)).not.toContain('api.telegram.org');
+      expect(
+        await env.DB.prepare(
+          'SELECT status,last_error_code FROM telegram_outbound_jobs WHERE report_id=? AND route_id=?',
+        )
+          .bind(row?.report_id, destinationId)
+          .first(),
+      ).toMatchObject({
+        status: 'failed',
+        last_error_code: 'DELIVERY_UNKNOWN',
+      });
+    } finally {
+      logs.mockRestore();
+    }
   });
   it('formats the business timezone and exactly four allowed fields', () => {
     expect(businessDate(Date.UTC(2026, 9, 7, 18), 'Asia/Taipei')).toBe(
