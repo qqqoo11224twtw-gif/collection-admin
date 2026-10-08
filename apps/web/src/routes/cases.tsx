@@ -16,7 +16,7 @@ function CaseWorkspace() {
             to="/"
             className="text-sm text-muted-foreground hover:text-foreground"
           >
-            ← Starter console
+            ← 後台首頁
           </Link>
           <div className="flex flex-wrap items-center gap-3">
             {permissions.can('intake.view') && (
@@ -25,7 +25,7 @@ function CaseWorkspace() {
                 search={{ page: 1, query: '', status: '', source: '' }}
                 className="text-sm text-muted-foreground hover:text-foreground"
               >
-                Intake inbox
+                收件管理
               </Link>
             )}
             <ReviewNotice />
@@ -33,14 +33,14 @@ function CaseWorkspace() {
               to="/cases/regions"
               className="text-sm text-muted-foreground hover:text-foreground"
             >
-              Regions
+              地區調度
             </Link>
             {permissions.can('settlement.view') && (
               <Link
                 to="/cases/finance"
                 className="text-sm text-muted-foreground hover:text-foreground"
               >
-                Finance
+                財務管理
               </Link>
             )}
             {permissions.can('telegram_route.manage') && (
@@ -48,7 +48,7 @@ function CaseWorkspace() {
                 to="/cases/telegram"
                 className="text-sm text-muted-foreground hover:text-foreground"
               >
-                Telegram settings
+                Telegram 設定
               </Link>
             )}
             {permissions.can('collector.manage') && (
@@ -56,15 +56,14 @@ function CaseWorkspace() {
                 to="/cases/collectors"
                 className="text-sm text-muted-foreground hover:text-foreground"
               >
-                Collectors
+                外收人員
               </Link>
             )}
             <UserMenu />
           </div>
         </div>
         <div className="rounded-lg bg-info/5 px-4 py-3 text-sm text-muted-foreground">
-          Local demo workspace · All cases and images are fictional. No live
-          integrations.
+          本機示範環境 · 所有案件與圖片皆為虛構資料，未連接正式服務。
         </div>
         <Outlet />
       </main>

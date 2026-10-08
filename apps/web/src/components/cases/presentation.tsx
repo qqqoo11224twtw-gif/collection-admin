@@ -8,12 +8,12 @@ export type CaseRecord = Awaited<
   ReturnType<AppRouterClient['cases']['detail']>
 >;
 export const statusLabels = {
-  pending: 'Pending',
-  assigned: 'Assigned',
-  follow_up: 'Follow-up',
-  installment: 'Installment',
-  settled: 'Settled',
-  unresolved: 'Unresolved',
+  pending: '待處理',
+  assigned: '已委外',
+  follow_up: '安排二訪',
+  installment: '分期',
+  settled: '結清',
+  unresolved: '無解',
 };
 const colors = {
   pending: 'bg-muted text-muted-foreground',
@@ -38,7 +38,7 @@ export function money(value: number) {
   }).format(value);
 }
 export function timestamp(value: Date | string) {
-  return new Intl.DateTimeFormat('en-GB', {
+  return new Intl.DateTimeFormat('zh-TW', {
     timeZone: 'Asia/Taipei',
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -46,8 +46,8 @@ export function timestamp(value: Date | string) {
 }
 export function LoadingCases() {
   return (
-    <output aria-label="Loading cases" className="block space-y-4">
-      <span className="sr-only">Loading cases…</span>
+    <output aria-label="載入案件中" className="block space-y-4">
+      <span className="sr-only">載入案件中…</span>
       {[1, 2, 3, 4].map((id) => (
         <Skeleton key={id} className="h-12 w-full" />
       ))}
@@ -61,11 +61,10 @@ export function CaseError({ retry }: { retry: () => void }) {
       className="rounded-xl bg-destructive/5 p-8 text-center space-y-3"
     >
       <p className="text-sm text-destructive">
-        Unable to load this content. It may be unavailable or outside your
-        access.
+        無法載入資料，資料可能不存在或您沒有查看權限。
       </p>
       <Button variant="outline" onClick={retry}>
-        Try again
+        重試
       </Button>
     </div>
   );

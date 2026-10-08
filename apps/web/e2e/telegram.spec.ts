@@ -9,37 +9,35 @@ test.describe('Local Telegram administration', () => {
     await page.goto('/cases');
     await expect(page).toHaveURL(/\/login/);
     await signIn(page, 'phase6-admin@example.test');
-    await page.getByRole('link', { name: 'Telegram settings' }).click();
+    await page.getByRole('link', { name: 'Telegram 設定' }).click();
     await expect(
-      page.getByRole('heading', { name: 'Telegram settings' }),
+      page.getByRole('heading', { name: 'Telegram 設定' }),
     ).toBeVisible();
     const suffix = Date.now();
     const chatId = `-${suffix}`;
-    await page.getByLabel('Chat ID', { exact: true }).fill(chatId);
-    await page.getByLabel('Topic ID (optional)').fill('55');
-    await page.getByRole('button', { name: 'Save route', exact: true }).click();
+    await page.getByLabel('Telegram 群組 ID', { exact: true }).fill(chatId);
+    await page.getByLabel('Telegram 話題 ID（選填）').fill('55');
+    await page.getByRole('button', { name: '儲存路由', exact: true }).click();
     await expect(
-      page.getByText(`intake_source · ${chatId} / Topic 55`),
+      page.getByText(`收件來源 · ${chatId} / Topic 55`),
     ).toBeVisible();
-    await page.getByLabel('Telegram user ID').fill(String(suffix));
+    await page.getByLabel('Telegram 使用者 ID').fill(String(suffix));
     await page
-      .getByLabel('Display name (optional)')
+      .getByLabel('顯示名稱（選填）')
       .fill(`Fictional identity ${suffix}`);
-    await page.getByRole('button', { name: 'Save identity' }).click();
+    await page.getByRole('button', { name: '儲存身分' }).click();
     await expect(
       page.getByText(`Fictional identity ${suffix} · ${suffix}`),
     ).toBeVisible();
-    const row = page
-      .getByText(`intake_source · ${chatId} / Topic 55`)
-      .locator('..');
-    await row.getByRole('button', { name: 'Edit route' }).click();
-    await page.getByLabel('Active route').uncheck();
-    await page.getByRole('button', { name: 'Save route', exact: true }).click();
-    await expect(row.getByText('Inactive')).toBeVisible();
-    await row.getByRole('button', { name: 'Edit route' }).click();
-    await page.getByLabel('Active route').check();
-    await page.getByRole('button', { name: 'Save route', exact: true }).click();
-    await expect(row.getByText('Active', { exact: true })).toBeVisible();
+    const row = page.getByText(`收件來源 · ${chatId} / Topic 55`).locator('..');
+    await row.getByRole('button', { name: '編輯路由' }).click();
+    await page.getByLabel('路由啟用中').uncheck();
+    await page.getByRole('button', { name: '儲存路由', exact: true }).click();
+    await expect(row.getByText('已停用')).toBeVisible();
+    await row.getByRole('button', { name: '編輯路由' }).click();
+    await page.getByLabel('路由啟用中').check();
+    await page.getByRole('button', { name: '儲存路由', exact: true }).click();
+    await expect(row.getByText('啟用中', { exact: true })).toBeVisible();
     const payload = {
       update_id: suffix,
       message: {
@@ -73,13 +71,13 @@ test.describe('Local Telegram administration', () => {
         { timeout: 15000 },
       )
       .toBe('done');
-    await page.getByRole('button', { name: 'Process local jobs' }).click();
+    await page.getByRole('button', { name: '處理本機工作' }).click();
     await expect(
-      page.getByRole('button', { name: 'Process local jobs' }),
+      page.getByRole('button', { name: '處理本機工作' }),
     ).toBeEnabled();
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(
-      page.getByRole('heading', { name: 'Telegram settings' }),
+      page.getByRole('heading', { name: 'Telegram 設定' }),
     ).toBeVisible();
     expect(
       await page.evaluate(
@@ -97,13 +95,11 @@ test.describe('Local Telegram administration', () => {
     await page.goto('/cases');
     await expect(page).toHaveURL(/\/login/);
     await signIn(page, `phase6-user-${Date.now()}@example.test`);
-    await expect(
-      page.getByRole('link', { name: 'Telegram settings' }),
-    ).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Telegram 設定' })).toHaveCount(
+      0,
+    );
     await page.goto('/cases/telegram');
-    await expect(
-      page.getByText('Access denied', { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText('無操作權限', { exact: true })).toBeVisible();
     const response = await page.request.post(
       `${SERVER_URL}/rpc/telegram/routes`,
       { data: {} },

@@ -27,20 +27,20 @@ import { orpc } from '~/lib/orpc';
 export const Route = createFileRoute('/cases/$caseId')({
   component: CaseDetail,
 });
-const placeholders = [{ value: 'payments', label: 'Payment history' }];
+const placeholders = [{ value: 'payments', label: '收款紀錄' }];
 const sources = {
-  manual: 'Manual',
-  poster_builder: 'Poster builder',
+  manual: '人工建檔',
+  poster_builder: '製圖小幫手',
   telegram_ai: 'Telegram AI',
-  historical_import: 'Historical import',
+  historical_import: '歷史匯入',
 };
 const revisit = {
-  pending: 'Pending review',
-  recommended: 'Recommended',
-  not_required: 'Not required',
-  observe: 'Observe',
-  not_recommended: 'Not recommended',
-  not_needed: 'Not needed',
+  pending: '待確認',
+  recommended: '值得二訪',
+  not_required: '不需二訪',
+  observe: '可再觀察',
+  not_recommended: '不建議二訪',
+  not_needed: '不需二訪',
 };
 function CaseDetail() {
   const permissions = useCasePermissions();
@@ -57,17 +57,17 @@ function CaseDetail() {
   if (result.isError) return <CaseError retry={() => void result.refetch()} />;
   const record = result.data;
   const fields = [
-    ['Customer', record.customerName],
-    ['Case no.', record.caseNo],
-    ['Code', record.code],
-    ['Region', record.region ?? 'Not recorded'],
-    ['Address', record.address],
-    ['Amount due', money(record.amountDue)],
-    ['Revisit recommendation', revisit[record.revisitStatus]],
-    ['Revisit reason', record.revisitReason || '—'],
-    ['Source', sources[record.source]],
-    ['Created', timestamp(record.createdAt)],
-    ['Updated', timestamp(record.updatedAt)],
+    ['客戶', record.customerName],
+    ['案件編號', record.caseNo],
+    ['代號', record.code],
+    ['地區', record.region ?? '未填寫'],
+    ['地址', record.address],
+    ['應收款項', money(record.amountDue)],
+    ['二訪建議', revisit[record.revisitStatus]],
+    ['二訪原因', record.revisitReason || '—'],
+    ['來源', sources[record.source]],
+    ['建立時間', timestamp(record.createdAt)],
+    ['更新時間', timestamp(record.updatedAt)],
   ];
   return (
     <div className="space-y-6">
@@ -77,7 +77,7 @@ function CaseDetail() {
         search={{ query: '', page: 1 }}
         className="text-sm text-muted-foreground hover:text-foreground"
       >
-        ← All cases
+        ← 案件列表
       </Link>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -95,15 +95,15 @@ function CaseDetail() {
       </div>
       <Tabs defaultValue="overview" key={caseId} className="space-y-6">
         <div className="overflow-x-auto pb-2">
-          <TabsList variant="line" aria-label="Case details">
+          <TabsList variant="line" aria-label="案件詳情">
             <TabsTrigger value="overview" className="text-base">
-              Overview
+              概覽
             </TabsTrigger>
             <TabsTrigger value="images" className="text-base">
-              Outsourcing images
+              委外圖片
             </TabsTrigger>
             <TabsTrigger value="reports" className="text-base">
-              Report history
+              回報紀錄
             </TabsTrigger>
             {placeholders.map((tab) => (
               <TabsTrigger
@@ -115,11 +115,11 @@ function CaseDetail() {
               </TabsTrigger>
             ))}
             <TabsTrigger value="assignments" className="text-base">
-              Assignment history
+              派單紀錄
             </TabsTrigger>
             {permissions.can('audit_log.view') && (
               <TabsTrigger value="activity" className="text-base">
-                Activity log
+                操作紀錄
               </TabsTrigger>
             )}
           </TabsList>
@@ -137,7 +137,7 @@ function CaseDetail() {
                   </div>
                 ))}
                 <div>
-                  <dt className="text-sm text-muted-foreground">Status</dt>
+                  <dt className="text-sm text-muted-foreground">案件狀態</dt>
                   <dd className="mt-2">
                     <StatusBadge status={record.status} />
                   </dd>

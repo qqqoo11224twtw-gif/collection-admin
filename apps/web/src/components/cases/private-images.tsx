@@ -14,6 +14,7 @@ import { Label } from '@saasflare-dev/ui/components/label';
 import { Skeleton } from '@saasflare-dev/ui/components/skeleton';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { displayError } from '~/components/cases/display-labels';
 import { useSession } from '~/lib/auth';
 import { orpc } from '~/lib/orpc';
 import { useCasePermissions, useRefreshCases } from './management-hooks';
@@ -46,7 +47,7 @@ function PrivateThumbnail({
             signal: controller.signal,
           },
         );
-        if (!response.ok) throw new Error('Image unavailable');
+        if (!response.ok) throw new Error('無法查看圖片');
         const blob = await response.blob();
         if (controller.signal.aborted) return;
         url = URL.createObjectURL(blob);
@@ -67,13 +68,13 @@ function PrivateThumbnail({
         role="alert"
         className="flex aspect-video flex-col items-center justify-center gap-3 bg-muted"
       >
-        <p className="text-sm text-destructive">Image unavailable</p>
+        <p className="text-sm text-destructive">無法查看圖片</p>
         <Button
           variant="outline"
           size="sm"
           onClick={() => setAttempt((value) => value + 1)}
         >
-          Retry image
+          重新載入圖片
         </Button>
       </div>
     );
@@ -84,7 +85,7 @@ function PrivateThumbnail({
       className="aspect-video w-full object-contain bg-muted"
     />
   ) : (
-    <Skeleton aria-label="Loading image" className="aspect-video w-full" />
+    <Skeleton aria-label="載入圖片中" className="aspect-video w-full" />
   );
 }
 export function PrivateImages({
@@ -110,7 +111,7 @@ export function PrivateImages({
     retry: false,
   });
   if (result.isPending)
-    return <Skeleton className="h-64 w-full" aria-label="Loading media" />;
+    return <Skeleton className="h-64 w-full" aria-label="載入圖片中" />;
   if (result.isError) return <CaseError retry={() => void result.refetch()} />;
   return (
     <div className="space-y-5">
@@ -134,7 +135,7 @@ export function PrivateImages({
                   file.size > 5 * 1024 * 1024,
               )
             ) {
-              setMessage('Choose one to five images, at most 5 MiB each.');
+              setMessage('請選擇 1 至 5 張圖片，每張上限 5 MiB。');
               return;
             }
             form.set('expectedVersion', String(version));
@@ -147,21 +148,19 @@ export function PrivateImages({
               if (!response.ok) {
                 const error = (await response.json()) as { message?: string };
                 throw new Error(
-                  error.message ?? 'Upload failed. Refresh and try again.',
+                  error.message ?? '上傳失敗，請重新整理後再試。',
                 );
               }
               formElement.reset();
               await refresh();
             } catch (failure: unknown) {
-              setMessage(
-                failure instanceof Error ? failure.message : 'Upload failed.',
-              );
+              setMessage(displayError(failure, '上傳失敗。'));
             } finally {
               setUploading(false);
             }
           }}
         >
-          <Label htmlFor="case-upload">Upload private images</Label>
+          <Label htmlFor="case-upload">上傳私人圖片</Label>
           <Input
             id="case-upload"
             name="files"
@@ -172,13 +171,13 @@ export function PrivateImages({
             disabled={uploading || remove.isPending || reorder.isPending}
           />
           <p className="text-sm text-muted-foreground">
-            PNG, JPEG or WebP · Up to 5 images per upload · 5 MiB per image
+            支援 PNG、JPEG 或 WebP · 每次最多 5 張 · 每張上限 5 MiB
           </p>
           <Button
             type="submit"
             disabled={uploading || remove.isPending || reorder.isPending}
           >
-            {uploading ? 'Uploading…' : 'Upload images'}
+            {uploading ? '上傳中…' : '上傳圖片'}
           </Button>
         </form>
       )}
@@ -189,7 +188,7 @@ export function PrivateImages({
       )}
       {!result.data.length ? (
         <div className="rounded-xl bg-muted/50 p-12 text-center text-sm text-muted-foreground">
-          No images attached to this case.
+          此案件暫無委外圖片。
         </div>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -209,7 +208,7 @@ export function PrivateImages({
                   {media.originalFilename}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Order {media.sortOrder} · {timestamp(media.createdAt)}
+                  排序 {media.sortOrder} · {timestamp(media.createdAt)}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {permissions.can('media.upload') &&
@@ -218,7 +217,7 @@ export function PrivateImages({
                         key={direction}
                         variant="outline"
                         size="sm"
-                        aria-label={`${direction < 0 ? 'Move up' : 'Move down'} ${media.originalFilename}`}
+                        aria-label={`${direction < 0 ? '向上移動' : '向下移動'} ${media.originalFilename}`}
                         disabled={
                           uploading ||
                           remove.isPending ||
@@ -242,14 +241,12 @@ export function PrivateImages({
                             await refresh();
                           } catch (failure: unknown) {
                             setMessage(
-                              failure instanceof Error
-                                ? failure.message
-                                : 'Unable to reorder images.',
+                              displayError(failure, '無法調整圖片排序。'),
                             );
                           }
                         }}
                       >
-                        {direction < 0 ? '↑ Up' : '↓ Down'}
+                        {direction < 0 ? '↑ 上移' : '↓ 下移'}
                       </Button>
                     ))}
                   {permissions.can('media.delete') && (
@@ -261,7 +258,7 @@ export function PrivateImages({
                       }
                       onClick={() => setDeleting(media.id)}
                     >
-                      Delete image
+                      刪除圖片
                     </Button>
                   )}
                 </div>
@@ -278,15 +275,14 @@ export function PrivateImages({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this image?</AlertDialogTitle>
+            <AlertDialogTitle>確定刪除此圖片？</AlertDialogTitle>
             <AlertDialogDescription>
-              The image will be removed from this case. This action is recorded
-              in the activity log.
+              圖片將從此案件移除，此操作會記錄於操作紀錄。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={remove.isPending}>
-              Cancel
+              取消
             </AlertDialogCancel>
             <AlertDialogAction
               disabled={remove.isPending}
@@ -303,19 +299,13 @@ export function PrivateImages({
                   await refresh();
                   setDeleting(null);
                   if (result.cleanupPending)
-                    setMessage(
-                      'Image access was removed. Storage cleanup is pending.',
-                    );
+                    setMessage('圖片已無法存取，儲存空間清理中。');
                 } catch (failure: unknown) {
-                  setMessage(
-                    failure instanceof Error
-                      ? failure.message
-                      : 'Unable to delete image.',
-                  );
+                  setMessage(displayError(failure, '無法刪除圖片。'));
                 }
               }}
             >
-              Confirm delete
+              確認刪除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

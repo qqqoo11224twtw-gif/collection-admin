@@ -62,7 +62,7 @@ test.describe('Bulk regional assignment', () => {
     await expect(page).toHaveURL(/\/login/);
     await signIn(page, 'phase8-admin@example.test');
     await expect(
-      page.getByRole('heading', { name: 'Cases', exact: true }),
+      page.getByRole('heading', { name: '案件管理', exact: true }),
     ).toBeVisible();
     const { prefix, collector, cases } = await fixtures(page, 12);
     await page.goto('/cases/regions');
@@ -71,27 +71,25 @@ test.describe('Bulk regional assignment', () => {
       .filter({
         has: page.getByRole('heading', { name: '桃園市', exact: true }),
       })
-      .getByRole('link', { name: 'Unassigned cases' })
+      .getByRole('link', { name: '未委外案件' })
       .click();
-    await expect(page.getByLabel('Region filter')).toHaveValue('桃園市');
-    await expect(page.getByLabel('Assignment filter')).toHaveValue(
-      'unassigned',
-    );
-    await page.getByLabel('Filter cases').fill(prefix);
+    await expect(page.getByLabel('地區')).toHaveValue('桃園市');
+    await expect(page.getByLabel('委外狀態')).toHaveValue('unassigned');
+    await page.getByLabel('搜尋案件').fill(prefix);
     await expect(page.locator('tbody tr')).toHaveCount(10);
-    await expect(page.getByText(/12 cases · Page 1 of 2/)).toBeVisible();
+    await expect(page.getByText(/12 筆案件 · 第 1 ／ 2/)).toBeVisible();
     const rows = page.locator('tbody tr');
     await rows.nth(0).getByRole('checkbox').check();
     await rows.nth(1).getByRole('checkbox').check();
-    await expect(
-      page.getByRole('status', { name: 'Selected cases' }),
-    ).toContainText('Selected: 2 cases');
+    await expect(page.getByRole('status', { name: '已選案件' })).toContainText(
+      '已選擇： 2 筆案件',
+    );
     await page
-      .getByRole('checkbox', { name: 'Select current page', exact: true })
+      .getByRole('checkbox', { name: '全選目前頁面', exact: true })
       .check();
-    await expect(
-      page.getByRole('status', { name: 'Selected cases' }),
-    ).toContainText('Selected: 10 cases');
+    await expect(page.getByRole('status', { name: '已選案件' })).toContainText(
+      '已選擇： 10 筆案件',
+    );
     const pageIds = await rows
       .locator('a')
       .evaluateAll((links) => [
@@ -102,25 +100,23 @@ test.describe('Bulk regional assignment', () => {
         ),
       ]);
     expect(pageIds).toHaveLength(10);
-    await page.getByRole('button', { name: 'Next page' }).click();
-    await expect(
-      page.getByRole('status', { name: 'Selected cases' }),
-    ).toContainText('Selected: 0 cases');
+    await page.getByRole('button', { name: '下一頁' }).click();
+    await expect(page.getByRole('status', { name: '已選案件' })).toContainText(
+      '已選擇： 0 筆案件',
+    );
     await expect(page.locator('tbody tr')).toHaveCount(2);
-    await page.getByRole('button', { name: 'Previous page' }).click();
+    await page.getByRole('button', { name: '上一頁' }).click();
     await expect(page.locator('tbody tr')).toHaveCount(10);
     await page
-      .getByRole('checkbox', { name: 'Select current page', exact: true })
+      .getByRole('checkbox', { name: '全選目前頁面', exact: true })
       .check();
-    await page
-      .getByRole('button', { name: 'Bulk assign', exact: true })
-      .click();
+    await page.getByRole('button', { name: '批量派單', exact: true }).click();
     const dialog = page.getByRole('dialog');
-    await expect(dialog).toContainText('Selected: 10 cases');
+    await expect(dialog).toContainText('已選擇： 10 筆案件');
     await dialog
-      .getByLabel('Collector', { exact: true })
+      .getByLabel('外收人員', { exact: true })
       .selectOption(collector.id);
-    await expect(dialog).toContainText(`Collector: Fictional bulk ${prefix}`);
+    await expect(dialog).toContainText(`外收人員： Fictional bulk ${prefix}`);
     const stolen = cases.find((c) => pageIds.includes(c.id));
     expect(stolen).toBeDefined();
     await rpc(page, 'cases.assign', {
@@ -132,9 +128,7 @@ test.describe('Bulk regional assignment', () => {
     const response = page.waitForResponse((r) =>
       r.url().endsWith('/rpc/cases/bulkAssign'),
     );
-    await dialog
-      .getByRole('button', { name: 'Confirm assignment', exact: true })
-      .click();
+    await dialog.getByRole('button', { name: '確認派單', exact: true }).click();
     const output = (
       (await (await response).json()) as {
         json: {
@@ -149,19 +143,13 @@ test.describe('Bulk regional assignment', () => {
       }
     ).json;
     await expect(
-      dialog.getByRole('heading', { name: 'Bulk assignment complete' }),
+      dialog.getByRole('heading', { name: '批量派單完成' }),
     ).toBeVisible();
+    await expect(dialog.getByText('成功： 9', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('略過： 1', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('已由其他管理員派單')).toBeVisible();
     await expect(
-      dialog.getByText('Assigned: 9', { exact: true }),
-    ).toBeVisible();
-    await expect(dialog.getByText('Skipped: 1', { exact: true })).toBeVisible();
-    await expect(
-      dialog.getByText('Already assigned by another operator'),
-    ).toBeVisible();
-    await expect(
-      dialog
-        .getByRole('list', { name: 'Per-case assignment results' })
-        .locator('li'),
+      dialog.getByRole('list', { name: '各案件派單結果' }).locator('li'),
     ).toHaveCount(10);
     const assigned = output.items.filter((item) => item.status === 'assigned');
     expect(new Set(assigned.map((i) => i.assignmentId)).size).toBe(9);
@@ -175,9 +163,9 @@ test.describe('Bulk regional assignment', () => {
     }
     await rpc(page, 'telegram.process');
     await expect(
-      dialog.getByText('Telegram sent: 9', { exact: true }),
+      dialog.getByText('Telegram 已傳送： 9', { exact: true }),
     ).toBeVisible();
-    await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+    await dialog.getByRole('button', { name: '完成', exact: true }).click();
     await expect(page.locator('tbody tr')).toHaveCount(2);
   });
   test('mobile selection, cancel without writes, confirmation and result layout', async ({
@@ -189,45 +177,37 @@ test.describe('Bulk regional assignment', () => {
     await expect(page).toHaveURL(/\/login/);
     await signIn(page, 'phase8-admin@example.test');
     await expect(
-      page.getByRole('heading', { name: 'Cases', exact: true }),
+      page.getByRole('heading', { name: '案件管理', exact: true }),
     ).toBeVisible();
     const { prefix, collector } = await fixtures(page, 3);
-    await page.getByLabel('Region filter').selectOption('桃園市');
-    await page.getByLabel('Assignment filter').selectOption('unassigned');
-    await page.getByLabel('Filter cases').fill(prefix);
+    await page.getByLabel('地區').selectOption('桃園市');
+    await page.getByLabel('委外狀態').selectOption('unassigned');
+    await page.getByLabel('搜尋案件').fill(prefix);
     await expect(page.locator('tbody tr')).toHaveCount(3);
     await page
-      .getByRole('checkbox', { name: 'Select current page', exact: true })
+      .getByRole('checkbox', { name: '全選目前頁面', exact: true })
       .check();
-    await expect(
-      page.getByRole('status', { name: 'Selected cases' }),
-    ).toContainText('Selected: 3 cases');
-    await page
-      .getByRole('button', { name: 'Bulk assign', exact: true })
-      .click();
+    await expect(page.getByRole('status', { name: '已選案件' })).toContainText(
+      '已選擇： 3 筆案件',
+    );
+    await page.getByRole('button', { name: '批量派單', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog
-      .getByLabel('Collector', { exact: true })
+      .getByLabel('外收人員', { exact: true })
       .selectOption(collector.id);
-    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await dialog.getByRole('button', { name: '取消', exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(page.locator('tbody tr')).toHaveCount(3);
-    await page
-      .getByRole('button', { name: 'Bulk assign', exact: true })
-      .click();
+    await page.getByRole('button', { name: '批量派單', exact: true }).click();
     await dialog
-      .getByLabel('Collector', { exact: true })
+      .getByLabel('外收人員', { exact: true })
       .selectOption(collector.id);
     await page.screenshot({
       path: info.outputPath('bulk-assignment-mobile-dialog.png'),
       fullPage: true,
     });
-    await dialog
-      .getByRole('button', { name: 'Confirm assignment', exact: true })
-      .click();
-    await expect(
-      dialog.getByText('Assigned: 3', { exact: true }),
-    ).toBeVisible();
+    await dialog.getByRole('button', { name: '確認派單', exact: true }).click();
+    await expect(dialog.getByText('成功： 3', { exact: true })).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -237,9 +217,9 @@ test.describe('Bulk regional assignment', () => {
       path: info.outputPath('bulk-assignment-mobile-result.png'),
       fullPage: true,
     });
-    await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+    await dialog.getByRole('button', { name: '完成', exact: true }).click();
     await expect(
-      page.getByRole('heading', { name: 'No cases found', exact: true }),
+      page.getByRole('heading', { name: '找不到案件', exact: true }),
     ).toBeVisible();
   });
   test('ordinary users have no selection controls and backend denies bulk assignment', async ({
@@ -249,13 +229,13 @@ test.describe('Bulk regional assignment', () => {
     await expect(page).toHaveURL(/\/login/);
     await signIn(page, `bulk-user-${Date.now()}@example.test`);
     await expect(
-      page.getByRole('heading', { name: 'Cases', exact: true }),
+      page.getByRole('heading', { name: '案件管理', exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Bulk assign', exact: true }),
+      page.getByRole('button', { name: '批量派單', exact: true }),
     ).toHaveCount(0);
     await expect(
-      page.getByRole('checkbox', { name: 'Select current page', exact: true }),
+      page.getByRole('checkbox', { name: '全選目前頁面', exact: true }),
     ).toHaveCount(0);
     const denied = await page.request.post(
       `${SERVER_URL}/rpc/cases/bulkAssign`,

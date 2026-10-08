@@ -41,8 +41,8 @@ export async function fillUntilEnabled(
 export async function signIn(page: Page, email = USER_EMAIL): Promise<void> {
   // Keep any ?redirect=... the gate put there — only navigate if needed.
   if (!page.url().includes('/login')) await page.goto('/login');
-  await fillUntilEnabled(page, 'you@example.com', email, /send code/i);
-  await page.getByRole('button', { name: /send code/i }).click();
+  await fillUntilEnabled(page, 'you@example.com', email, /寄送驗證碼/i);
+  await page.getByRole('button', { name: /寄送驗證碼/i }).click();
 
   // The shadcn OTP input appears once the code is "sent".
   const otpInput = page.getByTestId('otp-input');

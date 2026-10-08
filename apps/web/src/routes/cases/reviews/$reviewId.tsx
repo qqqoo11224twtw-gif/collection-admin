@@ -8,6 +8,12 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import {
+  displayError,
+  displayFieldValue,
+  displayLabel,
+  displayMessage,
+} from '~/components/cases/display-labels';
+import {
   useCasePermissions,
   useRefreshCases,
 } from '~/components/cases/management-hooks';
@@ -38,9 +44,7 @@ function ReviewDetail() {
   if (permissions.isPending) return <LoadingCases />;
   if (!permissions.can('review.view'))
     return (
-      <p className="text-sm text-muted-foreground">
-        You do not have access to reviews.
-      </p>
+      <p className="text-sm text-muted-foreground">無待確認項目查看權限。</p>
     );
   if (result.isPending) return <LoadingCases />;
   if (result.isError) return <CaseError retry={() => void result.refetch()} />;
@@ -117,21 +121,23 @@ function ReviewForm({ record }: { record: Review }) {
         search={{ page: 1, query: '', status: 'pending', type: '' }}
         className="text-sm text-muted-foreground hover:text-foreground"
       >
-        ← Review center
+        ← 待確認
       </Link>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Confirm findings
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">{record.reason}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">確認資料</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {displayMessage(record.reason)}
+          </p>
         </div>
-        <Badge variant="secondary">{record.status}</Badge>
+        <Badge variant="secondary">
+          {record.status === 'pending' ? '待確認' : displayLabel(record.status)}
+        </Badge>
       </div>
       <p className="text-sm text-muted-foreground">
-        {record.source} · Confidence:{' '}
+        {displayLabel(record.source)} · 信心值：{' '}
         {record.confidence === null
-          ? 'Not supplied'
+          ? '未提供'
           : `${Math.round(record.confidence * 100)}%`}{' '}
         · {timestamp(record.createdAt)}
       </p>
@@ -146,7 +152,7 @@ function ReviewForm({ record }: { record: Review }) {
       )}
       {/* The original proposal remains visible after the final confirmation is saved. */}
       <section className="rounded-xl bg-muted/50 p-5 space-y-3">
-        <h2 className="text-lg font-medium">Original proposal</h2>
+        <h2 className="text-lg font-medium">原始提案</h2>
         {'originalContent' in proposal && (
           <p className="whitespace-pre-wrap break-words text-sm">
             {proposal.originalContent}
@@ -157,9 +163,11 @@ function ReviewForm({ record }: { record: Review }) {
             {Object.entries(proposal.extraction).map(([key, value]) => (
               <div key={key}>
                 <dt className="text-sm text-muted-foreground">
-                  {key.replaceAll('_', ' ')}
+                  {displayLabel(key)}
                 </dt>
-                <dd className="mt-1 break-words text-sm">{String(value)}</dd>
+                <dd className="mt-1 break-words text-sm">
+                  {displayFieldValue(key, value)}
+                </dd>
               </div>
             ))}
           </dl>
@@ -168,37 +176,29 @@ function ReviewForm({ record }: { record: Review }) {
             {Object.entries(proposal.classification).map(([key, value]) => (
               <div key={key}>
                 <dt className="text-sm text-muted-foreground">
-                  {key.replaceAll('_', ' ')}
+                  {displayLabel(key)}
                 </dt>
                 <dd className="mt-1 whitespace-pre-wrap break-words text-sm">
-                  {value === null
-                    ? 'Not supplied'
-                    : typeof value === 'boolean'
-                      ? value
-                        ? 'Yes'
-                        : 'No'
-                      : String(value)}
+                  {displayFieldValue(key, value)}
                 </dd>
               </div>
             ))}
           </dl>
         ) : proposal.type === 'payment_detection' ? (
           <p className="text-sm">
-            {proposal.payment.payment_detected
-              ? 'Payment detected'
-              : 'No payment detected'}{' '}
-            · {proposal.payment.payment_amount ?? 'Amount not supplied'}
+            {proposal.payment.payment_detected ? '有收款標記' : '無收款標記'} ·{' '}
+            {proposal.payment.payment_amount ?? '未提供金額'}
           </p>
         ) : (
-          <p className="text-sm">Lookup: {proposal.query.value}</p>
+          <p className="text-sm">搜尋結果： {proposal.query.value}</p>
         )}
       </section>
       {!pending && (
         <section className="rounded-xl bg-card p-5 ring-1 ring-foreground/10 space-y-3">
-          <h2 className="text-lg font-medium">Final confirmation</h2>
+          <h2 className="text-lg font-medium">最後確認</h2>
           <p className="text-sm text-muted-foreground">
-            Resolved {record.resolvedAt ? timestamp(record.resolvedAt) : '—'} ·{' '}
-            {record.resolvedByName ?? 'Former user'}
+            已處理 {record.resolvedAt ? timestamp(record.resolvedAt) : '—'} ·{' '}
+            {record.resolvedByName ?? '已移除的使用者'}
           </p>
           {record.confirmedData ? (
             <dl className="grid gap-3 sm:grid-cols-2">
@@ -213,16 +213,16 @@ function ReviewForm({ record }: { record: Review }) {
               ).map(([key, value]) => (
                 <div key={key}>
                   <dt className="text-sm text-muted-foreground">
-                    {key.replaceAll('_', ' ')}
+                    {displayLabel(key)}
                   </dt>
                   <dd className="mt-1 break-words text-sm">
-                    {value === null ? 'Not supplied' : String(value)}
+                    {displayFieldValue(key, value)}
                   </dd>
                 </div>
               ))}
             </dl>
           ) : (
-            <p className="text-sm">Rejected. Case data was not changed.</p>
+            <p className="text-sm">已拒絕，案件資料未變更。</p>
           )}
         </section>
       )}
@@ -251,29 +251,25 @@ function ReviewForm({ record }: { record: Review }) {
               });
               await refresh();
             } catch (failure: unknown) {
-              setError(
-                failure instanceof Error
-                  ? failure.message
-                  : 'Unable to resolve review.',
-              );
+              setError(displayError(failure, '無法處理人工確認項目。'));
             }
           }}
         >
-          <h2 className="text-lg font-medium">Review and confirm</h2>
+          <h2 className="text-lg font-medium">檢查並確認</h2>
           <fieldset
             disabled={!editable || resolve.isPending}
             className="space-y-4"
           >
             {proposal.type === 'case_match' ? (
               <div className="space-y-2">
-                <Label htmlFor="review-candidate">Candidate case</Label>
+                <Label htmlFor="review-candidate">候選案件</Label>
                 <select
                   id="review-candidate"
                   name="selectedCaseId"
                   defaultValue=""
                   className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
                 >
-                  <option value="">Choose a candidate</option>
+                  <option value="">請選擇候選案件</option>
                   {record.candidates.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.customerName} · {c.code} · {c.caseNo}
@@ -286,7 +282,7 @@ function ReviewForm({ record }: { record: Review }) {
                 {Object.entries(proposal.extraction).map(([name, value]) => (
                   <div key={name} className="space-y-2">
                     <Label htmlFor={`extraction-${name}`}>
-                      {name.replaceAll('_', ' ')}
+                      {displayLabel(name)}
                     </Label>
                     <Input
                       id={`extraction-${name}`}
@@ -306,16 +302,14 @@ function ReviewForm({ record }: { record: Review }) {
                   <>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="confirm-status">Confirmed status</Label>
+                        <Label htmlFor="confirm-status">確認狀態</Label>
                         <select
                           id="confirm-status"
                           name="status"
                           defaultValue={classification.status}
                           className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
                         >
-                          <option value="needs_review">
-                            Choose a final status
-                          </option>
+                          <option value="needs_review">請選擇確認狀態</option>
                           {[
                             'cannot_find',
                             'follow_up',
@@ -324,22 +318,20 @@ function ReviewForm({ record }: { record: Review }) {
                             'unresolved',
                           ].map((s) => (
                             <option key={s} value={s}>
-                              {s.replaceAll('_', ' ')}
+                              {displayLabel(s)}
                             </option>
                           ))}
                         </select>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="confirm-revisit">
-                          Revisit recommendation
-                        </Label>
+                        <Label htmlFor="confirm-revisit">二訪建議</Label>
                         <select
                           id="confirm-revisit"
                           name="revisit_status"
                           defaultValue={classification.revisit_status ?? ''}
                           className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
                         >
-                          <option value="">Keep current recommendation</option>
+                          <option value="">保留目前二訪建議</option>
                           {Object.entries(reportRevisitLabels).map(([v, l]) => (
                             <option key={v} value={v}>
                               {l}
@@ -349,7 +341,7 @@ function ReviewForm({ record }: { record: Review }) {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="confirm-reason">Revisit reason</Label>
+                      <Label htmlFor="confirm-reason">二訪原因</Label>
                       <Textarea
                         id="confirm-reason"
                         name="revisit_reason"
@@ -365,11 +357,11 @@ function ReviewForm({ record }: { record: Review }) {
                     type="checkbox"
                     defaultChecked={payment?.payment_detected}
                   />
-                  Payment detected
+                  有收款標記
                 </Label>
                 <div className="space-y-2">
                   <Label htmlFor="confirm-payment">
-                    Reported payment amount (TWD)
+                    回報收款金額（新臺幣）
                   </Label>
                   <Input
                     id="confirm-payment"
@@ -383,8 +375,7 @@ function ReviewForm({ record }: { record: Review }) {
               </>
             )}
             <p className="text-sm text-muted-foreground">
-              Approve uses the original proposal. Choose corrected approval to
-              save edited values.
+              「核准提案」使用原始內容；如需儲存修改內容，請選「修改後核准」。
             </p>
             <div className="flex flex-wrap gap-3">
               <Button
@@ -393,7 +384,7 @@ function ReviewForm({ record }: { record: Review }) {
                 value="approved"
                 disabled={!canApprove}
               >
-                Approve proposal
+                核准提案
               </Button>
               <Button
                 type="submit"
@@ -401,7 +392,7 @@ function ReviewForm({ record }: { record: Review }) {
                 value="corrected"
                 variant="outline"
               >
-                Approve corrected values
+                修改後核准
               </Button>
               <Button
                 type="submit"
@@ -410,13 +401,13 @@ function ReviewForm({ record }: { record: Review }) {
                 variant="outline"
                 formNoValidate
               >
-                Reject
+                拒絕
               </Button>
             </div>
           </fieldset>
           {!editable && (
             <p className="text-sm text-muted-foreground">
-              You do not have permission to resolve this review.
+              無人工確認操作權限。
             </p>
           )}
           {error && (

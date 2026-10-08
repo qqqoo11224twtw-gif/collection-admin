@@ -6,7 +6,7 @@ async function login(page: Page) {
   await expect(page).toHaveURL(/\/login/);
   await signIn(page, 'phase4-admin@example.test');
   await expect(
-    page.getByRole('button', { name: 'New case', exact: true }),
+    page.getByRole('button', { name: '新增案件', exact: true }),
   ).toBeVisible();
 }
 async function rpc(page: Page, path: string, input: unknown) {
@@ -56,30 +56,24 @@ test.describe('Unified review center', () => {
     await login(page);
     const suffix = String(Date.now());
     const caseId = await pending(page, suffix);
-    await page.getByRole('link', { name: /Pending review/ }).click();
+    await page.getByRole('link', { name: /待確認/ }).click();
     await expect(
-      page.getByRole('heading', { name: 'Review center', exact: true }),
+      page.getByRole('heading', { name: '待確認', exact: true }),
     ).toBeVisible();
-    await page.getByLabel('Search reviews').fill(suffix);
-    await page.getByLabel('Review type').selectOption('report_classification');
-    await page
-      .getByRole('link', { name: 'Report classification', exact: true })
-      .click();
+    await page.getByLabel('搜尋待確認項目').fill(suffix);
+    await page.getByLabel('確認類型').selectOption('report_classification');
+    await page.getByRole('link', { name: '回報分類', exact: true }).click();
     await expect(
       page.getByText(`完全虛構的確認回報 ${suffix}`, { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Approve proposal', exact: true }),
+      page.getByRole('button', { name: '核准提案', exact: true }),
     ).toBeDisabled();
-    await page.getByLabel('Confirmed status').selectOption('installment');
-    await page.getByLabel('Revisit recommendation').selectOption('recommended');
-    await page
-      .getByRole('button', { name: 'Approve corrected values', exact: true })
-      .click();
-    await expect(
-      page.getByRole('heading', { name: 'Final confirmation' }),
-    ).toBeVisible();
-    await expect(page.getByText('corrected', { exact: true })).toBeVisible();
+    await page.getByLabel('確認狀態').selectOption('installment');
+    await page.getByLabel('二訪建議').selectOption('recommended');
+    await page.getByRole('button', { name: '修改後核准', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '最後確認' })).toBeVisible();
+    await expect(page.getByText('修改後核准', { exact: true })).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('review-confirmed.png'),
       fullPage: true,
@@ -96,17 +90,17 @@ test.describe('Unified review center', () => {
     });
     await page.goto(`/cases/${caseId}`);
     await expect(
-      page.getByRole('tabpanel').getByText('Installment', { exact: true }),
+      page.getByRole('tabpanel').getByText('分期', { exact: true }),
     ).toBeVisible();
-    await page.getByRole('tab', { name: 'Activity log', exact: true }).click();
+    await page.getByRole('tab', { name: '操作紀錄', exact: true }).click();
     await expect(
-      page.getByRole('tabpanel').getByText('Review corrected', { exact: true }),
+      page.getByRole('tabpanel').getByText('已修改後核准', { exact: true }),
     ).toBeVisible();
     await page.goto('/cases/reviews');
-    await page.getByLabel('Review status').selectOption('corrected');
-    await page.getByLabel('Search reviews').fill(suffix);
+    await page.getByLabel('確認狀態').selectOption('corrected');
+    await page.getByLabel('搜尋待確認項目').fill(suffix);
     await expect(
-      page.getByRole('link', { name: 'Report classification', exact: true }),
+      page.getByRole('link', { name: '回報分類', exact: true }),
     ).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
     expect(
@@ -132,18 +126,16 @@ test.describe('Unified review center', () => {
       confidence: 0.8,
     })) as { id: string };
     await page.goto(`/cases/reviews/${r.id}`);
-    await page
-      .getByRole('button', { name: 'Approve proposal', exact: true })
-      .click();
-    await expect(page.getByText('approved', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '核准提案', exact: true }).click();
+    await expect(page.getByText('已核准', { exact: true })).toBeVisible();
     const rejectedCase = await pending(page, `${suffix}-reject`);
     const pendingRows = (await rpc(page, 'reviews.list', {
       query: `${suffix}-reject`,
     })) as { items: { id: string }[] };
     await page.goto(`/cases/reviews/${pendingRows.items[0].id}`);
-    await page.getByRole('button', { name: 'Reject', exact: true }).click();
+    await page.getByRole('button', { name: '拒絕', exact: true }).click();
     await expect(
-      page.getByText('Rejected. Case data was not changed.', { exact: true }),
+      page.getByText('已拒絕，案件資料未變更。', { exact: true }),
     ).toBeVisible();
     expect((await rpc(page, 'cases.detail', { id: rejectedCase })).status).toBe(
       'pending',
@@ -160,10 +152,8 @@ test.describe('Unified review center', () => {
       reason: '完全虛構的圖片欄位提案',
     })) as { id: string };
     await page.goto(`/cases/reviews/${image.id}`);
-    await page.getByLabel('amount due', { exact: true }).fill('40000');
-    await page
-      .getByRole('button', { name: 'Approve corrected values', exact: true })
-      .click();
+    await page.getByLabel('應收款項', { exact: true }).fill('40000');
+    await page.getByRole('button', { name: '修改後核准', exact: true }).click();
     await expect(page.getByText('40000', { exact: true })).toBeVisible();
     await expect(page.getByText('50000', { exact: true })).toBeVisible();
     expect((await rpc(page, 'cases.detail', { id: caseId })).amountDue).toBe(
@@ -175,14 +165,12 @@ test.describe('Unified review center', () => {
     await expect(page).toHaveURL(/\/login/);
     await signIn(page, 'phase4-user@example.test');
     await expect(
-      page.getByRole('link', { name: 'API keys', exact: true }),
+      page.getByRole('link', { name: 'API 金鑰', exact: true }),
     ).toBeVisible();
-    await expect(
-      page.getByRole('link', { name: /Pending review/ }),
-    ).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /待確認/ })).toHaveCount(0);
     await page.goto('/cases/reviews');
     await expect(
-      page.getByText('You do not have access to the review center.', {
+      page.getByText('無待確認中心查看權限。', {
         exact: true,
       }),
     ).toBeVisible();

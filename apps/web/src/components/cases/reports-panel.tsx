@@ -3,7 +3,6 @@ import { Badge } from '@saasflare-dev/ui/components/badge';
 import { Button } from '@saasflare-dev/ui/components/button';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -14,28 +13,30 @@ import { Label } from '@saasflare-dev/ui/components/label';
 import { Textarea } from '@saasflare-dev/ui/components/textarea';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { displayError } from '~/components/cases/display-labels';
+import { DialogContent } from '~/components/cases/localized-dialog';
 import { orpc } from '~/lib/orpc';
 import { useCasePermissions, useRefreshCases } from './management-hooks';
 import { CaseError, LoadingCases, money, timestamp } from './presentation';
 
 type Report = Awaited<ReturnType<AppRouterClient['reports']['list']>>[number];
 const statuses = {
-  cannot_find: 'Cannot find',
-  follow_up: 'Follow-up',
-  installment: 'Installment',
-  settled: 'Settled',
-  unresolved: 'Unresolved',
-  needs_review: 'Needs review',
+  cannot_find: '找不到客戶',
+  follow_up: '安排二訪',
+  installment: '分期',
+  settled: '結清',
+  unresolved: '無解',
+  needs_review: '待確認',
 };
 export const reportRevisitLabels = {
-  recommended: 'Recommended',
-  observe: 'Observe',
-  not_recommended: 'Not recommended',
-  not_needed: 'Not needed',
+  recommended: '值得二訪',
+  observe: '可再觀察',
+  not_recommended: '不建議二訪',
+  not_needed: '不需二訪',
 };
 const sources = {
-  admin: 'Admin',
-  collector_portal: 'Collector portal',
+  admin: '管理員',
+  collector_portal: '外收人員入口',
   telegram: 'Telegram',
   api: 'API',
 };
@@ -66,15 +67,14 @@ function ReportEditor({
     >
       <DialogTrigger asChild>
         <Button variant={record ? 'outline' : 'default'}>
-          {record ? 'Edit report' : 'New report'}
+          {record ? '編輯回報' : '新增回報'}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl max-h-[90svh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{record ? 'Edit report' : 'Create report'}</DialogTitle>
+          <DialogTitle>{record ? '編輯回報' : '新增回報'}</DialogTitle>
           <DialogDescription>
-            Record your visit and findings. Payment markers do not create
-            financial entries.
+            記錄訪查結果與建議，收款標記不會建立正式財務紀錄。
           </DialogDescription>
         </DialogHeader>
         {/* Manual classification is validated by the shared backend workflow. */}
@@ -112,16 +112,12 @@ function ReportEditor({
                 await refresh();
                 setOpen(false);
               } catch (failure: unknown) {
-                setError(
-                  failure instanceof Error
-                    ? failure.message
-                    : 'Unable to save report.',
-                );
+                setError(displayError(failure, '無法儲存回報。'));
               }
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="report-content">Report content</Label>
+              <Label htmlFor="report-content">回報內容</Label>
               <Textarea
                 id="report-content"
                 name="content"
@@ -133,7 +129,7 @@ function ReportEditor({
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="report-status">Report status</Label>
+                <Label htmlFor="report-status">回報狀態</Label>
                 <select
                   id="report-status"
                   name="status"
@@ -148,14 +144,14 @@ function ReportEditor({
                 </select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="report-revisit">Revisit recommendation</Label>
+                <Label htmlFor="report-revisit">二訪建議</Label>
                 <select
                   id="report-revisit"
                   name="revisitStatus"
                   defaultValue={record?.revisitStatus ?? ''}
                   className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
                 >
-                  <option value="">Keep current recommendation</option>
+                  <option value="">保留目前二訪建議</option>
                   {Object.entries(reportRevisitLabels).map(([value, label]) => (
                     <option key={value} value={value}>
                       {label}
@@ -165,7 +161,7 @@ function ReportEditor({
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="report-reason">Revisit reason</Label>
+              <Label htmlFor="report-reason">二訪原因</Label>
               <Textarea
                 id="report-reason"
                 name="revisitReason"
@@ -179,12 +175,10 @@ function ReportEditor({
                 name="paymentDetected"
                 defaultChecked={record?.paymentDetected}
               />
-              Payment detected
+              有收款標記
             </Label>
             <div className="space-y-2">
-              <Label htmlFor="report-payment">
-                Reported payment amount (TWD)
-              </Label>
+              <Label htmlFor="report-payment">回報收款金額（新臺幣）</Label>
               <Input
                 id="report-payment"
                 name="paymentAmount"
@@ -207,10 +201,10 @@ function ReportEditor({
                 disabled={busy}
                 onClick={() => setOpen(false)}
               >
-                Cancel
+                取消
               </Button>
               <Button disabled={busy}>
-                {busy ? 'Saving…' : record ? 'Save report' : 'Create report'}
+                {busy ? '儲存中…' : record ? '儲存回報' : '新增回報'}
               </Button>
             </div>
           </form>
@@ -236,9 +230,7 @@ export function ReportsPanel({
   if (permissions.isPending) return <LoadingCases />;
   if (!permissions.can('report.view'))
     return (
-      <p className="text-sm text-muted-foreground">
-        You do not have access to reports.
-      </p>
+      <p className="text-sm text-muted-foreground">無回報紀錄查看權限。</p>
     );
   if (result.isPending) return <LoadingCases />;
   if (result.isError) return <CaseError retry={() => void result.refetch()} />;
@@ -246,7 +238,7 @@ export function ReportsPanel({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">
-          Visit findings and recommendations, newest first.
+          訪查結果與建議，依最新回報排序。
         </p>
         {permissions.can('report.create') && (
           <ReportEditor caseId={caseId} version={version} />
@@ -254,7 +246,7 @@ export function ReportsPanel({
       </div>
       {!result.data.length && (
         <p className="rounded-xl bg-muted/50 p-8 text-sm text-muted-foreground">
-          No reports yet.
+          暫無回報紀錄。
         </p>
       )}
       {/* Each report preserves its own visit recommendation and payment observation. */}
@@ -274,7 +266,7 @@ export function ReportsPanel({
               <div className="flex items-center gap-3">
                 <Badge variant="secondary">
                   {record.workflowStatus === 'awaiting_status'
-                    ? 'Awaiting collector selection'
+                    ? '等待外收人員確認'
                     : statuses[record.status]}
                 </Badge>
                 {permissions.can('report.edit') &&
@@ -292,20 +284,18 @@ export function ReportsPanel({
             </p>
             {record.selectedStatus && (
               <p className="mt-4 text-sm text-muted-foreground">
-                Collector selected: {statuses[record.selectedStatus]} ·
-                Completed by {record.completedBy ?? record.author}
+                外收人員已選擇： {statuses[record.selectedStatus]} · 確認人{' '}
+                {record.completedBy ?? record.author}
                 {record.completedAt && ` · ${timestamp(record.completedAt)}`}
               </p>
             )}
             <dl className="mt-5 grid gap-4 sm:grid-cols-2">
               <div>
-                <dt className="text-sm text-muted-foreground">
-                  Revisit recommendation
-                </dt>
+                <dt className="text-sm text-muted-foreground">二訪建議</dt>
                 <dd className="mt-1 text-sm font-medium">
                   {record.revisitStatus
                     ? reportRevisitLabels[record.revisitStatus]
-                    : 'No recommendation recorded'}
+                    : '未提供二訪建議'}
                 </dd>
                 {record.revisitReason && (
                   <p className="mt-2 whitespace-pre-wrap break-words text-sm">
@@ -314,13 +304,9 @@ export function ReportsPanel({
                 )}
               </div>
               <div>
-                <dt className="text-sm text-muted-foreground">
-                  Payment observation
-                </dt>
+                <dt className="text-sm text-muted-foreground">收款標記</dt>
                 <dd className="mt-1 text-sm">
-                  {record.paymentDetected
-                    ? 'Payment detected'
-                    : 'No payment detected'}
+                  {record.paymentDetected ? '有收款標記' : '無收款標記'}
                   {record.paymentAmount !== null &&
                     ` · ${money(record.paymentAmount)}`}
                 </dd>
@@ -328,7 +314,7 @@ export function ReportsPanel({
             </dl>
             {record.version > 0 && (
               <p className="mt-4 text-sm text-muted-foreground">
-                Edited {timestamp(record.updatedAt)}
+                已編輯 {timestamp(record.updatedAt)}
               </p>
             )}
           </li>

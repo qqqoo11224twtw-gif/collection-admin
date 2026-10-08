@@ -2,7 +2,6 @@ import { REGIONS } from '@saasflare-dev/api/regions';
 import { Button } from '@saasflare-dev/ui/components/button';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -13,6 +12,8 @@ import { Label } from '@saasflare-dev/ui/components/label';
 import { Textarea } from '@saasflare-dev/ui/components/textarea';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
+import { displayError, displayLabel } from '~/components/cases/display-labels';
+import { DialogContent } from '~/components/cases/localized-dialog';
 import { orpc } from '~/lib/orpc';
 import { useRefreshCases } from './management-hooks';
 import { ManualCaseEditor } from './manual-case-editor';
@@ -41,16 +42,16 @@ function CaseEditorForm({ record }: { record: CaseRecord }) {
     >
       <DialogTrigger asChild>
         <Button variant={record ? 'outline' : 'default'}>
-          {record ? 'Edit case' : 'New case'}
+          {record ? '編輯案件' : '新增案件'}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl max-h-[90svh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{record ? 'Edit case' : 'Create case'}</DialogTitle>
+          <DialogTitle>{record ? '編輯案件' : '新增案件'}</DialogTitle>
           <DialogDescription>
             {record
-              ? 'Case number and original creation details stay fixed.'
-              : 'A unique case number will be generated when you save.'}
+              ? '案件編號與原始建立資訊無法修改。'
+              : '儲存時由系統產生案件編號。'}
           </DialogDescription>
         </DialogHeader>
         {/* The server validates every field; immutable identity fields are never submitted. */}
@@ -83,11 +84,7 @@ function CaseEditorForm({ record }: { record: CaseRecord }) {
                 await refresh();
                 setOpen(false);
               } catch (failure: unknown) {
-                setError(
-                  failure instanceof Error
-                    ? failure.message
-                    : 'Unable to save this case.',
-                );
+                setError(displayError(failure, '無法儲存案件，請重試。'));
               }
             }}
           >
@@ -95,11 +92,11 @@ function CaseEditorForm({ record }: { record: CaseRecord }) {
               {[
                 {
                   name: 'customerName',
-                  label: 'Customer name',
+                  label: '客戶姓名',
                   max: 120,
                   value: record?.customerName,
                 },
-                { name: 'code', label: 'Code', max: 60, value: record?.code },
+                { name: 'code', label: '代號', max: 60, value: record?.code },
               ].map((field) => (
                 <div key={field.name} className="space-y-2">
                   <Label htmlFor={`case-${field.name}`}>{field.label}</Label>
@@ -114,14 +111,14 @@ function CaseEditorForm({ record }: { record: CaseRecord }) {
               ))}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="case-region">Region</Label>
+              <Label htmlFor="case-region">地區</Label>
               <select
                 id="case-region"
                 name="region"
                 defaultValue={record?.region ?? ''}
                 className={selectClass}
               >
-                <option value="">Not recorded</option>
+                <option value="">未填寫</option>
                 {REGIONS.map((region) => (
                   <option key={region} value={region}>
                     {region}
@@ -130,7 +127,7 @@ function CaseEditorForm({ record }: { record: CaseRecord }) {
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="case-address">Address</Label>
+              <Label htmlFor="case-address">地址</Label>
               <Input
                 id="case-address"
                 name="address"
@@ -141,7 +138,7 @@ function CaseEditorForm({ record }: { record: CaseRecord }) {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="case-amount">Amount due (TWD)</Label>
+                <Label htmlFor="case-amount">應收款項（新臺幣）</Label>
                 <Input
                   id="case-amount"
                   name="amountDue"
@@ -154,7 +151,7 @@ function CaseEditorForm({ record }: { record: CaseRecord }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="case-status">Status</Label>
+                <Label htmlFor="case-status">案件狀態</Label>
                 <select
                   id="case-status"
                   name="status"
@@ -170,7 +167,7 @@ function CaseEditorForm({ record }: { record: CaseRecord }) {
                     'unresolved',
                   ].map((value) => (
                     <option key={value} value={value}>
-                      {value.replaceAll('_', ' ')}
+                      {displayLabel(value)}
                     </option>
                   ))}
                 </select>
@@ -178,7 +175,7 @@ function CaseEditorForm({ record }: { record: CaseRecord }) {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="case-revisit">Revisit status</Label>
+                <Label htmlFor="case-revisit">二訪狀態</Label>
                 <select
                   id="case-revisit"
                   name="revisitStatus"
@@ -194,14 +191,14 @@ function CaseEditorForm({ record }: { record: CaseRecord }) {
                     'not_needed',
                   ].map((value) => (
                     <option key={value} value={value}>
-                      {value.replaceAll('_', ' ')}
+                      {displayLabel(value)}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="case-reason">Revisit reason</Label>
+              <Label htmlFor="case-reason">二訪原因</Label>
               <Textarea
                 id="case-reason"
                 name="revisitReason"
@@ -221,10 +218,10 @@ function CaseEditorForm({ record }: { record: CaseRecord }) {
                 disabled={busy}
                 onClick={() => setOpen(false)}
               >
-                Cancel
+                取消
               </Button>
               <Button type="submit" disabled={busy}>
-                {busy ? 'Saving…' : record ? 'Save changes' : 'Create case'}
+                {busy ? '儲存中…' : record ? '儲存變更' : '新增案件'}
               </Button>
             </div>
           </form>

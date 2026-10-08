@@ -2,7 +2,6 @@ import { Badge } from '@saasflare-dev/ui/components/badge';
 import { Button } from '@saasflare-dev/ui/components/button';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -13,6 +12,8 @@ import { Label } from '@saasflare-dev/ui/components/label';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
+import { displayError, displayLabel } from '~/components/cases/display-labels';
+import { DialogContent } from '~/components/cases/localized-dialog';
 import {
   useCasePermissions,
   useRefreshCases,
@@ -55,13 +56,13 @@ function NewIntake() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>New intake</Button>
+        <Button>新增收件</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Receive draft</DialogTitle>
+          <DialogTitle>建立收件草稿</DialogTitle>
           <DialogDescription>
-            This saves a draft. No case will be created until confirmation.
+            此操作只儲存草稿，確認後才會建立案件。
           </DialogDescription>
         </DialogHeader>
         <form
@@ -90,17 +91,15 @@ function NewIntake() {
               await refresh();
               setOpen(false);
             } catch (f: unknown) {
-              setError(
-                f instanceof Error ? f.message : 'Unable to receive draft.',
-              );
+              setError(displayError(f, '無法建立收件草稿。'));
             }
           }}
         >
           {[
-            ['customer_name', 'Customer name'],
-            ['code', 'Code'],
-            ['address', 'Address'],
-            ['amount_due', 'Amount due (TWD)'],
+            ['customer_name', '客戶姓名'],
+            ['code', '代號'],
+            ['address', '地址'],
+            ['amount_due', '應收款項（新臺幣）'],
           ].map(([name, label]) => (
             <div key={name} className="space-y-2">
               <Label htmlFor={`draft-${name}`}>{label}</Label>
@@ -118,7 +117,7 @@ function NewIntake() {
               {error}
             </p>
           )}
-          <Button disabled={receive.isPending}>Save draft</Button>
+          <Button disabled={receive.isPending}>儲存草稿</Button>
         </form>
       </DialogContent>
     </Dialog>
@@ -148,20 +147,16 @@ function IntakeList() {
   });
   if (permissions.isPending) return <LoadingCases />;
   if (!permissions.can('intake.view'))
-    return (
-      <p className="text-sm text-muted-foreground">
-        You do not have access to intakes.
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground">無收件查看權限。</p>;
   const update = (values: Partial<typeof search>) =>
     void nav({ search: { ...search, ...values, page: 1 } });
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Intake inbox</h1>
+          <h1 className="text-2xl font-semibold">收件管理</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Incoming drafts stay separate from confirmed case records.
+            收件草稿與正式案件分開保存。
           </p>
         </div>
         {permissions.can('intake.create') && <NewIntake />}
@@ -169,7 +164,7 @@ function IntakeList() {
       {/* Lightweight intake filters, without financial summaries. */}
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
-          <Label htmlFor="intake-search">Search intakes</Label>
+          <Label htmlFor="intake-search">搜尋收件</Label>
           <Input
             id="intake-search"
             value={search.query}
@@ -177,33 +172,33 @@ function IntakeList() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="intake-status">Intake status</Label>
+          <Label htmlFor="intake-status">收件狀態</Label>
           <select
             id="intake-status"
             value={search.status}
             onChange={(e) => update({ status: e.target.value })}
             className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
           >
-            <option value="">All statuses</option>
+            <option value="">全部狀態</option>
             {statuses.map((s) => (
               <option key={s} value={s}>
-                {s.replaceAll('_', ' ')}
+                {displayLabel(s)}
               </option>
             ))}
           </select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="intake-source">Intake source</Label>
+          <Label htmlFor="intake-source">收件來源</Label>
           <select
             id="intake-source"
             value={search.source}
             onChange={(e) => update({ source: e.target.value })}
             className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
           >
-            <option value="">All sources</option>
+            <option value="">全部來源</option>
             {sources.map((s) => (
               <option key={s} value={s}>
-                {s.replaceAll('_', ' ')}
+                {displayLabel(s)}
               </option>
             ))}
           </select>
@@ -217,7 +212,7 @@ function IntakeList() {
         <>
           {!result.data.items.length ? (
             <p className="rounded-xl bg-muted/50 p-8 text-sm text-muted-foreground">
-              No intakes match these filters.
+              沒有符合條件的收件。
             </p>
           ) : (
             <ul className="space-y-4">
@@ -232,27 +227,26 @@ function IntakeList() {
                       params={{ intakeId: row.id }}
                       className="text-base font-medium hover:underline"
                     >
-                      {row.customerName ?? 'Incomplete draft'}
+                      {row.customerName ?? '草稿資料不完整'}
                     </Link>
                     <Badge variant="secondary">
-                      {row.status.replaceAll('_', ' ')}
+                      {displayLabel(row.status)}
                     </Badge>
                   </div>
                   <p className="mt-3 text-sm">
-                    {row.code ?? 'Code not supplied'} ·{' '}
-                    {row.source.replaceAll('_', ' ')} ·{' '}
+                    {row.code ?? '未提供代號'} · {displayLabel(row.source)} ·{' '}
                     {timestamp(row.createdAt)}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                    <span>{row.mediaCount} images</span>
-                    {row.reviewItemId && <span>Human review required</span>}
+                    <span>{row.mediaCount} 張圖片</span>
+                    {row.reviewItemId && <span>需要人工確認</span>}
                     {row.matchedCaseId && (
                       <Link
                         to="/cases/$caseId"
                         params={{ caseId: row.matchedCaseId }}
                         className="hover:underline"
                       >
-                        Matched case
+                        配對案件
                       </Link>
                     )}
                   </div>
@@ -262,7 +256,7 @@ function IntakeList() {
           )}
           <div className="flex flex-wrap justify-between gap-3">
             <p className="text-sm text-muted-foreground">
-              {result.data.total} intakes · Page {search.page}
+              {result.data.total} 筆收件 · 第 {search.page}
             </p>
             <div className="flex gap-2">
               <Button
@@ -272,7 +266,7 @@ function IntakeList() {
                   void nav({ search: { ...search, page: search.page - 1 } })
                 }
               >
-                Previous
+                上一頁
               </Button>
               <Button
                 variant="outline"
@@ -281,7 +275,7 @@ function IntakeList() {
                   void nav({ search: { ...search, page: search.page + 1 } })
                 }
               >
-                Next
+                下一頁
               </Button>
             </div>
           </div>

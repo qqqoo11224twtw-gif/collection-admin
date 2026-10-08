@@ -7,7 +7,7 @@ async function login(page: Page, email = 'phase5-admin@example.test') {
   await expect(page).toHaveURL(/\/login/);
   await signIn(page, email);
   await expect(
-    page.getByRole('link', { name: 'Intake inbox', exact: true }),
+    page.getByRole('link', { name: '收件管理', exact: true }),
   ).toBeVisible();
 }
 async function rpc(page: Page, path: string, input: unknown) {
@@ -40,25 +40,23 @@ test.describe('Unified intake inbox', () => {
     page,
   }, testInfo) => {
     await login(page);
-    await page.getByRole('link', { name: 'Intake inbox', exact: true }).click();
-    await page.getByRole('button', { name: 'New intake', exact: true }).click();
+    await page.getByRole('link', { name: '收件管理', exact: true }).click();
+    await page.getByRole('button', { name: '新增收件', exact: true }).click();
     const dialog = page.getByRole('dialog');
     const suffix = String(Date.now());
-    await dialog.getByLabel('Customer name').fill(`虛構接收測試 ${suffix}`);
-    await dialog.getByLabel('Code', { exact: true }).fill(`INBOX-${suffix}`);
+    await dialog.getByLabel('客戶姓名').fill(`虛構接收測試 ${suffix}`);
+    await dialog.getByLabel('代號', { exact: true }).fill(`INBOX-${suffix}`);
     await dialog
-      .getByLabel('Address', { exact: true })
+      .getByLabel('地址', { exact: true })
       .fill('虛構市接收路（非真實地址）');
-    await dialog.getByLabel('Amount due (TWD)').fill('50000');
-    await dialog.getByRole('button', { name: 'Save draft' }).click();
+    await dialog.getByLabel('應收款項（新臺幣）').fill('50000');
+    await dialog.getByRole('button', { name: '儲存草稿' }).click();
     await expect(dialog).toBeHidden();
-    await page.getByLabel('Search intakes').fill(suffix);
+    await page.getByLabel('搜尋收件').fill(suffix);
     await page
       .getByRole('link', { name: `虛構接收測試 ${suffix}`, exact: true })
       .click();
-    await expect(
-      page.getByText('Not confirmed yet.', { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText('尚未確認。', { exact: true })).toBeVisible();
     const intakeId = page.url().split('/').at(-1) ?? '';
     const file = {
       name: 'fictional-intake.png',
@@ -66,28 +64,24 @@ test.describe('Unified intake inbox', () => {
       buffer: Buffer.from(DEMO_IMAGES[0].base64, 'base64'),
     };
     await page
-      .getByLabel('PNG, JPEG or WebP · up to 5 images, 5 MiB each')
+      .getByLabel('支援 PNG、JPEG 或 WebP · 最多 5 張 · 每張上限 5 MiB')
       .setInputFiles([file, { ...file, name: 'fictional-repeat.png' }]);
-    await page.getByRole('button', { name: 'Upload images' }).click();
+    await page.getByRole('button', { name: '上傳圖片' }).click();
     await expect(
       page.getByText('fictional-intake.png', { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText('Duplicate hash', { exact: true }).first(),
+      page.getByText('重複圖片雜湊值', { exact: true }).first(),
     ).toBeVisible();
     await expect(
       page.getByRole('img', { name: 'fictional-intake.png', exact: true }),
     ).toHaveAttribute('src', /^blob:/);
-    await page
-      .getByRole('button', { name: 'Create new case', exact: true })
-      .click();
-    await expect(page.getByText('created', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '建立新案件', exact: true }).click();
+    await expect(page.getByText('已建案', { exact: true })).toBeVisible();
+    await expect(page.getByText('已轉入案件', { exact: true })).toHaveCount(2);
+    await expect(page.getByText('已建立案件', { exact: true })).toBeVisible();
     await expect(
-      page.getByText('Promoted to case', { exact: true }),
-    ).toHaveCount(2);
-    await expect(page.getByText('Case created', { exact: true })).toBeVisible();
-    await expect(
-      page.getByText('Images promoted', { exact: true }),
+      page.getByText('已轉入案件圖片', { exact: true }),
     ).toBeVisible();
     const detail = (await rpc(page, 'intake.detail', { id: intakeId })) as {
       matchedCaseId: string;
@@ -106,16 +100,14 @@ test.describe('Unified intake inbox', () => {
       fullPage: true,
     });
     await page.goto(`/cases/${detail.matchedCaseId}`);
-    await page
-      .getByRole('tab', { name: 'Outsourcing images', exact: true })
-      .click();
+    await page.getByRole('tab', { name: '委外圖片', exact: true }).click();
     await expect(
       page.getByText('fictional-intake.png', { exact: true }),
     ).toBeVisible();
     await page.goto('/cases/intake');
-    await page.getByLabel('Search intakes').fill(suffix);
-    await page.getByLabel('Intake status').selectOption('created');
-    await page.getByLabel('Intake source').selectOption('manual');
+    await page.getByLabel('搜尋收件').fill(suffix);
+    await page.getByLabel('收件狀態').selectOption('created');
+    await page.getByLabel('收件來源').selectOption('manual');
     await expect(
       page.getByRole('link', { name: `虛構接收測試 ${suffix}`, exact: true }),
     ).toBeVisible();
@@ -156,20 +148,16 @@ test.describe('Unified intake inbox', () => {
       externalId: `local-${suffix}`,
     })) as { id: string };
     await page.goto(`/cases/intake/${item.id}`);
-    await expect(page.getByText(/^ambiguous · code/)).toBeVisible();
+    await expect(page.getByText(/^多筆候選，需確認 · 代號/)).toBeVisible();
+    await page.getByRole('button', { name: '分析草稿', exact: true }).click();
     await page
-      .getByRole('button', { name: 'Analyze draft', exact: true })
+      .getByRole('link', { name: '人工確認 · 待確認', exact: true })
       .click();
-    await page
-      .getByRole('link', { name: 'Human review · pending', exact: true })
-      .click();
-    await page.getByLabel('Candidate case').selectOption(b.id);
-    await page
-      .getByRole('button', { name: 'Approve proposal', exact: true })
-      .click();
-    await expect(page.getByText('approved', { exact: true })).toBeVisible();
+    await page.getByLabel('候選案件').selectOption(b.id);
+    await page.getByRole('button', { name: '核准提案', exact: true }).click();
+    await expect(page.getByText('已核准', { exact: true })).toBeVisible();
     await page.goto(`/cases/intake/${item.id}`);
-    await expect(page.getByText('matched', { exact: true })).toBeVisible();
+    await expect(page.getByText('已配對', { exact: true })).toBeVisible();
     expect((await rpc(page, 'cases.detail', { id: b.id })).amountDue).toBe(100);
     expect(
       (await rpc(page, 'intake.detail', { id: item.id })).matchedCaseId,
@@ -189,10 +177,10 @@ test.describe('Unified intake inbox', () => {
     })) as { id: string };
     await page.goto(`/cases/intake/${item.id}`);
     await expect(
-      page.getByRole('button', { name: 'Analyze draft', exact: true }),
+      page.getByRole('button', { name: '分析草稿', exact: true }),
     ).toHaveCount(0);
     await expect(
-      page.getByRole('button', { name: 'Reject intake', exact: true }),
+      page.getByRole('button', { name: '拒絕收件', exact: true }),
     ).toHaveCount(0);
     const denied = await page.request.post(`${SERVER_URL}/rpc/intake/resolve`, {
       data: { json: { id: item.id, expectedVersion: 0, action: 'create' } },
@@ -231,28 +219,24 @@ test.describe('Unified intake inbox', () => {
       },
     })) as { id: string };
     await page.goto(`/cases/intake/${item.id}`);
+    await page.getByRole('button', { name: '分析草稿', exact: true }).click();
     await page
-      .getByRole('button', { name: 'Analyze draft', exact: true })
-      .click();
-    await page
-      .getByRole('link', { name: 'Human review · pending', exact: true })
+      .getByRole('link', { name: '人工確認 · 待確認', exact: true })
       .click();
     await expect(
-      page.getByRole('button', { name: 'Approve proposal', exact: true }),
+      page.getByRole('button', { name: '核准提案', exact: true }),
     ).toBeDisabled();
     const suffix = String(Date.now());
-    await page.getByLabel('code', { exact: true }).fill(`CONFIRMED-${suffix}`);
+    await page.getByLabel('代號', { exact: true }).fill(`CONFIRMED-${suffix}`);
     await page
-      .getByLabel('customer name', { exact: true })
+      .getByLabel('客戶姓名', { exact: true })
       .fill(`虛構補完整戶 ${suffix}`);
     await page
-      .getByLabel('address', { exact: true })
+      .getByLabel('地址', { exact: true })
       .fill('虛構市補完整路（非真實地址）');
-    await page.getByLabel('amount due', { exact: true }).fill('4200');
-    await page
-      .getByRole('button', { name: 'Approve corrected values', exact: true })
-      .click();
-    await expect(page.getByText('corrected', { exact: true })).toBeVisible();
+    await page.getByLabel('應收款項', { exact: true }).fill('4200');
+    await page.getByRole('button', { name: '修改後核准', exact: true }).click();
+    await expect(page.getByText('修改後核准', { exact: true })).toBeVisible();
     expect((await rpc(page, 'intake.detail', { id: item.id })).status).toBe(
       'created',
     );

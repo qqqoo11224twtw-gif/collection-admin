@@ -41,7 +41,7 @@ function SearchBar({ userId }: { userId: string }) {
           search={{ query: '', page: 1 }}
           className="text-sm font-semibold shrink-0"
         >
-          Case workspace
+          案件管理
         </Link>
         {/* Search is global across accessible cases, regardless of the current page. */}
         <search
@@ -56,8 +56,8 @@ function SearchBar({ userId }: { userId: string }) {
             className="absolute left-3 top-2.5 size-4 text-muted-foreground"
           />
           <Input
-            aria-label="Global case search"
-            placeholder="Search customer, code, case no. or address"
+            aria-label="全域案件搜尋"
+            placeholder="搜尋客戶、代號、案件編號或地址"
             maxLength={120}
             className="pl-9 pr-9"
             value={value}
@@ -73,7 +73,7 @@ function SearchBar({ userId }: { userId: string }) {
           {value && (
             <button
               type="button"
-              aria-label="Clear search"
+              aria-label="清除搜尋"
               className="absolute right-3 top-2.5 text-muted-foreground"
               onClick={() => {
                 setValue('');
@@ -86,21 +86,21 @@ function SearchBar({ userId }: { userId: string }) {
           )}
           {open && value.trim() && (
             <section
-              aria-label="Search results"
+              aria-label="搜尋結果"
               className="absolute top-full z-50 mt-2 w-full rounded-xl bg-popover p-2 shadow-lg ring-1 ring-foreground/10"
             >
               <p className="px-3 py-2 text-sm text-muted-foreground">
-                Name, code & case no.: prefix · Address: contains
+                姓名、代號與案件編號：前綴搜尋 · 地址：包含搜尋
               </p>
               {query !== value.trim() || results.isPending ? (
-                <output className="block p-3 text-sm">Searching…</output>
+                <output className="block p-3 text-sm">搜尋中…</output>
               ) : results.isError ? (
                 <p role="alert" className="p-3 text-sm text-destructive">
-                  Search unavailable. Try again.
+                  搜尋失敗，請重試。
                 </p>
               ) : results.data?.items.length === 0 ? (
                 <p className="p-3 text-sm text-muted-foreground">
-                  No matching cases.
+                  找不到符合條件的案件。
                 </p>
               ) : (
                 results.data?.items.map((record) => (
@@ -128,7 +128,7 @@ function SearchBar({ userId }: { userId: string }) {
                   className="block rounded-lg p-3 text-sm font-medium hover:bg-muted"
                   onClick={() => setOpen(false)}
                 >
-                  View all {results.data.total} results
+                  查看全部 {results.data.total} 筆結果
                 </Link>
               )}
             </section>

@@ -40,7 +40,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (isPending || !session) {
     return (
       <main className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
-        Checking session…
+        確認登入狀態中…
       </main>
     );
   }

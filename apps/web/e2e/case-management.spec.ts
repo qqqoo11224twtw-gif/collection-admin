@@ -8,24 +8,22 @@ async function login(page: import('@playwright/test').Page) {
   await expect(page).toHaveURL(/\/login/);
   await signIn(page, adminEmail);
   await expect(
-    page.getByRole('button', { name: 'New case', exact: true }),
+    page.getByRole('button', { name: '新增案件', exact: true }),
   ).toBeVisible();
 }
 async function newCase(page: import('@playwright/test').Page, code: string) {
-  await page.getByRole('button', { name: 'New case', exact: true }).click();
+  await page.getByRole('button', { name: '新增案件', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Region', { exact: true }).selectOption('台北市');
-  await dialog.getByLabel('Customer name').fill('虛構二階段測試戶');
-  await dialog.getByLabel('Code', { exact: true }).fill(code);
+  await dialog.getByLabel('地區', { exact: true }).selectOption('台北市');
+  await dialog.getByLabel('客戶姓名').fill('虛構二階段測試戶');
+  await dialog.getByLabel('代號', { exact: true }).fill(code);
   await dialog
-    .getByLabel('Address', { exact: true })
+    .getByLabel('地址', { exact: true })
     .fill('虛構市二階段測試路（非真實地址）');
-  await dialog.getByLabel('Amount due (TWD)').fill('3200');
-  await dialog
-    .getByRole('button', { name: 'Create case', exact: true })
-    .click();
+  await dialog.getByLabel('應收款項（新臺幣）').fill('3200');
+  await dialog.getByRole('button', { name: '新增案件', exact: true }).click();
   await expect(page).toHaveURL(/\/cases\/[a-f0-9-]+$/);
-  await expect(page.getByRole('button', { name: 'Edit case' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '編輯案件' })).toBeVisible();
 }
 test.describe('Local phase-two management', () => {
   test.skip(isRemote, 'Management workflows use local fictional data only');
@@ -40,24 +38,24 @@ test.describe('Local phase-two management', () => {
       .getByText(/^CASE-\d{8}-/)
       .first()
       .textContent();
-    await page.getByRole('button', { name: 'Edit case' }).click();
+    await page.getByRole('button', { name: '編輯案件' }).click();
     const editor = page.getByRole('dialog');
-    await editor.getByLabel('Customer name').fill('虛構更新測試戶');
-    await editor.getByLabel('Amount due (TWD)').fill('4500');
-    await editor.getByRole('button', { name: 'Save changes' }).click();
+    await editor.getByLabel('客戶姓名').fill('虛構更新測試戶');
+    await editor.getByLabel('應收款項（新臺幣）').fill('4500');
+    await editor.getByRole('button', { name: '儲存變更' }).click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
       '虛構更新測試戶',
     );
     await expect(
       page.getByText(caseNo ?? '', { exact: true }).first(),
     ).toBeVisible();
-    await page.getByRole('link', { name: 'Collectors', exact: true }).click();
+    await page.getByRole('link', { name: '外收人員', exact: true }).click();
     for (const code of [`FIELD-A-${suffix}`, `FIELD-B-${suffix}`]) {
-      await page.getByRole('button', { name: 'New collector' }).click();
+      await page.getByRole('button', { name: '新增外收人員' }).click();
       const dialog = page.getByRole('dialog');
-      await dialog.getByLabel('Display name').fill(code);
-      await dialog.getByLabel('Collector code').fill(code);
-      await dialog.getByRole('button', { name: 'Save collector' }).click();
+      await dialog.getByLabel('顯示名稱').fill(code);
+      await dialog.getByLabel('外收人員代號').fill(code);
+      await dialog.getByRole('button', { name: '儲存外收人員' }).click();
       await expect(
         page.getByRole('heading', { name: code, exact: true }),
       ).toBeVisible();
@@ -68,14 +66,14 @@ test.describe('Local phase-two management', () => {
         exact: true,
       }),
     });
-    await collector.getByRole('button', { name: 'Edit collector' }).click();
+    await collector.getByRole('button', { name: '編輯外收人員' }).click();
     await page
       .getByRole('dialog')
-      .getByLabel('Display name')
+      .getByLabel('顯示名稱')
       .fill(`Edited-A-${suffix}`);
     await page
       .getByRole('dialog')
-      .getByRole('button', { name: 'Save collector' })
+      .getByRole('button', { name: '儲存外收人員' })
       .click();
     const edited = page.locator('article').filter({
       has: page.getByRole('heading', {
@@ -83,69 +81,59 @@ test.describe('Local phase-two management', () => {
         exact: true,
       }),
     });
-    await edited
-      .getByRole('button', { name: 'Deactivate', exact: true })
-      .click();
-    await expect(edited.getByText('Inactive', { exact: true })).toBeVisible();
-    await edited.getByRole('button', { name: 'Activate', exact: true }).click();
-    await expect(edited.getByText('Active', { exact: true })).toBeVisible();
+    await edited.getByRole('button', { name: '停用', exact: true }).click();
+    await expect(edited.getByText('已停用', { exact: true })).toBeVisible();
+    await edited.getByRole('button', { name: '啟用', exact: true }).click();
+    await expect(edited.getByText('啟用中', { exact: true })).toBeVisible();
     await page.goto(caseUrl);
-    await page
-      .getByRole('tab', { name: 'Assignment history', exact: true })
-      .click();
-    await page
-      .getByRole('button', { name: 'Assign case', exact: true })
-      .click();
+    await page.getByRole('tab', { name: '派單紀錄', exact: true }).click();
+    await page.getByRole('button', { name: '指派案件', exact: true }).click();
     await page
       .getByRole('dialog')
-      .getByLabel('Collector', { exact: true })
+      .getByLabel('外收人員', { exact: true })
       .selectOption({ label: `Edited-A-${suffix} · FIELD-A-${suffix}` });
     await page
       .getByRole('dialog')
-      .getByLabel('Note')
+      .getByLabel('備註')
       .fill('Fictional first assignment');
     await page
       .getByRole('dialog')
-      .getByRole('button', { name: 'Save assignment' })
+      .getByRole('button', { name: '儲存派單' })
       .click();
     await expect(
-      page.getByRole('tabpanel').getByText('Current', { exact: true }),
+      page.getByRole('tabpanel').getByText('目前有效', { exact: true }),
     ).toBeVisible();
-    await page
-      .getByRole('button', { name: 'Change assignment', exact: true })
-      .click();
+    await page.getByRole('button', { name: '改派案件', exact: true }).click();
     await page
       .getByRole('dialog')
-      .getByLabel('Collector', { exact: true })
+      .getByLabel('外收人員', { exact: true })
       .selectOption({ label: `FIELD-B-${suffix} · FIELD-B-${suffix}` });
     await page
       .getByRole('dialog')
-      .getByRole('button', { name: 'Save assignment' })
+      .getByRole('button', { name: '儲存派單' })
       .click();
     await expect(
-      page.getByRole('tabpanel').getByText('Ended', { exact: true }),
+      page.getByRole('tabpanel').getByText('已解除', { exact: true }),
     ).toHaveCount(1);
-    await page
-      .getByRole('button', { name: 'Change assignment', exact: true })
-      .click();
+    await page.getByRole('button', { name: '改派案件', exact: true }).click();
     await page
       .getByRole('dialog')
-      .getByLabel('Collector', { exact: true })
+      .getByLabel('外收人員', { exact: true })
       .selectOption('');
     await page
       .getByRole('dialog')
-      .getByRole('button', { name: 'Save assignment' })
+      .getByRole('button', { name: '儲存派單' })
       .click();
     await expect(
-      page.getByRole('tabpanel').getByText('Ended', { exact: true }),
+      page.getByRole('tabpanel').getByText('已解除', { exact: true }),
     ).toHaveCount(2);
-    await page.getByRole('tab', { name: 'Activity log', exact: true }).click();
+    await page.getByRole('tab', { name: '操作紀錄', exact: true }).click();
     for (const action of [
-      'Case created',
-      'Case edited',
-      'Case assigned',
-      'Case reassigned',
-      'Assignment removed',
+      '已建立案件',
+      '已編輯案件',
+      '已指派案件',
+      '已改派案件',
+      '已解除指派',
     ])
       await expect(
         page.getByRole('tabpanel').getByText(action, { exact: true }),
@@ -161,29 +149,25 @@ test.describe('Local phase-two management', () => {
     await login(page);
     await newCase(page, `PHASE2-MEDIA-${Date.now()}`);
     const caseId = page.url().split('/').at(-1);
-    await page.getByRole('tab', { name: 'Outsourcing images' }).click();
-    await page
-      .getByLabel('Upload private images', { exact: true })
-      .setInputFiles([
-        {
-          name: 'fictional-one.png',
-          mimeType: 'image/png',
-          buffer: Buffer.from(DEMO_IMAGES[0].base64, 'base64'),
-        },
-        {
-          name: 'fictional-two.png',
-          mimeType: 'image/png',
-          buffer: Buffer.from(DEMO_IMAGES[1].base64, 'base64'),
-        },
-      ]);
-    await page
-      .getByRole('button', { name: 'Upload images', exact: true })
-      .click();
+    await page.getByRole('tab', { name: '委外圖片' }).click();
+    await page.getByLabel('上傳私人圖片', { exact: true }).setInputFiles([
+      {
+        name: 'fictional-one.png',
+        mimeType: 'image/png',
+        buffer: Buffer.from(DEMO_IMAGES[0].base64, 'base64'),
+      },
+      {
+        name: 'fictional-two.png',
+        mimeType: 'image/png',
+        buffer: Buffer.from(DEMO_IMAGES[1].base64, 'base64'),
+      },
+    ]);
+    await page.getByRole('button', { name: '上傳圖片', exact: true }).click();
     await expect(page.locator('figure img')).toHaveCount(2);
     for (const image of await page.locator('figure img').all())
       await expect(image).toHaveAttribute('src', /^blob:/);
     await page
-      .getByRole('button', { name: 'Move up fictional-two.png', exact: true })
+      .getByRole('button', { name: '向上移動 fictional-two.png', exact: true })
       .click();
     await expect(page.locator('figure').first()).toContainText(
       'fictional-two.png',
@@ -201,11 +185,11 @@ test.describe('Local phase-two management', () => {
     await page
       .locator('figure')
       .filter({ hasText: 'fictional-one.png' })
-      .getByRole('button', { name: 'Delete image', exact: true })
+      .getByRole('button', { name: '刪除圖片', exact: true })
       .click();
     await page
       .getByRole('alertdialog')
-      .getByRole('button', { name: 'Confirm delete' })
+      .getByRole('button', { name: '確認刪除' })
       .click();
     await expect(page.locator('figure img')).toHaveCount(1);
     expect(
@@ -219,12 +203,8 @@ test.describe('Local phase-two management', () => {
       path: testInfo.outputPath('phase-two-images.png'),
       fullPage: true,
     });
-    await page.getByRole('tab', { name: 'Activity log', exact: true }).click();
-    for (const action of [
-      'Images uploaded',
-      'Images reordered',
-      'Image deleted',
-    ])
+    await page.getByRole('tab', { name: '操作紀錄', exact: true }).click();
+    for (const action of ['已上傳圖片', '已調整圖片排序', '已刪除圖片'])
       await expect(
         page.getByRole('tabpanel').getByText(action, { exact: true }),
       ).toBeVisible();
@@ -236,28 +216,20 @@ test.describe('Local phase-two management', () => {
     await expect(page).toHaveURL(/\/login/);
     await signIn(page, 'agent@example.test');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit case' })).toHaveCount(
-      0,
-    );
+    await expect(page.getByRole('button', { name: '編輯案件' })).toHaveCount(0);
     await expect(
-      page.getByRole('link', { name: 'Collectors', exact: true }),
+      page.getByRole('link', { name: '外收人員', exact: true }),
     ).toHaveCount(0);
-    await page.getByRole('tab', { name: 'Assignment history' }).click();
-    await expect(page.getByText('Current', { exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: '派單紀錄' }).click();
+    await expect(page.getByText('目前有效', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '改派案件' })).toHaveCount(0);
+    await page.getByRole('tab', { name: '委外圖片' }).click();
+    await expect(page.getByLabel('上傳私人圖片')).toHaveCount(0);
     await expect(
-      page.getByRole('button', { name: 'Change assignment' }),
+      page.getByRole('button', { name: '刪除圖片', exact: true }),
     ).toHaveCount(0);
-    await page.getByRole('tab', { name: 'Outsourcing images' }).click();
-    await expect(page.getByLabel('Upload private images')).toHaveCount(0);
-    await expect(
-      page.getByRole('button', { name: 'Delete image', exact: true }),
-    ).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: 'Activity log' })).toHaveCount(
-      0,
-    );
+    await expect(page.getByRole('tab', { name: '操作紀錄' })).toHaveCount(0);
     await page.goto('/cases/collectors');
-    await expect(page.getByRole('alert')).toContainText(
-      'permission to manage collectors',
-    );
+    await expect(page.getByRole('alert')).toContainText('外收人員管理權限');
   });
 });

@@ -4,6 +4,7 @@ import { Label } from '@saasflare-dev/ui/components/label';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
+import { displayError } from '~/components/cases/display-labels';
 import {
   useCasePermissions,
   useRefreshCases,
@@ -43,7 +44,7 @@ function FinancePage() {
   const mark = useMutation(orpc.finance.markSettlement.mutationOptions());
   if (permissions.isPending) return <LoadingCases />;
   if (!permissions.can('settlement.view'))
-    return <p className="text-sm text-muted-foreground">Access denied</p>;
+    return <p className="text-sm text-muted-foreground">無操作權限</p>;
   async function download() {
     setExporting(true);
     setError('');
@@ -55,8 +56,7 @@ function FinancePage() {
         `${import.meta.env.NEXT_PUBLIC_SERVER_URL}/api/finance/settlements.xlsx?${params}`,
         { credentials: 'include' },
       );
-      if (!response.ok)
-        throw new Error('Export failed. Check the dates and permissions.');
+      if (!response.ok) throw new Error('匯出失敗，請確認日期與操作權限。');
       const url = URL.createObjectURL(await response.blob()),
         link = document.createElement('a');
       link.href = url;
@@ -64,7 +64,7 @@ function FinancePage() {
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (failure: unknown) {
-      setError(failure instanceof Error ? failure.message : 'Export failed.');
+      setError(displayError(failure, '匯出失敗。'));
     } finally {
       setExporting(false);
     }
@@ -72,16 +72,15 @@ function FinancePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Finance</h1>
+        <h1 className="text-2xl font-semibold">財務管理</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Confirmed receipts and money still to be returned are tracked
-          separately.
+          實際收款與尚未回款金額分別記錄。
         </p>
       </div>
       {/* One date range consistently filters both ledgers and the Excel download. */}
       <div className="flex flex-wrap items-end gap-4">
         <div className="space-y-2">
-          <Label htmlFor="finance-from">Date from</Label>
+          <Label htmlFor="finance-from">起始日期</Label>
           <Input
             id="finance-from"
             type="date"
@@ -93,7 +92,7 @@ function FinancePage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="finance-to">Date to</Label>
+          <Label htmlFor="finance-to">結束日期</Label>
           <Input
             id="finance-to"
             type="date"
@@ -110,7 +109,7 @@ function FinancePage() {
             disabled={exporting}
             onClick={() => void download()}
           >
-            {exporting ? 'Exporting…' : 'Export Excel (.xlsx)'}
+            {exporting ? '匯出中…' : '匯出 Excel（.xlsx）'}
           </Button>
         )}
       </div>
@@ -125,12 +124,12 @@ function FinancePage() {
         <CaseError retry={() => void result.refetch()} />
       ) : !result.data.items.length ? (
         <p className="rounded-xl bg-muted/50 p-8 text-sm text-muted-foreground">
-          No receipts in this date range.
+          此日期範圍內暫無收款紀錄。
         </p>
       ) : (
         <>
           <section className="space-y-4">
-            <h2 className="text-lg font-medium">Actual receipts</h2>
+            <h2 className="text-lg font-medium">收款紀錄</h2>
             {result.data.items.map((row) => (
               <article
                 key={row.id}
@@ -153,7 +152,7 @@ function FinancePage() {
             ))}
           </section>
           <section className="space-y-4">
-            <h2 className="text-lg font-medium">Return ledger</h2>
+            <h2 className="text-lg font-medium">回款紀錄</h2>
             {result.data.items.map((row) => (
               <article
                 key={row.id}
@@ -188,11 +187,7 @@ function FinancePage() {
                         });
                         await refresh();
                       } catch (failure: unknown) {
-                        setError(
-                          failure instanceof Error
-                            ? failure.message
-                            : 'Could not update return status.',
-                        );
+                        setError(displayError(failure, '無法更新回款狀態。'));
                       }
                     }}
                   >
@@ -206,7 +201,7 @@ function FinancePage() {
           </section>
           <div className="flex items-center justify-between gap-3 text-sm">
             <span>
-              {result.data.total} receipts · Page {page}
+              {result.data.total} 筆收款 · 第 {page}
             </span>
             <div className="flex gap-2">
               <Button
@@ -214,14 +209,14 @@ function FinancePage() {
                 disabled={page === 1}
                 onClick={() => setPage(page - 1)}
               >
-                Previous
+                上一頁
               </Button>
               <Button
                 variant="outline"
                 disabled={page * 25 >= result.data.total}
                 onClick={() => setPage(page + 1)}
               >
-                Next
+                下一頁
               </Button>
             </div>
           </div>

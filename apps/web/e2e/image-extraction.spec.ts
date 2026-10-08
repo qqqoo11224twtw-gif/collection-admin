@@ -10,7 +10,7 @@ test('Telegram report remains pending in case history before manual status selec
   await expect(page).toHaveURL(/\/login/);
   await signIn(page, 'phase7-admin@example.test');
   await expect(
-    page.getByRole('link', { name: 'Intake inbox', exact: true }),
+    page.getByRole('link', { name: '收件管理', exact: true }),
   ).toBeVisible();
   const call = async (path: string, input: unknown) => {
     const r = await page.request.post(
@@ -80,12 +80,12 @@ test('Telegram report remains pending in case history before manual status selec
   });
   await call('telegram.process', {});
   await page.goto(`/cases/${row.id}`);
-  await page.getByRole('tab', { name: 'Report history', exact: true }).click();
+  await page.getByRole('tab', { name: '回報紀錄', exact: true }).click();
   await expect(
-    page.getByText('Awaiting collector selection', { exact: true }),
+    page.getByText('等待外收人員確認', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Edit report', exact: true }),
+    page.getByRole('button', { name: '編輯回報', exact: true }),
   ).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
@@ -107,7 +107,7 @@ test('fake extraction preserves original draft, requires human review and render
   await expect(page).toHaveURL(/\/login/);
   await signIn(page, 'phase7-admin@example.test');
   await expect(
-    page.getByRole('link', { name: 'Intake inbox', exact: true }),
+    page.getByRole('link', { name: '收件管理', exact: true }),
   ).toBeVisible();
   const receive = await page.request.post(`${SERVER_URL}/rpc/intake/receive`, {
     data: {
@@ -126,23 +126,21 @@ test('fake extraction preserves original draft, requires human review and render
   const id = (await receive.json()).json.id;
   await page.goto(`/cases/intake/${id}`);
   await page
-    .getByLabel('PNG, JPEG or WebP · up to 5 images, 5 MiB each')
+    .getByLabel('支援 PNG、JPEG 或 WebP · 最多 5 張 · 每張上限 5 MiB')
     .setInputFiles({
       name: 'fictional-extraction.png',
       mimeType: 'image/png',
       buffer: Buffer.from(DEMO_IMAGES[0].base64, 'base64'),
     });
-  await page.getByRole('button', { name: 'Upload images' }).click();
+  await page.getByRole('button', { name: '上傳圖片' }).click();
   await expect(
     page.getByRole('img', { name: 'fictional-extraction.png', exact: true }),
   ).toHaveAttribute('src', /^blob:/);
-  await page.getByRole('button', { name: 'Extract image fields' }).click();
-  await expect(
-    page.getByText('Human confirmation required', { exact: false }),
-  ).toBeVisible({ timeout: 30000 });
-  await expect(
-    page.getByText('Confidence: 0%', { exact: false }),
-  ).toBeVisible();
+  await page.getByRole('button', { name: '辨識圖片欄位' }).click();
+  await expect(page.getByText('需要人工確認', { exact: false })).toBeVisible({
+    timeout: 30000,
+  });
+  await expect(page.getByText('信心值： 0%', { exact: false })).toBeVisible();
   const detail = await page.request.post(`${SERVER_URL}/rpc/intake/detail`, {
     data: { json: { id } },
   });

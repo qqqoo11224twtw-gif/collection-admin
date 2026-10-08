@@ -4,6 +4,10 @@ import { Input } from '@saasflare-dev/ui/components/input';
 import { Label } from '@saasflare-dev/ui/components/label';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
+import {
+  displayLabel,
+  displayMessage,
+} from '~/components/cases/display-labels';
 import { useCasePermissions } from '~/components/cases/management-hooks';
 import {
   CaseError,
@@ -12,10 +16,10 @@ import {
 } from '~/components/cases/presentation';
 import { orpc } from '~/lib/orpc';
 export const reviewTypeLabels = {
-  report_classification: 'Report classification',
-  case_match: 'Case match',
-  image_extraction: 'Image extraction',
-  payment_detection: 'Payment detection',
+  report_classification: '回報分類',
+  case_match: '案件配對',
+  image_extraction: '圖片辨識',
+  payment_detection: '收款判斷',
 };
 export const Route = createFileRoute('/cases/reviews/')({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -59,40 +63,38 @@ function ReviewCenter() {
   if (permissions.isPending) return <LoadingCases />;
   if (!permissions.can('review.view'))
     return (
-      <p className="text-sm text-muted-foreground">
-        You do not have access to the review center.
-      </p>
+      <p className="text-sm text-muted-foreground">無待確認中心查看權限。</p>
     );
   const update = (values: Partial<typeof search>) =>
     void navigate({ search: { ...search, ...values, page: 1 } });
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Review center</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">待確認</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Confirm uncertain findings before they update case records.
+          資料不確定時，請先人工確認再更新正式案件。
         </p>
       </div>
       {/* Search and filters stay independent from the review decision workflow. */}
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
-          <Label htmlFor="review-search">Search reviews</Label>
+          <Label htmlFor="review-search">搜尋待確認項目</Label>
           <Input
             id="review-search"
             value={search.query}
             onChange={(e) => update({ query: e.target.value })}
-            placeholder="Customer, case or reason"
+            placeholder="客戶、案件或原因"
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="review-type">Review type</Label>
+          <Label htmlFor="review-type">確認類型</Label>
           <select
             id="review-type"
             className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
             value={search.type}
             onChange={(e) => update({ type: e.target.value })}
           >
-            <option value="">All types</option>
+            <option value="">全部類型</option>
             {Object.entries(reviewTypeLabels).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -101,7 +103,7 @@ function ReviewCenter() {
           </select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="review-status">Review status</Label>
+          <Label htmlFor="review-status">確認狀態</Label>
           <select
             id="review-status"
             className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
@@ -110,7 +112,7 @@ function ReviewCenter() {
           >
             {['pending', 'approved', 'corrected', 'rejected'].map((s) => (
               <option key={s} value={s}>
-                {s[0].toUpperCase() + s.slice(1)}
+                {s === 'pending' ? '待確認' : displayLabel(s)}
               </option>
             ))}
           </select>
@@ -124,7 +126,7 @@ function ReviewCenter() {
         <>
           {!result.data.items.length ? (
             <p className="rounded-xl bg-muted/50 p-8 text-sm text-muted-foreground">
-              No reviews match these filters.
+              沒有符合條件的待確認項目。
             </p>
           ) : (
             <ul className="space-y-4">
@@ -145,7 +147,7 @@ function ReviewCenter() {
                       <p className="mt-2 text-sm">
                         {item.customerName ??
                           item.lookupValue ??
-                          'Case selection required'}
+                          '需要選擇案件'}
                         {item.caseNo && (
                           <span className="ml-2 break-all text-muted-foreground">
                             {item.caseNo}
@@ -154,19 +156,23 @@ function ReviewCenter() {
                       </p>
                     </div>
                     <div className="flex items-start gap-2">
-                      <Badge variant="secondary">{item.status}</Badge>
-                      <Badge variant="outline">{item.priority} priority</Badge>
+                      <Badge variant="secondary">
+                        {item.status === 'pending'
+                          ? '待確認'
+                          : displayLabel(item.status)}
+                      </Badge>
+                      <Badge variant="outline">優先級 {item.priority}</Badge>
                     </div>
                   </div>
                   <p className="mt-4 break-words text-sm text-muted-foreground">
-                    {item.reason}
+                    {displayMessage(item.reason)}
                   </p>
                   <p className="mt-3 text-sm text-muted-foreground">
-                    Confidence:{' '}
+                    信心值：{' '}
                     {item.confidence === null
-                      ? 'Not supplied'
+                      ? '未提供'
                       : `${Math.round(item.confidence * 100)}%`}{' '}
-                    · {item.source} · {timestamp(item.createdAt)}
+                    · {displayLabel(item.source)} · {timestamp(item.createdAt)}
                   </p>
                 </li>
               ))}
@@ -174,7 +180,7 @@ function ReviewCenter() {
           )}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
-              {result.data.total} reviews · Page {search.page}
+              {result.data.total} 筆待確認項目 · 第 {search.page}
             </p>
             <div className="flex gap-2">
               <Button
@@ -186,7 +192,7 @@ function ReviewCenter() {
                   })
                 }
               >
-                Previous
+                上一頁
               </Button>
               <Button
                 variant="outline"
@@ -197,7 +203,7 @@ function ReviewCenter() {
                   })
                 }
               >
-                Next
+                下一頁
               </Button>
             </div>
           </div>

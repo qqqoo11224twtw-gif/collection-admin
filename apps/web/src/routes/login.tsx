@@ -111,16 +111,16 @@ function LoginPage() {
         // EMAIL_NOT_ADMIN before any code is sent.
         setError(
           sendError.code === 'EMAIL_NOT_ADMIN'
-            ? 'This email is not an administrator account.'
-            : (sendError.message ?? 'Could not send the code.'),
+            ? '此電子郵件不是管理員帳號。'
+            : '無法寄送驗證碼，請稍後重試。',
         );
         return;
       }
       setStep('otp');
       setOtp('');
       setCooldown(60);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Network error.');
+    } catch {
+      setError('網路連線失敗，請重試。');
     } finally {
       setSending(false);
     }
@@ -135,7 +135,7 @@ function LoginPage() {
         otp: code,
       });
       if (verifyError) {
-        setError(verifyError.message ?? 'Invalid or expired code.');
+        setError('驗證碼錯誤或已過期。');
         setOtp('');
         return;
       }
@@ -143,8 +143,8 @@ function LoginPage() {
       // wherever the user came from, not to a login form that would
       // immediately bounce them forward again.
       void navigate({ to: safeRedirect(redirect), replace: true });
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Network error.');
+    } catch {
+      setError('網路連線失敗，請重試。');
     } finally {
       setVerifying(false);
     }
@@ -155,15 +155,12 @@ function LoginPage() {
   if (authMode === 'disabled') {
     return (
       <main className="flex min-h-svh flex-col items-center justify-center gap-3 p-5 text-center">
-        <h1 className="text-xl font-semibold tracking-tight">
-          Sign-in is disabled
-        </h1>
+        <h1 className="text-xl font-semibold tracking-tight">登入功能已停用</h1>
         <p className="max-w-sm text-sm text-muted-foreground">
-          This deployment runs with AUTH_MODE=disabled. See docs/auth.md to
-          enable the login story.
+          此環境已停用登入功能，設定方式請參閱 docs/auth.md。
         </p>
         <Button asChild variant="outline" size="sm">
-          <Link to="/">Back to home</Link>
+          <Link to="/">返回首頁</Link>
         </Button>
       </main>
     );
@@ -183,8 +180,8 @@ function LoginPage() {
             </h1>
             <p className="text-sm text-muted-foreground">
               {authMode === 'admin-only'
-                ? 'Administrator sign-in'
-                : 'Sign in or create your account with a one-time code'}
+                ? '管理員登入'
+                : '使用一次性驗證碼登入或建立帳號'}
             </p>
           </div>
 
@@ -199,7 +196,7 @@ function LoginPage() {
                 <CardContent>
                   <FieldGroup>
                     <Field data-invalid={showEmailError || undefined}>
-                      <FieldLabel htmlFor="email">Email</FieldLabel>
+                      <FieldLabel htmlFor="email">電子郵件</FieldLabel>
                       <Input
                         id="email"
                         type="email"
@@ -213,7 +210,7 @@ function LoginPage() {
                       />
                       {showEmailError && (
                         <FieldDescription className="text-destructive">
-                          Enter a valid email address.
+                          請輸入有效的電子郵件地址。
                         </FieldDescription>
                       )}
                       {error && (
@@ -231,10 +228,10 @@ function LoginPage() {
                     type="submit"
                   >
                     {sending && <Loader2 size={16} className="animate-spin" />}
-                    {sending ? 'Sending…' : 'Send code'}
+                    {sending ? '寄送中…' : '寄送驗證碼'}
                   </Button>
                   <p className="text-center text-xs text-muted-foreground">
-                    No password — we email you a 6-digit code.
+                    不需要密碼，系統會寄送 6 位數驗證碼。
                   </p>
                 </CardFooter>
               </form>
@@ -244,7 +241,7 @@ function LoginPage() {
                   <FieldGroup>
                     <Field data-invalid={!!error || undefined}>
                       <FieldLabel htmlFor="otp">
-                        Enter the code sent to{' '}
+                        請輸入寄送至以下信箱的驗證碼：{' '}
                         <span className="font-medium text-foreground">
                           {email.trim()}
                         </span>
@@ -280,8 +277,7 @@ function LoginPage() {
                       )}
                       {localMailMode && (
                         <FieldDescription className="text-center">
-                          Local dev: the code is printed to the server console
-                          (and at /api/dev/otp).
+                          本機開發：驗證碼會顯示於伺服器主控台及 /api/dev/otp。
                         </FieldDescription>
                       )}
                     </Field>
@@ -296,7 +292,7 @@ function LoginPage() {
                     {verifying && (
                       <Loader2 size={16} className="animate-spin" />
                     )}
-                    {verifying ? 'Verifying…' : 'Verify and sign in'}
+                    {verifying ? '驗證中…' : '驗證並登入'}
                   </Button>
                   <div className="flex w-full items-center justify-between text-xs text-muted-foreground">
                     <button
@@ -308,7 +304,7 @@ function LoginPage() {
                         setError(null);
                       }}
                     >
-                      Use a different email
+                      使用其他電子郵件
                     </button>
                     <button
                       type="button"
@@ -317,10 +313,10 @@ function LoginPage() {
                       onClick={() => void sendCode()}
                     >
                       {sending
-                        ? 'Sending…'
+                        ? '寄送中…'
                         : cooldown > 0
-                          ? `Resend code (${cooldown}s)`
-                          : 'Resend code'}
+                          ? `重新寄送驗證碼（${cooldown} 秒）`
+                          : '重新寄送驗證碼'}
                     </button>
                   </div>
                 </CardFooter>

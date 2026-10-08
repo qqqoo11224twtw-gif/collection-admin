@@ -2,7 +2,6 @@ import { Badge } from '@saasflare-dev/ui/components/badge';
 import { Button } from '@saasflare-dev/ui/components/button';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -12,6 +11,8 @@ import { Label } from '@saasflare-dev/ui/components/label';
 import { Textarea } from '@saasflare-dev/ui/components/textarea';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { displayError } from '~/components/cases/display-labels';
+import { DialogContent } from '~/components/cases/localized-dialog';
 import { orpc } from '~/lib/orpc';
 import { useCasePermissions, useRefreshCases } from './management-hooks';
 import { CaseError, LoadingCases, timestamp } from './presentation';
@@ -63,7 +64,7 @@ export function AssignmentPanel({
         >
           <DialogTrigger asChild>
             <Button onClick={() => setCorrecting(false)}>
-              {current ? 'Change assignment' : 'Assign case'}
+              {current ? '改派案件' : '指派案件'}
             </Button>
           </DialogTrigger>
           {current && permissions.can('assignment.correct') && (
@@ -74,21 +75,20 @@ export function AssignmentPanel({
                 setOpen(true);
               }}
             >
-              Correct historical collector
+              更正歷史外收人員
             </Button>
           )}
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
                 {correcting
-                  ? 'Correct historical collector'
+                  ? '更正歷史外收人員'
                   : current
-                    ? 'Change assignment'
-                    : 'Assign case'}
+                    ? '改派案件'
+                    : '指派案件'}
               </DialogTitle>
               <DialogDescription>
-                Only active collectors can receive cases. Changes preserve the
-                previous assignment.
+                只有啟用中的外收人員可接收案件，改派時會保留原派單紀錄。
               </DialogDescription>
             </DialogHeader>
             {open && (
@@ -116,23 +116,19 @@ export function AssignmentPanel({
                     await refresh();
                     setOpen(false);
                   } catch (failure: unknown) {
-                    setError(
-                      failure instanceof Error
-                        ? failure.message
-                        : 'Assignment could not be saved.',
-                    );
+                    setError(displayError(failure, '無法儲存派單。'));
                   }
                 }}
               >
                 <div className="space-y-2">
-                  <Label htmlFor="assignment-collector">Collector</Label>
+                  <Label htmlFor="assignment-collector">外收人員</Label>
                   <select
                     id="assignment-collector"
                     name="collectorId"
                     defaultValue={current?.collectorId ?? ''}
                     className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
                   >
-                    <option value="">Unassigned</option>
+                    <option value="">未委外</option>
                     {choices.data?.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.displayName} · {item.code}
@@ -142,7 +138,7 @@ export function AssignmentPanel({
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="assignment-note">
-                    {correcting ? 'Correction reason' : 'Note'}
+                    {correcting ? '更正原因' : '備註'}
                   </Label>
                   <Textarea
                     id="assignment-note"
@@ -153,7 +149,7 @@ export function AssignmentPanel({
                 </div>
                 {choices.isError && (
                   <p role="alert" className="text-sm text-destructive">
-                    Collectors could not be loaded.
+                    無法載入外收人員。
                   </p>
                 )}
                 {error && (
@@ -171,10 +167,10 @@ export function AssignmentPanel({
                   }
                 >
                   {mutation.isPending || correction.isPending
-                    ? 'Saving…'
+                    ? '儲存中…'
                     : correcting
-                      ? 'Save correction'
-                      : 'Save assignment'}
+                      ? '儲存更正'
+                      : '儲存派單'}
                 </Button>
               </form>
             )}
@@ -187,7 +183,7 @@ export function AssignmentPanel({
         <CaseError retry={() => void result.refetch()} />
       ) : !result.data.length ? (
         <p className="rounded-xl bg-muted/50 p-8 text-sm text-muted-foreground">
-          No assignment history yet.
+          暫無派單紀錄。
         </p>
       ) : (
         <ol className="space-y-4">
@@ -208,26 +204,26 @@ export function AssignmentPanel({
                     ? result.data.some(
                         (entry) => entry.correctedFromId === item.id,
                       )
-                      ? 'Corrected'
-                      : 'Ended'
+                      ? '修改後核准'
+                      : '已解除'
                     : item.collectorActive
-                      ? 'Current'
-                      : 'Current · collector inactive'}
+                      ? '目前有效'
+                      : '目前有效 · 外收人員已停用'}
                 </Badge>
               </div>
               <p className="mt-3 text-sm text-muted-foreground">
                 {item.recordType === 'correction'
-                  ? 'Historical correction · Original assignment'
-                  : 'Assigned'}{' '}
-                {timestamp(item.assignedAt)} · By {item.assignedBy}
+                  ? '歷史更正 · 原始派單'
+                  : '已委外'}{' '}
+                {timestamp(item.assignedAt)} · 指派人 {item.assignedBy}
               </p>
               {item.unassignedAt && (
                 <p className="mt-2 text-sm text-muted-foreground">
                   {result.data.some(
                     (entry) => entry.correctedFromId === item.id,
                   )
-                    ? 'Corrected on'
-                    : 'Ended'}{' '}
+                    ? '更正時間'
+                    : '已解除'}{' '}
                   {timestamp(item.unassignedAt)}
                 </p>
               )}
@@ -236,7 +232,7 @@ export function AssignmentPanel({
               )}
               {item.correctionReason && (
                 <p className="mt-3 text-sm">
-                  Correction reason: {item.correctionReason}
+                  更正原因： {item.correctionReason}
                 </p>
               )}
             </li>

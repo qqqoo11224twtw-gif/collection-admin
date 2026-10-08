@@ -12,7 +12,7 @@ test.describe('Auth (open mode)', () => {
 
   test('any email signs up via OTP and lands back home', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('link', { name: /sign in/i }).click();
+    await page.getByRole('link', { name: /登入/i }).click();
     await expect(page).toHaveURL(/\/login/);
 
     await signIn(page);
@@ -39,12 +39,12 @@ test.describe('Auth (open mode)', () => {
     // /login. Back must land on home; with a pushed entry it would bounce
     // straight back to /login and the Back button would appear dead.
     await page.goto('/');
-    await page.getByRole('link', { name: /per-user data/i }).click();
+    await page.getByRole('link', { name: /個人資料/i }).click();
     await expect(page).toHaveURL(/\/login\?.*redirect=/);
 
     await page.goBack();
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByText(`${APP_DISPLAY_NAME} Console`)).toBeVisible();
+    await expect(page.getByText(`${APP_DISPLAY_NAME} 後台`)).toBeVisible();
   });
 
   test('todos are private to the account', async ({ page }) => {
@@ -70,11 +70,11 @@ test.describe('Auth (open mode)', () => {
 
   test('sign out returns to the logged-out header', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('link', { name: /sign in/i }).click();
+    await page.getByRole('link', { name: /登入/i }).click();
     await signIn(page);
     await expect(page.getByTestId('user-email')).toBeVisible();
 
-    await page.getByRole('button', { name: /sign out/i }).click();
-    await expect(page.getByRole('link', { name: /sign in/i })).toBeVisible();
+    await page.getByRole('button', { name: /登出/i }).click();
+    await expect(page.getByRole('link', { name: /登入/i })).toBeVisible();
   });
 });

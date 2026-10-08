@@ -6,6 +6,11 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import {
+  displayError,
+  displayFieldValue,
+  displayLabel,
+} from '~/components/cases/display-labels';
+import {
   useCasePermissions,
   useRefreshCases,
 } from '~/components/cases/management-hooks';
@@ -60,20 +65,20 @@ function Thumbnail({
     />
   ) : (
     <p className="rounded-lg bg-muted p-8 text-sm text-muted-foreground">
-      {error ? 'Image unavailable' : 'Loading image…'}
+      {error ? '無法查看圖片' : '載入圖片中…'}
     </p>
   );
 }
 const actions = {
-  'intake.received': 'Intake received',
-  'intake.duplicate_detected': 'Duplicate detected',
-  'intake.processing': 'Matching completed',
-  'intake.sent_to_review': 'Sent to human review',
-  'intake.created_case': 'Case created',
-  'intake.matched': 'Case matched',
-  'intake.rejected': 'Intake rejected',
-  'intake.media_uploaded': 'Images received',
-  'media.promoted': 'Images promoted',
+  'intake.received': '已收到收件',
+  'intake.duplicate_detected': '發現重複資料',
+  'intake.processing': '已完成案件配對',
+  'intake.sent_to_review': '已送人工確認',
+  'intake.created_case': '已建立案件',
+  'intake.matched': '已配對案件',
+  'intake.rejected': '已拒絕收件',
+  'intake.media_uploaded': '已收到圖片',
+  'media.promoted': '已轉入案件圖片',
 } as Record<string, string>;
 function IntakeDetail() {
   const { intakeId } = Route.useParams();
@@ -101,11 +106,7 @@ function IntakeDetail() {
   const [uploading, setUploading] = useState(false);
   if (permissions.isPending) return <LoadingCases />;
   if (!permissions.can('intake.view'))
-    return (
-      <p className="text-sm text-muted-foreground">
-        You do not have access to intakes.
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground">無收件查看權限。</p>;
   if (result.isPending) return <LoadingCases />;
   if (result.isError) return <CaseError retry={() => void result.refetch()} />;
   const row = result.data;
@@ -133,7 +134,7 @@ function IntakeDetail() {
       });
       await refresh();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Unable to process intake.');
+      setError(displayError(e, '無法處理收件。'));
     }
   }
   return (
@@ -143,37 +144,37 @@ function IntakeDetail() {
         search={{ page: 1, query: '', status: '', source: '' }}
         className="text-sm text-muted-foreground hover:text-foreground"
       >
-        ← Intake inbox
+        ← 收件管理
       </Link>
       <div className="flex flex-wrap justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">
-            {row.proposedData.customer_name ?? 'Incomplete draft'}
+            {row.proposedData.customer_name ?? '草稿資料不完整'}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {row.source.replaceAll('_', ' ')} · {timestamp(row.createdAt)}
+            {displayLabel(row.source)} · {timestamp(row.createdAt)}
           </p>
         </div>
-        <Badge variant="secondary">{row.status.replaceAll('_', ' ')}</Badge>
+        <Badge variant="secondary">{displayLabel(row.status)}</Badge>
       </div>
       {/* Proposed and confirmed records remain distinct. */}
       <section className="rounded-xl border bg-card p-5 space-y-3">
-        <h2 className="text-lg font-medium">Image extraction</h2>
+        <h2 className="text-lg font-medium">圖片辨識</h2>
         <p className="text-sm text-muted-foreground">
-          Confidence:{' '}
+          信心值：{' '}
           {row.confidence === null
-            ? 'Not supplied'
+            ? '未提供'
             : `${Math.round(row.confidence * 100)}%`}{' '}
           ·{' '}
           {row.review?.status === 'pending'
-            ? 'Human confirmation required'
+            ? '需要人工確認'
             : aiPending
-              ? 'Processing images'
-              : 'Results are validated before case resolution'}
+              ? '處理圖片中'
+              : '辨識結果驗證後才可處理案件'}
         </p>
         {row.extractionJobs.map((job) => (
           <p key={job.id} className="text-sm text-muted-foreground">
-            {job.provider} · {job.model} · {job.status}
+            {job.provider} · {job.model} · {displayLabel(job.status)}
             {job.errorCode && ` · ${job.errorCode}`}
           </p>
         ))}
@@ -189,22 +190,18 @@ function IntakeDetail() {
                   await extract.mutateAsync({ id: intakeId });
                   await refresh();
                 } catch (e: unknown) {
-                  setError(
-                    e instanceof Error
-                      ? e.message
-                      : 'Extraction could not be queued.',
-                  );
+                  setError(displayError(e, '無法排入圖片辨識工作。'));
                 }
               }}
             >
-              Extract image fields
+              辨識圖片欄位
             </Button>
           )}
       </section>
       <div className="grid gap-5 md:grid-cols-2">
         {[
-          ['Original proposal', row.proposedData],
-          ['Confirmed data', row.confirmedData],
+          ['原始提案', row.proposedData],
+          ['確認資料', row.confirmedData],
         ].map(([title, data]) => (
           <section
             key={String(title)}
@@ -216,27 +213,25 @@ function IntakeDetail() {
                 {Object.entries(data).map(([key, value]) => (
                   <div key={key}>
                     <dt className="text-sm text-muted-foreground">
-                      {key.replaceAll('_', ' ')}
+                      {displayLabel(key)}
                     </dt>
                     <dd className="mt-1 break-words text-sm">
-                      {value === null ? 'Not supplied' : String(value)}
+                      {displayFieldValue(key, value)}
                     </dd>
                   </div>
                 ))}
               </dl>
             ) : (
-              <p className="mt-4 text-sm text-muted-foreground">
-                Not confirmed yet.
-              </p>
+              <p className="mt-4 text-sm text-muted-foreground">尚未確認。</p>
             )}
           </section>
         ))}
       </div>
       <section className="rounded-xl bg-muted/50 p-5 space-y-4">
-        <h2 className="text-lg font-medium">Case matching</h2>
+        <h2 className="text-lg font-medium">案件配對</h2>
         <p className="text-sm">
-          {row.matching.kind.replaceAll('_', ' ')} ·{' '}
-          {row.matching.method.replaceAll('_', ' ')}
+          {displayLabel(row.matching.kind)} ·{' '}
+          {displayLabel(row.matching.method)}
         </p>
         {row.matchedCase && (
           <Link
@@ -253,7 +248,10 @@ function IntakeDetail() {
             params={{ reviewId: row.review.id }}
             className="block text-sm font-medium hover:underline"
           >
-            Human review · {row.review.status}
+            人工確認 ·{' '}
+            {row.review.status === 'pending'
+              ? '待確認'
+              : displayLabel(row.review.status)}
           </Link>
         )}
         {!terminal && permissions.can('intake.resolve') && (
@@ -270,22 +268,18 @@ function IntakeDetail() {
                   });
                   await refresh();
                 } catch (e: unknown) {
-                  setError(
-                    e instanceof Error
-                      ? e.message
-                      : 'Unable to analyze intake.',
-                  );
+                  setError(displayError(e, '無法分析收件。'));
                 }
               }}
             >
-              Analyze draft
+              分析草稿
             </Button>
             {row.matching.kind === 'no_match' && (
               <Button
                 disabled={busy || row.status === 'needs_review'}
                 onClick={() => void action('create')}
               >
-                Create new case
+                建立新案件
               </Button>
             )}
             {row.matching.kind === 'unique_match' && (
@@ -295,7 +289,7 @@ function IntakeDetail() {
                   void action('match', row.matching.candidates[0]?.id)
                 }
               >
-                Match existing case
+                配對既有案件
               </Button>
             )}
             <Button
@@ -303,7 +297,7 @@ function IntakeDetail() {
               disabled={busy || row.status === 'needs_review'}
               onClick={() => void action('review')}
             >
-              Send to review
+              送人工確認
             </Button>
           </div>
         )}
@@ -313,7 +307,7 @@ function IntakeDetail() {
             disabled={busy}
             onClick={() => void action('reject')}
           >
-            Reject intake
+            拒絕收件
           </Button>
         )}
         {error && (
@@ -323,7 +317,7 @@ function IntakeDetail() {
         )}
       </section>
       <section className="space-y-4">
-        <h2 className="text-lg font-medium">Private attachments</h2>
+        <h2 className="text-lg font-medium">私人附件</h2>
         {!terminal && permissions.can('intake.create') && (
           <form
             className="space-y-3 rounded-xl bg-muted/50 p-5"
@@ -341,19 +335,19 @@ function IntakeDetail() {
                 );
                 if (!response.ok)
                   throw new Error(
-                    'Images could not be saved. Refresh and check file types and size.',
+                    '無法儲存圖片，請重新整理並確認檔案類型與大小。',
                   );
                 form.reset();
                 await refresh();
               } catch (e: unknown) {
-                setError(e instanceof Error ? e.message : 'Upload failed.');
+                setError(displayError(e, '上傳失敗。'));
               } finally {
                 setUploading(false);
               }
             }}
           >
             <Label htmlFor="intake-files">
-              PNG, JPEG or WebP · up to 5 images, 5 MiB each
+              支援 PNG、JPEG 或 WebP · 最多 5 張 · 每張上限 5 MiB
             </Label>
             <Input
               id="intake-files"
@@ -363,11 +357,11 @@ function IntakeDetail() {
               multiple
               required
             />
-            <Button disabled={busy}>Upload images</Button>
+            <Button disabled={busy}>上傳圖片</Button>
           </form>
         )}
         {!row.media.length && (
-          <p className="text-sm text-muted-foreground">No attachments yet.</p>
+          <p className="text-sm text-muted-foreground">暫無附件。</p>
         )}
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {row.media.map((m) => (
@@ -384,24 +378,22 @@ function IntakeDetail() {
                 {m.originalFilename}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Order {m.sortOrder} · {timestamp(m.createdAt)}
+                排序 {m.sortOrder} · {timestamp(m.createdAt)}
               </p>
               {m.isDuplicate && (
                 <Badge variant="outline" className="mt-2">
-                  Duplicate hash
+                  重複圖片雜湊值
                 </Badge>
               )}
               {m.promotedAt && (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Promoted to case
-                </p>
+                <p className="mt-2 text-sm text-muted-foreground">已轉入案件</p>
               )}
             </li>
           ))}
         </ul>
       </section>
       <section className="space-y-4">
-        <h2 className="text-lg font-medium">Intake activity</h2>
+        <h2 className="text-lg font-medium">收件操作紀錄</h2>
         <ol className="space-y-3">
           {row.audit.map((item) => (
             <li
@@ -412,7 +404,7 @@ function IntakeDetail() {
                 {actions[item.action] ?? item.action}
               </p>
               <p className="mt-2 break-words text-sm text-muted-foreground">
-                {item.actor ?? 'System'} · {timestamp(item.createdAt)}
+                {item.actor ?? '系統'} · {timestamp(item.createdAt)}
               </p>
             </li>
           ))}

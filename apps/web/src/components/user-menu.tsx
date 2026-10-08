@@ -21,7 +21,7 @@ export function UserMenu() {
       <Button asChild variant="outline" size="sm">
         <Link to="/login">
           <LogIn size={16} />
-          Sign in
+          登入
         </Link>
       </Button>
     );
@@ -39,7 +39,7 @@ export function UserMenu() {
       <Button asChild variant="ghost" size="sm">
         <Link to="/examples/components/api-keys">
           <KeyRound size={16} />
-          API keys
+          API 金鑰
         </Link>
       </Button>
       <Button
@@ -50,7 +50,7 @@ export function UserMenu() {
         }
       >
         <LogOut size={16} />
-        Sign out
+        登出
       </Button>
     </div>
   );

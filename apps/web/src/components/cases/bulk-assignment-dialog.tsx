@@ -3,7 +3,6 @@ import { Badge } from '@saasflare-dev/ui/components/badge';
 import { Button } from '@saasflare-dev/ui/components/button';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -12,17 +11,19 @@ import {
 import { Label } from '@saasflare-dev/ui/components/label';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { displayError, displayLabel } from '~/components/cases/display-labels';
+import { DialogContent } from '~/components/cases/localized-dialog';
 import { orpc } from '~/lib/orpc';
 import { useCasePermissions, useRefreshCases } from './management-hooks';
 
 type Result = Awaited<ReturnType<AppRouterClient['cases']['bulkAssign']>>;
 const reasons: Record<string, string> = {
-  ALREADY_ASSIGNED: 'Already assigned by another operator',
-  CASE_UNAVAILABLE: 'Case unavailable or access denied',
-  ROUTE_UNAVAILABLE: 'Telegram route unavailable',
-  RECORD_CHANGED: 'Record or routing changed; refresh before trying again',
-  SAVE_FAILED: 'This case could not be saved',
-  INVALID_CASE_DATA: 'Case data exceeds the Telegram message limit',
+  ALREADY_ASSIGNED: '已由其他管理員派單',
+  CASE_UNAVAILABLE: '案件不存在或無操作權限',
+  ROUTE_UNAVAILABLE: 'Telegram 路由無法使用',
+  RECORD_CHANGED: '案件或路由已變更，請重新整理後重試',
+  SAVE_FAILED: '無法儲存此案件',
+  INVALID_CASE_DATA: '案件資料超過 Telegram 訊息長度限制',
 };
 export function BulkAssignmentDialog({
   caseIds,
@@ -82,17 +83,15 @@ export function BulkAssignmentDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button disabled={!caseIds.length}>Bulk assign</Button>
+        <Button disabled={!caseIds.length}>批量派單</Button>
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>
-            {outcome ? 'Bulk assignment complete' : 'Bulk assign cases'}
-          </DialogTitle>
+          <DialogTitle>{outcome ? '批量派單完成' : '批量派單'}</DialogTitle>
           <DialogDescription>
             {outcome
-              ? 'Assignments are saved independently. Telegram delivery continues through the outbound queue.'
-              : 'Each case receives its own assignment and Telegram message using the collector’s active chat and topic.'}
+              ? '各案件已分別儲存派單紀錄，Telegram 訊息將由傳送佇列繼續處理。'
+              : '每筆案件會各自建立派單及 Telegram 訊息，並使用外收人員有效的群組與話題。'}
           </DialogDescription>
         </DialogHeader>
         {outcome ? (
@@ -101,35 +100,35 @@ export function BulkAssignmentDialog({
               aria-live="polite"
               className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3"
             >
-              <p>Assigned: {outcome.summary.assigned}</p>
-              <p>Skipped: {outcome.summary.skipped}</p>
-              <p>Save failed: {outcome.summary.failed}</p>
-              <p>Telegram queued: {outcome.summary.telegramQueued}</p>
-              <p>Telegram retrying: {outcome.summary.telegramRetrying}</p>
-              <p>Telegram failed: {outcome.summary.telegramFailed}</p>
-              <p>Telegram sent: {outcome.summary.telegramSent}</p>
+              <p>成功： {outcome.summary.assigned}</p>
+              <p>略過： {outcome.summary.skipped}</p>
+              <p>儲存失敗： {outcome.summary.failed}</p>
+              <p>Telegram 待傳送： {outcome.summary.telegramQueued}</p>
+              <p>Telegram 待重試： {outcome.summary.telegramRetrying}</p>
+              <p>Telegram 傳送失敗： {outcome.summary.telegramFailed}</p>
+              <p>Telegram 已傳送： {outcome.summary.telegramSent}</p>
               {!!outcome.summary.processing && (
-                <p>Processing: {outcome.summary.processing}</p>
+                <p>處理中： {outcome.summary.processing}</p>
               )}
             </div>
             <p className="break-all text-sm text-muted-foreground">
-              Batch: {outcome.batchId}
+              批次編號： {outcome.batchId}
             </p>
             {live.isError && (
               <p role="alert" className="text-sm text-destructive">
-                Delivery status could not be refreshed.
+                無法更新傳送狀態。
                 <Button variant="link" onClick={() => void live.refetch()}>
-                  Retry status
+                  重新取得狀態
                 </Button>
               </p>
             )}
-            <ul className="space-y-3" aria-label="Per-case assignment results">
+            <ul className="space-y-3" aria-label="各案件派單結果">
               {outcome.items.map((item) => (
                 <li key={item.caseId} className="rounded-lg border p-3 text-sm">
                   <p className="break-words font-medium">
                     {item.label
                       ? `${item.label.caseNo} · ${item.label.customerName}`
-                      : 'Unavailable case'}
+                      : '無法查看的案件'}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Badge
@@ -137,30 +136,30 @@ export function BulkAssignmentDialog({
                         item.status === 'assigned' ? 'secondary' : 'outline'
                       }
                     >
-                      {item.status}
+                      {displayLabel(item.status)}
                     </Badge>
                     {item.telegramStatus && (
                       <Badge variant="outline">
-                        Telegram: {item.telegramStatus}
+                        Telegram： {displayLabel(item.telegramStatus)}
                       </Badge>
                     )}
                   </div>
                   {item.reason && (
                     <p className="mt-2 text-muted-foreground">
-                      {reasons[item.reason] ?? 'Could not process this case'}
+                      {reasons[item.reason] ?? '無法處理此案件'}
                     </p>
                   )}
                   {item.telegramError && (
                     <p className="mt-2 break-words text-muted-foreground">
                       {item.telegramError === 'DELIVERY_UNKNOWN'
-                        ? 'Delivery uncertain; reconciliation required before resending.'
+                        ? '傳送結果不明，重新寄送前需人工確認。'
                         : `Delivery: ${item.telegramError}`}
                     </p>
                   )}
                 </li>
               ))}
             </ul>
-            <Button onClick={() => setOpen(false)}>Done</Button>
+            <Button onClick={() => setOpen(false)}>完成</Button>
           </div>
         ) : (
           <form
@@ -179,18 +178,19 @@ export function BulkAssignmentDialog({
                 await refresh();
               } catch (failure: unknown) {
                 setError(
-                  failure instanceof Error
-                    ? failure.message
-                    : 'Bulk assignment could not be saved. Retry uses the same batch ID.',
+                  displayError(
+                    failure,
+                    '無法儲存批量派單，重試時會使用相同批次編號。',
+                  ),
                 );
               }
             }}
           >
             <p className="text-sm">
-              Selected: {request?.caseIds.length ?? caseIds.length} cases
+              已選擇： {request?.caseIds.length ?? caseIds.length} 筆案件
             </p>
             <div className="space-y-2">
-              <Label htmlFor="bulk-collector">Collector</Label>
+              <Label htmlFor="bulk-collector">外收人員</Label>
               <select
                 id="bulk-collector"
                 required
@@ -199,7 +199,7 @@ export function BulkAssignmentDialog({
                 onChange={(event) => setCollectorId(event.target.value)}
                 className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
               >
-                <option value="">Choose a collector</option>
+                <option value="">請選擇外收人員</option>
                 {collectors.data?.map((item) => (
                   <option
                     key={item.id}
@@ -207,36 +207,35 @@ export function BulkAssignmentDialog({
                     disabled={item.routeCount !== 1}
                   >
                     {item.displayName} · {item.code}
-                    {item.routeCount !== 1 ? ' — active route required' : ''}
+                    {item.routeCount !== 1 ? ' — 需要有效路由' : ''}
                   </option>
                 ))}
               </select>
             </div>
             {chosen && (
-              <p className="text-sm">Collector: {chosen.displayName}</p>
+              <p className="text-sm">外收人員： {chosen.displayName}</p>
             )}
             {collectors.isPending && (
               <output className="text-sm text-muted-foreground">
-                Loading collectors…
+                載入外收人員中…
               </output>
             )}
             {collectors.isError && (
               <p role="alert" className="text-sm text-destructive">
-                Collectors could not be loaded.
+                無法載入外收人員。
                 <Button
                   type="button"
                   variant="link"
                   onClick={() => void collectors.refetch()}
                 >
-                  Retry
+                  重試
                 </Button>
               </p>
             )}
             {collectors.data &&
               !collectors.data.some((item) => item.routeCount === 1) && (
                 <p className="text-sm text-muted-foreground">
-                  Configure one active Telegram collector route before
-                  assigning.
+                  派單前請先設定一組有效的 Telegram 外收人員路由。
                 </p>
               )}
             {error && (
@@ -251,13 +250,13 @@ export function BulkAssignmentDialog({
                 disabled={mutation.isPending}
                 onClick={() => setOpen(false)}
               >
-                Cancel
+                取消
               </Button>
               <Button
                 type="submit"
                 disabled={mutation.isPending || chosen?.routeCount !== 1}
               >
-                {mutation.isPending ? 'Assigning…' : 'Confirm assignment'}
+                {mutation.isPending ? '派單中…' : '確認派單'}
               </Button>
             </div>
           </form>

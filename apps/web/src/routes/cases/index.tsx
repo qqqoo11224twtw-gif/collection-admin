@@ -16,6 +16,7 @@ import { ChevronLeft, ChevronRight, FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 import { BulkAssignmentDialog } from '~/components/cases/bulk-assignment-dialog';
 import { CaseEditor } from '~/components/cases/case-editor';
+import { displayLabel } from '~/components/cases/display-labels';
 import { useCasePermissions } from '~/components/cases/management-hooks';
 import type { CaseRecord } from '~/components/cases/presentation';
 import {
@@ -102,15 +103,15 @@ function CasesPage() {
       {/* Page heading and lightweight search, without dashboard statistics. */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Cases</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">案件管理</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            A clear view of your assigned work and next follow-up.
+            查看案件、委外狀態與後續追蹤事項。
           </p>
         </div>
         {permissions.can('case.create') && <CaseEditor />}
         <Input
-          aria-label="Filter cases"
-          placeholder="Filter name, code, case no. or address"
+          aria-label="搜尋案件"
+          placeholder="搜尋姓名、代號、案件編號或地址"
           className="md:max-w-sm"
           maxLength={120}
           value={query}
@@ -127,15 +128,15 @@ function CasesPage() {
         {[
           {
             key: 'region',
-            label: 'Region filter',
+            label: '地區',
             choices: [
               ...REGIONS.map((value) => ({ value, label: value })),
-              { value: '__missing__', label: 'Not recorded' },
+              { value: '__missing__', label: '未填寫' },
             ],
           },
           {
             key: 'collectorId',
-            label: 'Collector filter',
+            label: '外收人員',
             choices:
               collectors.data?.map((c) => ({
                 value: c.id,
@@ -144,15 +145,15 @@ function CasesPage() {
           },
           {
             key: 'assignmentStatus',
-            label: 'Assignment filter',
+            label: '委外狀態',
             choices: [
-              { value: 'assigned', label: 'Assigned' },
-              { value: 'unassigned', label: 'Unassigned' },
+              { value: 'assigned', label: '已委外' },
+              { value: 'unassigned', label: '未委外' },
             ],
           },
           {
             key: 'status',
-            label: 'Case status filter',
+            label: '案件狀態',
             choices: [
               'pending',
               'assigned',
@@ -160,7 +161,7 @@ function CasesPage() {
               'installment',
               'settled',
               'unresolved',
-            ].map((value) => ({ value, label: value.replaceAll('_', ' ') })),
+            ].map((value) => ({ value, label: displayLabel(value) })),
           },
         ].map((filter) => (
           <select
@@ -195,7 +196,7 @@ function CasesPage() {
             }
           >
             <option value="">
-              All · {filter.label.replace(' filter', '')}
+              全部 · {filter.label.replace(' filter', '')}
             </option>
             {filter.choices.map((choice) => (
               <option key={choice.value} value={choice.value}>
@@ -208,11 +209,10 @@ function CasesPage() {
       {canAssign && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <output
-            aria-label="Selected cases"
+            aria-label="已選案件"
             className="text-sm text-muted-foreground"
           >
-            Selected: {selected.length} cases · Selection applies to this page
-            and filters.
+            已選擇： {selected.length} 筆案件 · 選取範圍限目前頁面與篩選條件。
           </output>
           <BulkAssignmentDialog
             caseIds={selected}
@@ -230,9 +230,9 @@ function CasesPage() {
             {result.data.items.length === 0 ? (
               <div className="flex flex-col items-center gap-3 px-4 py-16 text-center">
                 <FolderOpen className="size-8 text-muted-foreground" />
-                <h2 className="text-lg font-medium">No cases found</h2>
+                <h2 className="text-lg font-medium">找不到案件</h2>
                 <p className="text-sm text-muted-foreground">
-                  Try another search, or ask an administrator to assign a case.
+                  請嘗試其他搜尋條件，或請管理員指派案件。
                 </p>
                 {query && (
                   <Button
@@ -241,7 +241,7 @@ function CasesPage() {
                       void navigate({ search: { query: '', page: 1 } })
                     }
                   >
-                    Clear filter
+                    清除篩選
                   </Button>
                 )}
                 {page > 1 && (
@@ -251,7 +251,7 @@ function CasesPage() {
                       void navigate({ search: { ...search, page: 1 } })
                     }
                   >
-                    First page
+                    第一頁
                   </Button>
                 )}
               </div>
@@ -262,7 +262,7 @@ function CasesPage() {
                     {canAssign && (
                       <TableHead className="w-12 px-4">
                         <Checkbox
-                          aria-label="Select current page"
+                          aria-label="全選目前頁面"
                           disabled={!selectable.length}
                           checked={
                             allSelected
@@ -280,13 +280,13 @@ function CasesPage() {
                         />
                       </TableHead>
                     )}
-                    <TableHead className="px-4">Customer</TableHead>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Case no.</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Amount due</TableHead>
-                    <TableHead>Region / Collector</TableHead>
-                    <TableHead className="px-4 text-right">Updated</TableHead>
+                    <TableHead className="px-4">客戶</TableHead>
+                    <TableHead>代號</TableHead>
+                    <TableHead>案件編號</TableHead>
+                    <TableHead>案件狀態</TableHead>
+                    <TableHead className="text-right">應收款項</TableHead>
+                    <TableHead>地區／外收人員</TableHead>
+                    <TableHead className="px-4 text-right">更新時間</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -295,7 +295,7 @@ function CasesPage() {
                       {canAssign && (
                         <TableCell className="px-4">
                           <Checkbox
-                            aria-label={`Select ${record.caseNo}`}
+                            aria-label={`選取 ${record.caseNo}`}
                             disabled={!!record.isAssigned}
                             checked={selected.includes(record.id)}
                             onCheckedChange={(checked) =>
@@ -337,9 +337,9 @@ function CasesPage() {
                         {money(record.amountDue)}
                       </TableCell>
                       <TableCell>
-                        <p>{record.region ?? 'Not recorded'}</p>
+                        <p>{record.region ?? '未填寫'}</p>
                         <p className="mt-1 text-muted-foreground">
-                          {record.currentCollectorName ?? 'Unassigned'}
+                          {record.currentCollectorName ?? '未委外'}
                         </p>
                       </TableCell>
                       <TableCell className="px-4 text-right text-muted-foreground">
@@ -353,31 +353,31 @@ function CasesPage() {
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
             <p>
-              {result.data.total} cases · Page {page} of {pages}
+              {result.data.total} 筆案件 · 第 {page} ／ {pages}
             </p>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                aria-label="Previous page"
+                aria-label="上一頁"
                 disabled={page <= 1}
                 onClick={() =>
                   void navigate({ search: { ...search, page: page - 1 } })
                 }
               >
                 <ChevronLeft className="size-4" />
-                Previous
+                上一頁
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                aria-label="Next page"
+                aria-label="下一頁"
                 disabled={page >= pages}
                 onClick={() =>
                   void navigate({ search: { ...search, page: page + 1 } })
                 }
               >
-                Next
+                下一頁
                 <ChevronRight className="size-4" />
               </Button>
             </div>

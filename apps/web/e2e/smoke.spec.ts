@@ -18,12 +18,12 @@ test.describe('Smoke tests', () => {
 
     // All four system-status cards render (proves SSR + hydration). Scoped
     // to the section — "R2 Storage" also appears as an example card.
-    const status = page.locator('section').filter({ hasText: 'System Status' });
+    const status = page.locator('section').filter({ hasText: '系統狀態' });
     for (const name of [
-      'API Connection',
-      'KV Storage',
+      'API 連線',
+      'KV 儲存空間',
       'D1 Database',
-      'R2 Storage',
+      'R2 儲存空間',
     ]) {
       await expect(status.getByText(name, { exact: true })).toBeVisible();
     }
@@ -31,17 +31,17 @@ test.describe('Smoke tests', () => {
     // At least one health check resolves to "Healthy" — proves the full
     // frontend → oRPC client → TanStack Query → Hono backend chain is intact.
     // We don't assert all four, since R2 may be unconfigured on a given stage.
-    await expect(page.getByText('Healthy').first()).toBeVisible({
+    await expect(page.getByText('正常').first()).toBeVisible({
       timeout: 15_000,
     });
   });
 
   test('homepage lists the example cards (no hub page)', async ({ page }) => {
     await page.goto('/');
-    const demos = page.locator('section').filter({ hasText: 'Examples' });
-    await expect(demos.getByText('Per-User Data — Todos')).toBeVisible();
-    await expect(demos.getByText('API Key Authentication')).toBeVisible();
-    await expect(demos.getByText('File Uploads — R2')).toBeVisible();
-    await expect(demos.getByText('SSR Data Fetching')).toBeVisible();
+    const demos = page.locator('section').filter({ hasText: '範例' });
+    await expect(demos.getByText('個人資料 — 待辦清單')).toBeVisible();
+    await expect(demos.getByText('API 金鑰驗證')).toBeVisible();
+    await expect(demos.getByText('檔案上傳 — R2')).toBeVisible();
+    await expect(demos.getByText('伺服器端資料載入')).toBeVisible();
   });
 });

@@ -17,7 +17,7 @@ export function ReviewNotice() {
       search={{ page: 1, query: '', status: 'pending', type: '' }}
       className="text-sm font-medium hover:text-foreground"
     >
-      Pending review {result.isSuccess ? result.data : '…'}
+      待確認 {result.isSuccess ? result.data : '…'}
     </Link>
   );
 }

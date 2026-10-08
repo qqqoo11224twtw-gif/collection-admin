@@ -3,7 +3,6 @@ import { Badge } from '@saasflare-dev/ui/components/badge';
 import { Button } from '@saasflare-dev/ui/components/button';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -14,6 +13,8 @@ import { Label } from '@saasflare-dev/ui/components/label';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { displayError } from '~/components/cases/display-labels';
+import { DialogContent } from '~/components/cases/localized-dialog';
 import {
   useCasePermissions,
   useRefreshCases,
@@ -56,17 +57,14 @@ function CollectorEditor({ record }: { record?: Collector }) {
           variant={record ? 'outline' : 'default'}
           size={record ? 'sm' : 'default'}
         >
-          {record ? 'Edit collector' : 'New collector'}
+          {record ? '編輯外收人員' : '新增外收人員'}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {record ? 'Edit collector' : 'New collector'}
-          </DialogTitle>
+          <DialogTitle>{record ? '編輯外收人員' : '新增外收人員'}</DialogTitle>
           <DialogDescription>
-            Link a login account to grant access to assigned cases. Messaging
-            identities are managed separately.
+            綁定登入帳號後可查看指派案件，通訊身分另行管理。
           </DialogDescription>
         </DialogHeader>
         {open && (
@@ -93,16 +91,12 @@ function CollectorEditor({ record }: { record?: Collector }) {
                 await refresh();
                 setOpen(false);
               } catch (failure: unknown) {
-                setError(
-                  failure instanceof Error
-                    ? failure.message
-                    : 'Collector could not be saved.',
-                );
+                setError(displayError(failure, '無法儲存外收人員。'));
               }
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="collector-name">Display name</Label>
+              <Label htmlFor="collector-name">顯示名稱</Label>
               <Input
                 id="collector-name"
                 name="displayName"
@@ -112,7 +106,7 @@ function CollectorEditor({ record }: { record?: Collector }) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="collector-code">Collector code</Label>
+              <Label htmlFor="collector-code">外收人員代號</Label>
               <Input
                 id="collector-code"
                 name="code"
@@ -122,14 +116,14 @@ function CollectorEditor({ record }: { record?: Collector }) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="collector-user">Linked login</Label>
+              <Label htmlFor="collector-user">登入帳號</Label>
               <select
                 id="collector-user"
                 name="userId"
                 defaultValue={record?.userId ?? ''}
                 className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
               >
-                <option value="">No login linked</option>
+                <option value="">未綁定登入帳號</option>
                 {users.data?.map((account) => (
                   <option key={account.id} value={account.id}>
                     {account.name} · {account.email}
@@ -137,12 +131,12 @@ function CollectorEditor({ record }: { record?: Collector }) {
                 ))}
               </select>
               <p className="text-sm text-muted-foreground">
-                A login link cannot change while assignments are current.
+                仍有有效派單時，無法變更登入帳號綁定。
               </p>
             </div>
             {users.isError && (
               <p role="alert" className="text-sm text-destructive">
-                Login accounts could not be loaded.
+                無法載入登入帳號。
               </p>
             )}
             {error && (
@@ -154,7 +148,7 @@ function CollectorEditor({ record }: { record?: Collector }) {
               type="submit"
               disabled={busy || users.isPending || users.isError}
             >
-              {busy ? 'Saving…' : 'Save collector'}
+              {busy ? '儲存中…' : '儲存外收人員'}
             </Button>
           </form>
         )}
@@ -177,16 +171,16 @@ function CollectorsPage() {
   if (!permissions.can('collector.manage'))
     return (
       <p role="alert" className="text-sm text-destructive">
-        You do not have permission to manage collectors.
+        無外收人員管理權限。
       </p>
     );
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Collectors</h1>
+          <h1 className="text-2xl font-semibold">外收人員</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Manage the people responsible for field collection.
+            管理負責委外案件的外收人員。
           </p>
         </div>
         <CollectorEditor />
@@ -202,7 +196,7 @@ function CollectorsPage() {
         <CaseError retry={() => void result.refetch()} />
       ) : !result.data.length ? (
         <p className="rounded-xl bg-muted/50 p-8 text-sm text-muted-foreground">
-          No collectors yet. Add your first collector.
+          暫無外收人員，請新增第一位外收人員。
         </p>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
@@ -219,11 +213,11 @@ function CollectorsPage() {
                   </p>
                 </div>
                 <Badge variant="secondary">
-                  {record.isActive ? 'Active' : 'Inactive'}
+                  {record.isActive ? '啟用中' : '已停用'}
                 </Badge>
               </div>
               <p className="mt-4 text-sm text-muted-foreground">
-                {record.userId ? 'Login account linked' : 'No login linked'}
+                {record.userId ? '已綁定登入帳號' : '未綁定登入帳號'}
               </p>
               <div className="mt-4 flex gap-2">
                 <CollectorEditor record={record} />
@@ -244,15 +238,11 @@ function CollectorsPage() {
                       });
                       await refresh();
                     } catch (failure: unknown) {
-                      setError(
-                        failure instanceof Error
-                          ? failure.message
-                          : 'Unable to change collector status.',
-                      );
+                      setError(displayError(failure, '無法變更外收人員狀態。'));
                     }
                   }}
                 >
-                  {record.isActive ? 'Deactivate' : 'Activate'}
+                  {record.isActive ? '停用' : '啟用'}
                 </Button>
               </div>
             </article>

@@ -40,25 +40,27 @@ export function ConfigNotice({ status }: { status: ConfigStatus | undefined }) {
       {status.missing.length > 0 && (
         <Alert variant="destructive">
           <AlertTriangle size={16} />
-          <AlertTitle>Server configuration missing</AlertTitle>
+          <AlertTitle>伺服器設定缺漏</AlertTitle>
           <AlertDescription>
-            Required for AUTH_MODE={status.authMode}:{' '}
-            {status.missing.join(', ')}. See docs/auth.md.
+            此登入模式需要設定 AUTH_MODE={status.authMode}:{' '}
+            {status.missing.join(', ')}。請參閱 docs/auth.md。
           </AlertDescription>
         </Alert>
       )}
       {status.warnings.length > 0 && (
         <Alert>
           <Settings2 size={16} />
-          <AlertTitle>Degraded configuration</AlertTitle>
+          <AlertTitle>設定不完整</AlertTitle>
           <AlertDescription className="flex flex-col gap-1">
             {emailVars.length > 0 && status.mode === 'local' && (
               <span>
-                No mail delivery ({emailVars.join(' / ')}): sign-in codes are
-                printed to the server console and readable at /api/dev/otp.
+                未設定寄信服務（{emailVars.join(' / ')}
+                ）：登入驗證碼會顯示於伺服器主控台及 /api/dev/otp。
               </span>
             )}
-            <span>Unset: {status.warnings.join(', ')}. See docs/auth.md.</span>
+            <span>
+              尚未設定： {status.warnings.join(', ')}。請參閱 docs/auth.md。
+            </span>
           </AlertDescription>
         </Alert>
       )}

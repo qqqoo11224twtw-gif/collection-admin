@@ -39,13 +39,11 @@ function Home() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Terminal className="w-6 h-6" />
-            {APP_DISPLAY_NAME} Console
+            {APP_DISPLAY_NAME} 後台
           </h1>
           <p className="text-muted-foreground">
-            System operational.{' '}
-            <span className="text-success font-medium">
-              Ready for requests.
-            </span>
+            系統運作正常。{' '}
+            <span className="text-success font-medium">可接收請求。</span>
           </p>
         </div>
         <UserMenu />
@@ -56,9 +54,9 @@ function Home() {
         search={{ query: '', page: 1 }}
         className="rounded-xl bg-card p-5 shadow-xs ring-1 ring-foreground/10 hover:bg-muted"
       >
-        <span className="text-lg font-medium">Case workspace →</span>
+        <span className="text-lg font-medium">案件管理 →</span>
         <span className="mt-2 block text-sm text-muted-foreground">
-          Browse fictional cases, search records and view private demo images.
+          瀏覽虛構案件、搜尋資料與查看私人示範圖片。
         </span>
       </Link>
 
@@ -67,30 +65,30 @@ function Home() {
       {/* System Status */}
       <section className="space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-          System Status
+          系統狀態
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <StatusCheckCard
-            title="API Connection"
+            title="API 連線"
             description="Hono Worker via ORPC"
             queryKey="connection"
             icon={Server}
           />
           <StatusCheckCard
-            title="KV Storage"
+            title="KV 儲存空間"
             description="Cloudflare Workers KV"
             queryKey="kv"
             icon={Workflow}
           />
           <StatusCheckCard
             title="D1 Database"
-            description="Serverless SQLite Edge DB"
+            description="無伺服器 SQLite 邊緣資料庫"
             queryKey="db"
             icon={Database}
           />
           <StatusCheckCard
-            title="R2 Storage"
-            description="Object Storage"
+            title="R2 儲存空間"
+            description="物件儲存"
             queryKey="r2"
             icon={HardDrive}
           />
@@ -100,30 +98,30 @@ function Home() {
       {/* Examples — linked straight from the console, no hub page */}
       <section className="space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-          Examples
+          範例
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <ExampleCard
-            title="Per-User Data — Todos"
-            description="A todo list scoped to your account: the pattern for every user-owned table."
+            title="個人資料 — 待辦清單"
+            description="帳號專屬待辦清單，示範使用者資料隔離。"
             href="/examples/components/todos"
             icon={LayoutTemplate}
           />
           <ExampleCard
-            title="API Key Authentication"
+            title="API 金鑰驗證"
             description="Create a key, then call the external API (GET /api/v1/whoami) with it."
             href="/examples/components/api-keys"
             icon={KeyRound}
           />
           <ExampleCard
-            title="File Uploads — R2"
-            description="Direct-to-bucket uploads with presigned URLs and progress tracking."
+            title="檔案上傳 — R2"
+            description="使用預簽署網址上傳檔案並追蹤進度。"
             href="/examples/components/r2-upload"
             icon={HardDrive}
           />
           <ExampleCard
-            title="SSR Data Fetching"
-            description="Server-rendered data with TanStack Query prefetching."
+            title="伺服器端資料載入"
+            description="使用 TanStack Query 預先載入資料並在伺服器呈現。"
             href="/examples/ssr"
             icon={Server}
           />
@@ -133,7 +131,7 @@ function Home() {
       {/* Quick Links / Resources */}
       <section className="space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-          Resources
+          資源
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <ResourceCard
@@ -171,11 +169,11 @@ function Home() {
           GitHub
         </a>
         <p className="text-xs text-muted-foreground font-mono">
-          Edit{' '}
+          編輯{' '}
           <span className="bg-muted px-1 py-0.5 rounded text-foreground">
             apps/web/src/routes/index.tsx
           </span>{' '}
-          to start building your app.
+          開始建立應用程式。
         </p>
       </div>
     </main>
@@ -313,10 +311,10 @@ function StatusCheckCard({
             )}
             <span className="capitalize">
               {query.isLoading
-                ? 'Checking'
+                ? '檢查中'
                 : query.isError || !query.data
-                  ? 'Error'
-                  : 'Healthy'}
+                  ? '錯誤'
+                  : '正常'}
             </span>
           </div>
         </TooltipTrigger>

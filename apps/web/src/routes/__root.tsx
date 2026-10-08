@@ -25,7 +25,7 @@ export const Route = createRootRouteWithContext<{
       {
         name: 'description',
         content:
-          'Full-stack SaaS starter on Cloudflare Workers — Hono, oRPC, TanStack Start, better-auth.',
+          '基於 Cloudflare Workers 的 SaaS 專案，使用 Hono、oRPC、TanStack Start 與 better-auth。',
       },
     ],
     links: [
@@ -45,7 +45,7 @@ function RootComponent() {
     // Forked products must give this a unique value.
     // suppressHydrationWarning is required by next-themes: its inline script
     // stamps a class and color-scheme onto <html> before React hydrates.
-    <html lang="en" data-app={APP_ID} suppressHydrationWarning>
+    <html lang="zh-TW" data-app={APP_ID} suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

@@ -2,7 +2,6 @@ import { REGIONS } from '@saasflare-dev/api/regions';
 import { Button } from '@saasflare-dev/ui/components/button';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -12,6 +11,8 @@ import { Input } from '@saasflare-dev/ui/components/input';
 import { Label } from '@saasflare-dev/ui/components/label';
 import { useNavigate } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
+import { displayError } from '~/components/cases/display-labels';
+import { DialogContent } from '~/components/cases/localized-dialog';
 import { useRefreshCases } from './management-hooks';
 
 export function ManualCaseEditor() {
@@ -35,7 +36,7 @@ export function ManualCaseEditor() {
         customerName: String(data.get('customerName')),
         code: String(data.get('code')),
         region: String(data.get('region')),
-        address: String(data.get('address') || 'Not recorded'),
+        address: String(data.get('address') || '未填寫'),
         amountDue: Number(data.get('amountDue') || 0),
         idempotencyKey: key.current,
         duplicateOverride: override,
@@ -54,23 +55,18 @@ export function ManualCaseEditor() {
         lastCreatedAt?: string;
         message?: string;
       };
-      if (!response.ok)
-        throw new Error(result.message ?? 'Case could not be created.');
+      if (!response.ok) throw new Error(result.message ?? '無法建立案件。');
       if (result.kind === 'duplicate_warning') {
         setWarning(result.lastCreatedAt ?? '');
         return;
       }
-      if (!result.id) throw new Error('Invalid creation response.');
+      if (!result.id) throw new Error('建立案件的回應無效。');
       await refresh();
       setOpen(false);
       setWarning(null);
       await navigate({ to: '/cases/$caseId', params: { caseId: result.id } });
     } catch (failure: unknown) {
-      setError(
-        failure instanceof Error
-          ? failure.message
-          : 'Could not save this case.',
-      );
+      setError(displayError(failure, '無法儲存案件。'));
     } finally {
       setBusy(false);
     }
@@ -88,14 +84,12 @@ export function ManualCaseEditor() {
       }}
     >
       <DialogTrigger asChild>
-        <Button>New case</Button>
+        <Button>新增案件</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl max-h-[90svh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create case</DialogTitle>
-          <DialogDescription>
-            Enter the case details and upload finished images.
-          </DialogDescription>
+          <DialogTitle>新增案件</DialogTitle>
+          <DialogDescription>請填寫案件資料並上傳委外圖片。</DialogDescription>
         </DialogHeader>
         {/* Finished private artwork and human-entered fields share one creation transaction. */}
         <form
@@ -107,7 +101,7 @@ export function ManualCaseEditor() {
           }}
         >
           <div className="space-y-2">
-            <Label htmlFor="manual-files">Finished images</Label>
+            <Label htmlFor="manual-files">委外圖片</Label>
             <Input
               id="manual-files"
               name="files"
@@ -117,13 +111,13 @@ export function ManualCaseEditor() {
               disabled={busy}
             />
             <p className="text-sm text-muted-foreground">
-              PNG, JPEG or WebP · up to 5 images, 5 MiB each.
+              支援 PNG、JPEG 或 WebP · 最多 5 張 · 每張上限 5 MiB。
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {[
-              { key: 'code', label: 'Code', max: 60 },
-              { key: 'customerName', label: 'Customer name', max: 120 },
+              { key: 'code', label: '代號', max: 60 },
+              { key: 'customerName', label: '客戶姓名', max: 120 },
             ].map((field) => (
               <div key={field.key} className="space-y-2">
                 <Label htmlFor={`manual-${field.key}`}>{field.label}</Label>
@@ -138,7 +132,7 @@ export function ManualCaseEditor() {
             ))}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="manual-region">Region</Label>
+            <Label htmlFor="manual-region">地區</Label>
             <select
               id="manual-region"
               name="region"
@@ -147,7 +141,7 @@ export function ManualCaseEditor() {
               disabled={busy}
               defaultValue=""
             >
-              <option value="">Choose a region</option>
+              <option value="">請選擇地區</option>
               {REGIONS.map((region) => (
                 <option key={region} value={region}>
                   {region}
@@ -157,11 +151,11 @@ export function ManualCaseEditor() {
           </div>
           <details open>
             <summary className="cursor-pointer text-sm">
-              Optional case details
+              案件資料（選填）
             </summary>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="manual-address">Address</Label>
+                <Label htmlFor="manual-address">地址</Label>
                 <Input
                   id="manual-address"
                   name="address"
@@ -170,7 +164,7 @@ export function ManualCaseEditor() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="manual-amount">Amount due (TWD)</Label>
+                <Label htmlFor="manual-amount">應收款項（新臺幣）</Label>
                 <Input
                   id="manual-amount"
                   name="amountDue"
@@ -186,7 +180,7 @@ export function ManualCaseEditor() {
           {warning !== null && (
             <div
               role="alertdialog"
-              aria-label="Duplicate warning"
+              aria-label="重複建案提醒"
               className="space-y-3 rounded-lg bg-warning/10 p-4"
             >
               <p className="font-medium">發現疑似重複案件</p>
@@ -229,10 +223,10 @@ export function ManualCaseEditor() {
               disabled={busy}
               onClick={() => setOpen(false)}
             >
-              Cancel
+              取消
             </Button>
             <Button type="submit" disabled={busy || warning !== null}>
-              {busy ? 'Saving…' : 'Create case'}
+              {busy ? '儲存中…' : '新增案件'}
             </Button>
           </div>
         </form>
