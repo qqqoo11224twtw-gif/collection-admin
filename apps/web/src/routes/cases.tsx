@@ -29,6 +29,14 @@ function CaseWorkspace() {
               </Link>
             )}
             <ReviewNotice />
+            {permissions.can('telegram_route.manage') && (
+              <Link
+                to="/cases/telegram"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Telegram settings
+              </Link>
+            )}
             {permissions.can('collector.manage') && (
               <Link
                 to="/cases/collectors"

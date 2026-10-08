@@ -254,8 +254,6 @@ describe('Unified intake', () => {
       proposedData: {
         ...fields,
         code: current.code,
-        customer_name: '另一虛構提案',
-        address: '另一虛構地址',
         amount_due: 999,
       },
     });
@@ -268,7 +266,7 @@ describe('Unified intake', () => {
     ).toEqual(before);
     expect((await detail(row.id)).proposedData.amount_due).toBe(999);
   });
-  it('case_no exact and normalized address comparison safely disambiguate', async () => {
+  it('different codes remain separate despite matching name and normalized address; case_no exact wins', async () => {
     const name = crypto.randomUUID();
     const a = await existing({ customer_name: name, address: '虛構路１２號' });
     await existing({ customer_name: name, address: '虛構路99號' });
@@ -281,8 +279,8 @@ describe('Unified intake', () => {
       },
     });
     expect((await detail(row.id)).matching).toMatchObject({
-      kind: 'unique_match',
-      candidates: [{ id: a.id }],
+      kind: 'no_match',
+      candidates: [],
     });
     const byNo = await receive({
       caseNo: a.caseNo,

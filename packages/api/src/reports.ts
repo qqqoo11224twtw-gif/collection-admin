@@ -74,10 +74,32 @@ export async function createReport(
   context: Context,
   input: ReturnType<typeof reportCreateSchema.parse>,
   source: 'admin' | 'collector_portal' | 'telegram' | 'api',
+  originKey?: string,
 ) {
   requirePermission(context, 'report.create');
   input = reportCreateSchema.parse(input);
   await requireCaseAccess(context, input.caseId);
+  if (originKey) {
+    const existing = await context.env.DB.prepare(
+      'SELECT id,case_id,created_by_user_id,content FROM reports WHERE origin_key=?',
+    )
+      .bind(originKey)
+      .first<{
+        id: string;
+        case_id: string;
+        created_by_user_id: string;
+        content: string;
+      }>();
+    if (existing) {
+      if (
+        existing.case_id !== input.caseId ||
+        existing.created_by_user_id !== context.user?.id ||
+        existing.content !== input.content
+      )
+        throw new ORPCError('CONFLICT');
+      return { id: existing.id };
+    }
+  }
   const fields = await validatedFields(input);
   const [current] = await context.DB.select({
     id: assignments.id,
@@ -106,7 +128,7 @@ export async function createReport(
       fields.status !== 'needs_review',
     ),
     context.env.DB.prepare(
-      `INSERT INTO reports (id,case_id,assignment_id,collector_id,created_by_user_id,content,status,revisit_status,revisit_reason,payment_detected,payment_amount,source,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM cases WHERE id=? AND write_token=?)`,
+      `INSERT INTO reports (id,case_id,assignment_id,collector_id,created_by_user_id,content,status,revisit_status,revisit_reason,payment_detected,payment_amount,source,created_at,updated_at,origin_key) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM cases WHERE id=? AND write_token=?)`,
     ).bind(
       id,
       input.caseId,
@@ -122,6 +144,7 @@ export async function createReport(
       source,
       now,
       now,
+      originKey ?? null,
       input.caseId,
       token,
     ),
@@ -143,6 +166,13 @@ export async function createReport(
           token,
           source === 'telegram' ? 'telegram' : 'manual',
         )
+      : []),
+    ...(source === 'telegram' && originKey?.startsWith('telegram-update:')
+      ? [
+          context.env.DB.prepare(
+            'UPDATE telegram_updates SET report_id=? WHERE id=? AND EXISTS(SELECT 1 FROM reports WHERE id=? AND origin_key=?)',
+          ).bind(id, originKey.slice('telegram-update:'.length), id, originKey),
+        ]
       : []),
   ]);
   return { id };

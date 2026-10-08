@@ -10,6 +10,7 @@ import { planetApi } from './planet';
 import { caseLookupApi, reportsApi } from './reports';
 import { reviewsApi } from './reviews';
 import { storageApi } from './storage';
+import { telegramApi } from './telegram';
 import { todosApi } from './todos';
 
 export const appRouter = {
@@ -22,6 +23,7 @@ export const appRouter = {
   reports: reportsApi,
   reviews: reviewsApi,
   intake: intakeApi,
+  telegram: telegramApi,
   collectors: collectorsApi,
   healthCheck: {
     connection,

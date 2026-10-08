@@ -319,7 +319,7 @@ export const auditLogs = sqliteTable(
     userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
     action: text('action').notNull(),
     entityType: text('entity_type', {
-      enum: ['case', 'collector', 'review', 'intake'],
+      enum: ['case', 'collector', 'review', 'intake', 'telegram'],
     }).notNull(),
     entityId: text('entity_id').notNull(),
     metadata: text('metadata').notNull(),
@@ -382,6 +382,7 @@ export const reports = sqliteTable(
       .default(false),
     paymentAmount: integer('payment_amount'),
     source: text('source', { enum: REPORT_SOURCES }).notNull(),
+    originKey: text('origin_key').unique(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
     version: integer('version').notNull().default(0),
@@ -629,6 +630,156 @@ export const intakeMedia = sqliteTable(
     check(
       'intake_media_type_check',
       sql`${t.mediaType} IN ('image/png','image/jpeg','image/webp')`,
+    ),
+  ],
+);
+
+export const TELEGRAM_ROUTE_TYPES = [
+  'collector',
+  'report_destination',
+  'intake_source',
+] as const;
+export const telegramRoutes = sqliteTable(
+  'telegram_routes',
+  {
+    id: text('id').primaryKey(),
+    collectorId: text('collector_id').references(() => collectors.id, {
+      onDelete: 'restrict',
+    }),
+    chatId: text('chat_id').notNull(),
+    topicId: integer('topic_id'),
+    routeType: text('route_type', { enum: TELEGRAM_ROUTE_TYPES }).notNull(),
+    isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+    managedByUserId: text('managed_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('telegram_routes_target_idx').on(
+      t.chatId,
+      sql`coalesce(${t.topicId},0)`,
+      t.routeType,
+    ),
+    check(
+      'telegram_route_type_check',
+      sql`${t.routeType} IN ('collector','report_destination','intake_source')`,
+    ),
+    check(
+      'telegram_route_topic_check',
+      sql`${t.topicId} IS NULL OR ${t.topicId}>0`,
+    ),
+  ],
+);
+
+export const telegramIdentities = sqliteTable('telegram_identities', {
+  id: text('id').primaryKey(),
+  telegramUserId: text('telegram_user_id').notNull().unique(),
+  collectorId: text('collector_id').references(() => collectors.id, {
+    onDelete: 'restrict',
+  }),
+  userId: text('user_id').references(() => user.id, { onDelete: 'restrict' }),
+  displayName: text('display_name'),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export const telegramAlbums = sqliteTable(
+  'telegram_albums',
+  {
+    id: text('id').primaryKey(),
+    intakeId: text('intake_id').references(() => intakeItems.id, {
+      onDelete: 'restrict',
+    }),
+    routeId: text('route_id')
+      .notNull()
+      .references(() => telegramRoutes.id, { onDelete: 'restrict' }),
+    dueAt: integer('due_at', { mode: 'timestamp_ms' }).notNull(),
+    finalizedAt: integer('finalized_at', { mode: 'timestamp_ms' }),
+    version: integer('version').notNull().default(0),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [index('telegram_album_due_idx').on(t.dueAt, t.finalizedAt)],
+);
+
+export const telegramUpdates = sqliteTable(
+  'telegram_updates',
+  {
+    id: text('id').primaryKey(),
+    payload: text('payload').notNull(),
+    status: text('status', {
+      enum: ['pending', 'processing', 'done', 'failed'],
+    })
+      .notNull()
+      .default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: integer('next_attempt_at', {
+      mode: 'timestamp_ms',
+    }).notNull(),
+    leaseUntil: integer('lease_until', { mode: 'timestamp_ms' }),
+    leaseToken: text('lease_token'),
+    albumId: text('album_id').references(() => telegramAlbums.id, {
+      onDelete: 'restrict',
+    }),
+    intakeId: text('intake_id').references(() => intakeItems.id, {
+      onDelete: 'restrict',
+    }),
+    mediaId: text('media_id').references(() => intakeMedia.id, {
+      onDelete: 'restrict',
+    }),
+    reportId: text('report_id').references(() => reports.id, {
+      onDelete: 'restrict',
+    }),
+    resultCode: text('result_code'),
+    lastErrorCode: text('last_error_code'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    processedAt: integer('processed_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [
+    index('telegram_updates_due_idx').on(t.status, t.nextAttemptAt),
+    check('telegram_update_json_check', sql`json_valid(${t.payload})`),
+    check(
+      'telegram_update_status_check',
+      sql`${t.status} IN ('pending','processing','done','failed')`,
+    ),
+  ],
+);
+
+export const telegramOutboundJobs = sqliteTable(
+  'telegram_outbound_jobs',
+  {
+    id: text('id').primaryKey(),
+    dedupeKey: text('dedupe_key').notNull().unique(),
+    messageType: text('message_type', {
+      enum: ['report_destination', 'command_reply'],
+    }).notNull(),
+    reportId: text('report_id').references(() => reports.id, {
+      onDelete: 'restrict',
+    }),
+    routeId: text('route_id')
+      .notNull()
+      .references(() => telegramRoutes.id, { onDelete: 'restrict' }),
+    payload: text('payload').notNull(),
+    status: text('status', { enum: ['pending', 'sending', 'sent', 'failed'] })
+      .notNull()
+      .default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: integer('next_attempt_at', { mode: 'timestamp_ms' }),
+    leaseUntil: integer('lease_until', { mode: 'timestamp_ms' }),
+    leaseToken: text('lease_token'),
+    telegramMessageId: text('telegram_message_id'),
+    lastErrorCode: text('last_error_code'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    sentAt: integer('sent_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [
+    index('telegram_outbound_due_idx').on(t.status, t.nextAttemptAt),
+    check('telegram_outbound_json_check', sql`json_valid(${t.payload})`),
+    check(
+      'telegram_outbound_status_check',
+      sql`${t.status} IN ('pending','sending','sent','failed')`,
     ),
   ],
 );

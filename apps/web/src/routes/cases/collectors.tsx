@@ -65,8 +65,8 @@ function CollectorEditor({ record }: { record?: Collector }) {
             {record ? 'Edit collector' : 'New collector'}
           </DialogTitle>
           <DialogDescription>
-            Link a login account to grant access to assigned cases. No Telegram
-            identifiers are stored.
+            Link a login account to grant access to assigned cases. Messaging
+            identities are managed separately.
           </DialogDescription>
         </DialogHeader>
         {open && (

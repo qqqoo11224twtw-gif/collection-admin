@@ -17,6 +17,11 @@ import {
   intakeImageResponse,
   uploadIntakeImages,
 } from '@saasflare-dev/api/intake-media';
+import { telegramClient } from '@saasflare-dev/api/telegram-client';
+import {
+  runTelegramProcessing,
+  telegramWebhook,
+} from '@saasflare-dev/api/telegram-processing';
 import { verification } from '@saasflare-dev/db';
 import { desc, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
@@ -30,6 +35,19 @@ const app = new Hono<{
   Bindings: typeof server.Env;
   Variables: { apiKeyId: string; apiKeyUserId: string };
 }>();
+app.post('/api/telegram/webhook', async (c) =>
+  telegramWebhook(
+    {
+      env,
+      DB: drizzle(env.DB),
+      headers: c.req.raw.headers,
+      session: null,
+      user: null,
+      isAdmin: false,
+    },
+    c.req.raw,
+  ),
+);
 app.use(logger());
 
 app.use(
@@ -218,4 +236,25 @@ app.post('/api/intake/:intakeId/media', async (c) => {
     );
   }
 });
-export default app;
+export default Object.assign(app, {
+  async scheduled(
+    _controller: ScheduledController,
+    _bindings: unknown,
+    execution: ExecutionContext,
+  ) {
+    if (!['fake', 'live'].includes(env.TELEGRAM_MODE ?? '')) return;
+    execution.waitUntil(
+      runTelegramProcessing(
+        {
+          env,
+          DB: drizzle(env.DB),
+          headers: new Headers(),
+          session: null,
+          user: null,
+          isAdmin: false,
+        },
+        telegramClient(env),
+      ),
+    );
+  },
+});

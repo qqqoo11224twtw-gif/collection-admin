@@ -22,6 +22,7 @@ export const PERMISSIONS = [
   'intake.create',
   'intake.resolve',
   'intake.reject',
+  'telegram_route.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 interface Policy {

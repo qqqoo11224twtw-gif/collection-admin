@@ -141,7 +141,7 @@ export function intakeReviewBatch(
   const now = Date.now();
   const reason =
     proposal.type === 'case_match'
-      ? 'Multiple case candidates require a human choice.'
+      ? 'Case identity or address requires a human choice.'
       : 'Incomplete or uncertain extraction requires confirmation.';
   const source =
     row.source === 'telegram'

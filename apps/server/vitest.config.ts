@@ -46,6 +46,9 @@ export default defineConfig(async () => {
             RESEND_API_KEY: '',
             EMAIL_FROM: '',
             CASE_STORAGE_MODE: 'demo',
+            TELEGRAM_MODE: 'fake',
+            TELEGRAM_WEBHOOK_SECRET: 'test-webhook-placeholder',
+            BUSINESS_TIMEZONE: 'Asia/Taipei',
             TEST_MIGRATIONS: migrations,
             // Dummy R2 credentials so storage.presign can be smoke-tested.
             // getSignedUrl() signs locally (no network), so fake values are

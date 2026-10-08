@@ -22,6 +22,7 @@ import { Route as DesignScaleRouteImport } from './routes/design/scale'
 import { Route as DesignPatternsRouteImport } from './routes/design/patterns'
 import { Route as DesignOverviewRouteImport } from './routes/design/overview'
 import { Route as DesignComponentsRouteImport } from './routes/design/components'
+import { Route as CasesTelegramRouteImport } from './routes/cases/telegram'
 import { Route as CasesReviewsRouteImport } from './routes/cases/reviews'
 import { Route as CasesIntakeRouteImport } from './routes/cases/intake'
 import { Route as CasesCollectorsRouteImport } from './routes/cases/collectors'
@@ -99,6 +100,11 @@ const DesignComponentsRoute = DesignComponentsRouteImport.update({
   path: '/components',
   getParentRoute: () => DesignRoute,
 } as any)
+const CasesTelegramRoute = CasesTelegramRouteImport.update({
+  id: '/telegram',
+  path: '/telegram',
+  getParentRoute: () => CasesRoute,
+} as any)
 const CasesReviewsRoute = CasesReviewsRouteImport.update({
   id: '/reviews',
   path: '/reviews',
@@ -167,6 +173,7 @@ export interface FileRoutesByFullPath {
   '/cases/collectors': typeof CasesCollectorsRoute
   '/cases/intake': typeof CasesIntakeRouteWithChildren
   '/cases/reviews': typeof CasesReviewsRouteWithChildren
+  '/cases/telegram': typeof CasesTelegramRoute
   '/design/components': typeof DesignComponentsRoute
   '/design/overview': typeof DesignOverviewRoute
   '/design/patterns': typeof DesignPatternsRoute
@@ -189,6 +196,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/cases/collectors': typeof CasesCollectorsRoute
+  '/cases/telegram': typeof CasesTelegramRoute
   '/design/components': typeof DesignComponentsRoute
   '/design/overview': typeof DesignOverviewRoute
   '/design/patterns': typeof DesignPatternsRoute
@@ -216,6 +224,7 @@ export interface FileRoutesById {
   '/cases/collectors': typeof CasesCollectorsRoute
   '/cases/intake': typeof CasesIntakeRouteWithChildren
   '/cases/reviews': typeof CasesReviewsRouteWithChildren
+  '/cases/telegram': typeof CasesTelegramRoute
   '/design/components': typeof DesignComponentsRoute
   '/design/overview': typeof DesignOverviewRoute
   '/design/patterns': typeof DesignPatternsRoute
@@ -244,6 +253,7 @@ export interface FileRouteTypes {
     | '/cases/collectors'
     | '/cases/intake'
     | '/cases/reviews'
+    | '/cases/telegram'
     | '/design/components'
     | '/design/overview'
     | '/design/patterns'
@@ -266,6 +276,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/cases/$caseId'
     | '/cases/collectors'
+    | '/cases/telegram'
     | '/design/components'
     | '/design/overview'
     | '/design/patterns'
@@ -292,6 +303,7 @@ export interface FileRouteTypes {
     | '/cases/collectors'
     | '/cases/intake'
     | '/cases/reviews'
+    | '/cases/telegram'
     | '/design/components'
     | '/design/overview'
     | '/design/patterns'
@@ -410,6 +422,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignComponentsRouteImport
       parentRoute: typeof DesignRoute
     }
+    '/cases/telegram': {
+      id: '/cases/telegram'
+      path: '/telegram'
+      fullPath: '/cases/telegram'
+      preLoaderRoute: typeof CasesTelegramRouteImport
+      parentRoute: typeof CasesRoute
+    }
     '/cases/reviews': {
       id: '/cases/reviews'
       path: '/reviews'
@@ -523,6 +542,7 @@ interface CasesRouteChildren {
   CasesCollectorsRoute: typeof CasesCollectorsRoute
   CasesIntakeRoute: typeof CasesIntakeRouteWithChildren
   CasesReviewsRoute: typeof CasesReviewsRouteWithChildren
+  CasesTelegramRoute: typeof CasesTelegramRoute
   CasesIndexRoute: typeof CasesIndexRoute
 }
 
@@ -531,6 +551,7 @@ const CasesRouteChildren: CasesRouteChildren = {
   CasesCollectorsRoute: CasesCollectorsRoute,
   CasesIntakeRoute: CasesIntakeRouteWithChildren,
   CasesReviewsRoute: CasesReviewsRouteWithChildren,
+  CasesTelegramRoute: CasesTelegramRoute,
   CasesIndexRoute: CasesIndexRoute,
 }
 

@@ -38,7 +38,7 @@ export const reviewProposalSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('case_match'),
       query: caseLookupSchema,
-      candidateCaseIds: z.array(id).min(2).max(50),
+      candidateCaseIds: z.array(id).min(1).max(50),
     })
     .strict(),
   z

@@ -71,6 +71,13 @@
       "when": 1791432969404,
       "tag": "0009_brave_nicolaos",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1791435164102,
+      "tag": "0010_powerful_abomination",
+      "breakpoints": true
     }
   ]
 }

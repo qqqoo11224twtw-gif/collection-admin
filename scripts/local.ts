@@ -11,9 +11,12 @@ const env: NodeJS.ProcessEnv = {
   WRANGLER_SEND_METRICS: 'false',
 };
 for (const key of Object.keys(env)) {
-  if (/^(CLOUDFLARE_|ALCHEMY_|R2_|RESEND_)/.test(key)) delete env[key];
+  if (/^(CLOUDFLARE_|ALCHEMY_|R2_|RESEND_|TELEGRAM_)/.test(key))
+    delete env[key];
 }
 const children = new Set<ReturnType<typeof spawn>>();
+let scheduler: ReturnType<typeof setInterval> | undefined;
+let scheduling = false;
 function run(args: string[], cwd: string) {
   // Windows command shims require a shell; arguments here are fixed literals.
   const cli = process.env.npm_execpath;
@@ -38,6 +41,7 @@ function run(args: string[], cwd: string) {
   });
 }
 function stop() {
+  if (scheduler) clearInterval(scheduler);
   for (const child of children) {
     // pnpm launches nested processes; terminate only this launcher's live trees.
     if (process.platform === 'win32' && child.pid) {
@@ -103,12 +107,28 @@ if (process.argv[2] === 'build') {
       serverDir,
     );
     if (seeded !== 0) process.exit(seeded);
+    // Wrangler does not tick cron automatically in dev. Trigger its local-only
+    // scheduled-event emulator without making the webhook wait for processing.
+    scheduler = setInterval(async () => {
+      if (scheduling) return;
+      scheduling = true;
+      try {
+        await fetch('http://localhost:4000/__scheduled?cron=*+*+*+*+*', {
+          signal: AbortSignal.timeout(30000),
+        });
+      } catch {
+        /* The local Worker may still be starting or stopping. */
+      } finally {
+        scheduling = false;
+      }
+    }, 5000);
     process.exitCode = await Promise.race([
       run(
         [
           'exec',
           'wrangler',
           'dev',
+          '--test-scheduled',
           '--local',
           '--config',
           'wrangler.local.jsonc',

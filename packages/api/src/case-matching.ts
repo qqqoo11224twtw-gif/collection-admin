@@ -35,35 +35,38 @@ export class CaseMatchingService {
       })
         .from(cases)
         .where(
-          and(caseVisibility(context), sql`${column}=${value} COLLATE NOCASE`),
+          and(
+            caseVisibility(context),
+            sql`${column}=${value} COLLATE NOCASE`,
+            method === 'customer_name' && proposal.code
+              ? sql`(trim(${cases.code})='' OR ${cases.code}=${proposal.code} COLLATE NOCASE)`
+              : undefined,
+          ),
         )
         .orderBy(asc(cases.id))
         .limit(51);
-      if (!rows.length) {
-        continue;
-      }
+      if (!rows.length) continue;
       const truncated = rows.length > 50;
-      const addressMatches = proposal.address
-        ? rows.filter(
+      // Address is advisory: disagreement or missing code requires explicit review.
+      const strong =
+        method === 'case_no' ||
+        (method === 'code' &&
+          rows.every(
             (row) =>
-              normalizedAddress(row.address) ===
-              normalizedAddress(proposal.address ?? ''),
-          )
-        : [];
-      const candidates =
-        rows.length > 1 && addressMatches.length > 0 && !truncated
-          ? addressMatches
-          : rows;
+              (!proposal.customer_name ||
+                row.customerName.toLowerCase() ===
+                  proposal.customer_name.toLowerCase()) &&
+              (!proposal.address ||
+                normalizedAddress(row.address) ===
+                  normalizedAddress(proposal.address)),
+          ));
       return {
         kind:
-          candidates.length === 1 && !truncated
+          rows.length === 1 && !truncated && strong
             ? ('unique_match' as const)
             : ('ambiguous' as const),
-        candidates: candidates.slice(0, 50),
-        method:
-          addressMatches.length > 0 && rows.length > 1
-            ? `${method}+address`
-            : method,
+        candidates: rows.slice(0, 50),
+        method,
         truncated,
       };
     }
