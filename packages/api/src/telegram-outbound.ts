@@ -145,10 +145,10 @@ export async function processOutbound(
 ) {
   // A crashed/expired sending lease is uncertain: do not automatically re-send it.
   const expired = await context.env.DB.prepare(
-    "SELECT id FROM telegram_outbound_jobs WHERE status='sending' AND lease_until<=? LIMIT 20",
+    "SELECT id,message_type FROM telegram_outbound_jobs WHERE status='sending' AND lease_until<=? LIMIT 20",
   )
     .bind(now)
-    .all<{ id: string }>();
+    .all<{ id: string; message_type: string }>();
   for (const row of expired.results) {
     const token = crypto.randomUUID();
     await context.env.DB.batch([
@@ -157,7 +157,9 @@ export async function processOutbound(
       ).bind(token, row.id, now),
       telegramAudit(
         context,
-        'report.outbound_failed',
+        row.message_type === 'assignment_dispatch'
+          ? 'assignment.outbound_failed'
+          : 'report.outbound_failed',
         row.id,
         { code: 'DELIVERY_UNKNOWN' },
         {
@@ -194,6 +196,14 @@ export async function processOutbound(
         route.topicId !== payload.topicId
       )
         throw new TelegramFailure('ROUTE_CHANGED', false);
+      if (job.messageType === 'assignment_dispatch') {
+        const valid = await context.env.DB.prepare(
+          "SELECT a.id FROM assignments a JOIN collectors c ON c.id=a.collector_id JOIN telegram_routes r ON r.id=? WHERE a.id=? AND a.unassigned_at IS NULL AND c.is_active=1 AND r.collector_id=c.id AND r.route_type='collector'",
+        )
+          .bind(job.routeId, job.assignmentId)
+          .first();
+        if (!valid) throw new TelegramFailure('ASSIGNMENT_CHANGED', false);
+      }
       const messageId = await client.sendMessage(payload);
       await context.env.DB.batch([
         context.env.DB.prepare(
@@ -203,7 +213,9 @@ export async function processOutbound(
           context,
           job.messageType === 'report_destination'
             ? 'report.outbound_sent'
-            : 'telegram.reply_sent',
+            : job.messageType === 'assignment_dispatch'
+              ? 'assignment.outbound_sent'
+              : 'telegram.reply_sent',
           job.id,
           { reportId: job.reportId },
           {
@@ -235,7 +247,13 @@ export async function processOutbound(
         ),
         telegramAudit(
           context,
-          retry ? 'report.outbound_retry' : 'report.outbound_failed',
+          job.messageType === 'assignment_dispatch'
+            ? retry
+              ? 'assignment.outbound_retry'
+              : 'assignment.outbound_failed'
+            : retry
+              ? 'report.outbound_retry'
+              : 'report.outbound_failed',
           job.id,
           { code: failure.code, attempt: job.attempts },
           {

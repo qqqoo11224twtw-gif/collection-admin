@@ -34,6 +34,8 @@ export interface AuditMetadata {
   previousCollectorId?: string | null;
   count?: number;
   version?: number;
+  bulkAssignmentId?: string;
+  assignmentId?: string;
 }
 export function auditStatement(
   context: Context,

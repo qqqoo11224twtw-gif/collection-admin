@@ -330,7 +330,14 @@ export const auditLogs = sqliteTable(
     userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
     action: text('action').notNull(),
     entityType: text('entity_type', {
-      enum: ['case', 'collector', 'review', 'intake', 'telegram'],
+      enum: [
+        'case',
+        'collector',
+        'review',
+        'intake',
+        'telegram',
+        'bulk_assignment',
+      ],
     }).notNull(),
     entityId: text('entity_id').notNull(),
     metadata: text('metadata').notNull(),
@@ -788,11 +795,16 @@ export const telegramOutboundJobs = sqliteTable(
     id: text('id').primaryKey(),
     dedupeKey: text('dedupe_key').notNull().unique(),
     messageType: text('message_type', {
-      enum: ['report_destination', 'command_reply'],
+      enum: ['report_destination', 'command_reply', 'assignment_dispatch'],
     }).notNull(),
     reportId: text('report_id').references(() => reports.id, {
       onDelete: 'restrict',
     }),
+    assignmentId: text('assignment_id')
+      .unique()
+      .references(() => assignments.id, {
+        onDelete: 'restrict',
+      }),
     routeId: text('route_id')
       .notNull()
       .references(() => telegramRoutes.id, { onDelete: 'restrict' }),
@@ -1079,6 +1091,62 @@ export const settlements = sqliteTable(
     check(
       'settlement_return_check',
       sql`(${t.returnStatus}='pending' AND ${t.returnedAt} IS NULL AND ${t.returnedByUserId} IS NULL) OR (${t.returnStatus}='returned' AND ${t.returnedAt} IS NOT NULL AND ${t.returnedByUserId} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export const bulkAssignments = sqliteTable(
+  'bulk_assignments',
+  {
+    id: text('id').primaryKey(),
+    createdByUserId: text('created_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    collectorId: text('collector_id')
+      .notNull()
+      .references(() => collectors.id, { onDelete: 'restrict' }),
+    routeId: text('route_id')
+      .notNull()
+      .references(() => telegramRoutes.id, { onDelete: 'restrict' }),
+    request: text('request').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    index('bulk_assignments_actor_time_idx').on(t.createdByUserId, t.createdAt),
+    check('bulk_assignments_json_check', sql`json_valid(${t.request})`),
+  ],
+);
+export const bulkAssignmentItems = sqliteTable(
+  'bulk_assignment_items',
+  {
+    id: text('id').primaryKey(),
+    bulkAssignmentId: text('bulk_assignment_id')
+      .notNull()
+      .references(() => bulkAssignments.id, { onDelete: 'restrict' }),
+    // Keep unknown/deleted request IDs as safe per-item outcomes, not dangling foreign keys.
+    requestedCaseId: text('requested_case_id').notNull(),
+    status: text('status', {
+      enum: ['pending', 'assigned', 'skipped', 'failed'],
+    })
+      .notNull()
+      .default('pending'),
+    reason: text('reason'),
+    assignmentId: text('assignment_id')
+      .unique()
+      .references(() => assignments.id, { onDelete: 'restrict' }),
+    outboundJobId: text('outbound_job_id')
+      .unique()
+      .references(() => telegramOutboundJobs.id, { onDelete: 'restrict' }),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('bulk_assignment_case_idx').on(
+      t.bulkAssignmentId,
+      t.requestedCaseId,
+    ),
+    check(
+      'bulk_assignment_item_status_check',
+      sql`${t.status} IN ('pending','assigned','skipped','failed')`,
     ),
   ],
 );

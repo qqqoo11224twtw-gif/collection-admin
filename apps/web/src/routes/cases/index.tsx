@@ -1,5 +1,6 @@
 import { REGIONS } from '@saasflare-dev/api/regions';
 import { Button } from '@saasflare-dev/ui/components/button';
+import { Checkbox } from '@saasflare-dev/ui/components/checkbox';
 import { Input } from '@saasflare-dev/ui/components/input';
 import {
   Table,
@@ -12,6 +13,8 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ChevronLeft, ChevronRight, FolderOpen } from 'lucide-react';
+import { useState } from 'react';
+import { BulkAssignmentDialog } from '~/components/cases/bulk-assignment-dialog';
 import { CaseEditor } from '~/components/cases/case-editor';
 import { useCasePermissions } from '~/components/cases/management-hooks';
 import type { CaseRecord } from '~/components/cases/presentation';
@@ -65,6 +68,13 @@ function CasesPage() {
   const { page, query } = search;
   const navigate = Route.useNavigate();
   const { data: session } = useSession();
+  const selectionKey = JSON.stringify([session?.user.id, search]);
+  const [selection, setSelection] = useState<{ key: string; ids: string[] }>({
+    key: '',
+    ids: [],
+  });
+  const selected = selection.key === selectionKey ? selection.ids : [];
+  const canAssign = permissions.can('assignment.create');
   const options = orpc.cases.list.queryOptions({
     input: { ...search, pageSize: 10 },
   });
@@ -75,6 +85,12 @@ function CasesPage() {
     retry: false,
   });
   const pages = Math.max(1, Math.ceil((result.data?.total ?? 0) / 10));
+  const selectable =
+    result.data?.items
+      .filter((record) => !record.isAssigned)
+      .map((record) => record.id) ?? [];
+  const allSelected =
+    selectable.length > 0 && selectable.every((id) => selected.includes(id));
   const collectorOptions = orpc.collectors.choices.queryOptions();
   const collectors = useQuery({
     ...collectorOptions,
@@ -189,6 +205,21 @@ function CasesPage() {
           </select>
         ))}
       </div>
+      {canAssign && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <output
+            aria-label="Selected cases"
+            className="text-sm text-muted-foreground"
+          >
+            Selected: {selected.length} cases · Selection applies to this page
+            and filters.
+          </output>
+          <BulkAssignmentDialog
+            caseIds={selected}
+            onAssigned={() => setSelection({ key: selectionKey, ids: [] })}
+          />
+        </div>
+      )}
       {result.isPending ? (
         <LoadingCases />
       ) : result.isError ? (
@@ -228,6 +259,27 @@ function CasesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {canAssign && (
+                      <TableHead className="w-12 px-4">
+                        <Checkbox
+                          aria-label="Select current page"
+                          disabled={!selectable.length}
+                          checked={
+                            allSelected
+                              ? true
+                              : selected.length
+                                ? 'indeterminate'
+                                : false
+                          }
+                          onCheckedChange={(checked) =>
+                            setSelection({
+                              key: selectionKey,
+                              ids: checked ? selectable : [],
+                            })
+                          }
+                        />
+                      </TableHead>
+                    )}
                     <TableHead className="px-4">Customer</TableHead>
                     <TableHead>Code</TableHead>
                     <TableHead>Case no.</TableHead>
@@ -240,6 +292,23 @@ function CasesPage() {
                 <TableBody>
                   {result.data.items.map((record) => (
                     <TableRow key={record.id}>
+                      {canAssign && (
+                        <TableCell className="px-4">
+                          <Checkbox
+                            aria-label={`Select ${record.caseNo}`}
+                            disabled={!!record.isAssigned}
+                            checked={selected.includes(record.id)}
+                            onCheckedChange={(checked) =>
+                              setSelection({
+                                key: selectionKey,
+                                ids: checked
+                                  ? [...selected, record.id]
+                                  : selected.filter((id) => id !== record.id),
+                              })
+                            }
+                          />
+                        </TableCell>
+                      )}
                       <TableCell className="px-4 py-4 font-medium">
                         <Link
                           to="/cases/$caseId"
