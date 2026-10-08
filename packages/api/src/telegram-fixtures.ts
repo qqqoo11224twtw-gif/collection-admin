@@ -1,4 +1,27 @@
-import type { TelegramUpdate } from './telegram-contract';
+import type { TelegramReportStatus, TelegramUpdate } from './telegram-contract';
+export function callbackFixture(
+  updateId: number,
+  chatId: number,
+  userId: number,
+  token: string,
+  status: TelegramReportStatus,
+  topicId?: number,
+): TelegramUpdate {
+  return {
+    update_id: updateId,
+    callback_query: {
+      id: `fictional-callback-${updateId}`,
+      from: { id: userId, is_bot: false },
+      data: `report_status:${token}:${status}`,
+      message: {
+        message_id: 1,
+        date: 1791400000,
+        chat: { id: chatId, type: 'supergroup' },
+        message_thread_id: topicId,
+      },
+    },
+  };
+}
 export function photoFixture(
   updateId: number,
   chatId: number,

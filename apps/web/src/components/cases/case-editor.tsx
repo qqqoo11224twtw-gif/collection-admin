@@ -1,3 +1,4 @@
+import { REGIONS } from '@saasflare-dev/api/regions';
 import { Button } from '@saasflare-dev/ui/components/button';
 import {
   Dialog,
@@ -11,22 +12,23 @@ import { Input } from '@saasflare-dev/ui/components/input';
 import { Label } from '@saasflare-dev/ui/components/label';
 import { Textarea } from '@saasflare-dev/ui/components/textarea';
 import { useMutation } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { orpc } from '~/lib/orpc';
 import { useRefreshCases } from './management-hooks';
+import { ManualCaseEditor } from './manual-case-editor';
 import type { CaseRecord } from './presentation';
 
 const selectClass =
   'h-9 w-full rounded-lg border border-input bg-background px-3 text-sm';
 export function CaseEditor({ record }: { record?: CaseRecord }) {
+  return record ? <CaseEditorForm record={record} /> : <ManualCaseEditor />;
+}
+function CaseEditorForm({ record }: { record: CaseRecord }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
-  const create = useMutation(orpc.cases.create.mutationOptions());
   const edit = useMutation(orpc.cases.edit.mutationOptions());
   const refresh = useRefreshCases();
-  const navigate = useNavigate();
-  const busy = create.isPending || edit.isPending;
+  const busy = edit.isPending;
   return (
     <Dialog
       open={open}
@@ -63,6 +65,7 @@ export function CaseEditor({ record }: { record?: CaseRecord }) {
               const fields = {
                 customerName: text('customerName'),
                 code: text('code'),
+                region: (text('region') || null) as CaseRecord['region'],
                 address: text('address'),
                 amountDue: Number(text('amountDue')),
                 status: text('status') as CaseRecord['status'],
@@ -72,22 +75,11 @@ export function CaseEditor({ record }: { record?: CaseRecord }) {
                 revisitReason: text('revisitReason'),
               };
               try {
-                if (record)
-                  await edit.mutateAsync({
-                    ...fields,
-                    id: record.id,
-                    expectedVersion: record.version,
-                  });
-                else {
-                  const created = await create.mutateAsync({
-                    ...fields,
-                    source: text('source') as CaseRecord['source'],
-                  });
-                  await navigate({
-                    to: '/cases/$caseId',
-                    params: { caseId: created.id },
-                  });
-                }
+                await edit.mutateAsync({
+                  ...fields,
+                  id: record.id,
+                  expectedVersion: record.version,
+                });
                 await refresh();
                 setOpen(false);
               } catch (failure: unknown) {
@@ -120,6 +112,22 @@ export function CaseEditor({ record }: { record?: CaseRecord }) {
                   />
                 </div>
               ))}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="case-region">Region</Label>
+              <select
+                id="case-region"
+                name="region"
+                defaultValue={record?.region ?? ''}
+                className={selectClass}
+              >
+                <option value="">Not recorded</option>
+                {REGIONS.map((region) => (
+                  <option key={region} value={region}>
+                    {region}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="case-address">Address</Label>
@@ -191,28 +199,6 @@ export function CaseEditor({ record }: { record?: CaseRecord }) {
                   ))}
                 </select>
               </div>
-              {!record && (
-                <div className="space-y-2">
-                  <Label htmlFor="case-source">Source</Label>
-                  <select
-                    id="case-source"
-                    name="source"
-                    className={selectClass}
-                    defaultValue="manual"
-                  >
-                    {[
-                      'manual',
-                      'poster_builder',
-                      'telegram_ai',
-                      'historical_import',
-                    ].map((value) => (
-                      <option key={value} value={value}>
-                        {value.replaceAll('_', ' ')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="case-reason">Revisit reason</Label>

@@ -6,9 +6,14 @@ import {
 } from '@saasflare-dev/db';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Context } from './context';
+import {
+  enqueueImageExtraction,
+  processImageExtractionJobs,
+} from './image-extraction-service';
 import { receiveFromAdapter } from './intake-contract';
 import { processIntake } from './intake-resolver';
 import { receiveIntake } from './intake-service';
+import { imageExtractionProvider } from './openai-image-extraction';
 import {
   TelegramIntakeAdapter,
   telegramAudit,
@@ -22,10 +27,22 @@ import {
   QUIET_PERIOD_MS,
   telegramUpdateSchema,
 } from './telegram-contract';
+import { processInstallmentUpdate } from './telegram-installments';
 import { receiveTelegramMedia } from './telegram-media';
-import { processOutbound } from './telegram-outbound';
+import { processOutbound, queueReportDestination } from './telegram-outbound';
 import { telegramPrincipal } from './telegram-principal';
+import { processReportStatusCallback } from './telegram-report-status';
 import { processReportCommand } from './telegram-reports';
+
+async function finalizeTelegramDraft(
+  context: Context,
+  input: { id: string; expectedVersion: number },
+) {
+  const provider = imageExtractionProvider(context.env);
+  return provider
+    ? enqueueImageExtraction(context, input.id, provider)
+    : processIntake(context, input);
+}
 
 async function boundedJson(request: Request) {
   const reader = request.body?.getReader();
@@ -66,7 +83,7 @@ export async function receiveTelegramUpdate(
     await telegramAudit(context, 'telegram.duplicate_ignored', id).run();
     return { id, duplicate: true };
   }
-  const m = update.message;
+  const m = update.message ?? update.callback_query?.message;
   const [route] = m
     ? await context.DB.select()
         .from(telegramRoutes)
@@ -77,7 +94,9 @@ export async function receiveTelegramUpdate(
             eq(telegramRoutes.isActive, true),
             eq(
               telegramRoutes.routeType,
-              m.text?.startsWith('/回報') ? 'collector' : 'intake_source',
+              update.callback_query || m.text?.startsWith('/回報')
+                ? 'collector'
+                : 'intake_source',
             ),
           ),
         )
@@ -167,7 +186,7 @@ export async function processTelegramUpdates(
     .bind(now)
     .run();
   const pending = await base.env.DB.prepare(
-    "SELECT id FROM telegram_updates WHERE status='pending' AND next_attempt_at<=? ORDER BY next_attempt_at,CAST(id AS INTEGER) LIMIT 20",
+    "SELECT id FROM telegram_updates WHERE status='pending' AND next_attempt_at<=? ORDER BY CASE WHEN json_type(payload,'$.callback_query') IS NOT NULL THEN 0 ELSE 1 END,next_attempt_at,CAST(id AS INTEGER) LIMIT 20",
   )
     .bind(now)
     .all<{ id: string }>();
@@ -176,7 +195,7 @@ export async function processTelegramUpdates(
     const claim = await base.env.DB.prepare(
       "UPDATE telegram_updates SET status='processing',attempts=attempts+1,lease_token=?,lease_until=? WHERE id=? AND status='pending' AND next_attempt_at<=?",
     )
-      .bind(token, now + 120000, candidate.id, now)
+      .bind(token, Math.max(now, Date.now()) + 120000, candidate.id, now)
       .run();
     if (claim.meta.changes !== 1) continue;
     const [row] = await base.DB.select()
@@ -185,9 +204,9 @@ export async function processTelegramUpdates(
     let actor = base;
     try {
       const update = telegramUpdateSchema.parse(JSON.parse(row.payload));
-      const m = update.message;
+      const m = update.message ?? update.callback_query?.message;
       if (!m) throw new TelegramFailure('UNSUPPORTED_UPDATE', false);
-      const isReport = m.text?.startsWith('/回報') ?? false;
+      const isReport = !!update.callback_query || !!m.text;
       const [route] = await base.DB.select()
         .from(telegramRoutes)
         .where(
@@ -207,8 +226,23 @@ export async function processTelegramUpdates(
       let intakeId: string | null = row.intakeId;
       let reportId: string | null = row.reportId;
       let resultCode = 'INTAKE_CREATED';
-      if (isReport) {
+      if (update.callback_query) {
+        const result = await (update.callback_query.data?.startsWith('ip:')
+          ? processInstallmentUpdate
+          : processReportStatusCallback)(actor, update, route, client);
+        reportId = result.reportId;
+        resultCode = result.code;
+      } else if (m.text?.startsWith('/回報')) {
         const result = await processReportCommand(actor, update, route);
+        reportId = result.reportId;
+        resultCode = result.code;
+      } else if (m.text) {
+        const result = await processInstallmentUpdate(
+          actor,
+          update,
+          route,
+          client,
+        );
         reportId = result.reportId;
         resultCode = result.code;
       } else {
@@ -268,7 +302,7 @@ export async function processTelegramUpdates(
           .bind(intakeId)
           .first<{ version: number; status: string }>();
         if (r && ['received', 'processing'].includes(r.status))
-          await processIntake(actor, {
+          await finalizeTelegramDraft(actor, {
             id: intakeId,
             expectedVersion: r.version,
           });
@@ -312,6 +346,17 @@ export async function processTelegramUpdates(
     }
   }
   await finalizeAlbums(base, now);
+  // Repair only already committed manual confirmations, without re-applying status.
+  const completed = await base.env.DB.prepare(
+    "SELECT r.id FROM reports r WHERE r.source='telegram' AND r.workflow_status='completed' AND r.callback_token IS NOT NULL AND EXISTS(SELECT 1 FROM telegram_routes tr WHERE tr.route_type='report_destination' AND tr.is_active=1 AND (tr.collector_id IS NULL OR tr.collector_id=r.collector_id) AND NOT EXISTS(SELECT 1 FROM telegram_outbound_jobs j WHERE j.dedupe_key='report-destination:'||r.id||':'||tr.id)) LIMIT 20",
+  ).all<{ id: string }>();
+  for (const report of completed.results) {
+    try {
+      await queueReportDestination(base, report.id);
+    } catch {
+      /* A durable completed report is retried on the next scheduler pass. */
+    }
+  }
   // Repair the crash boundary between media/album completion and review creation.
   const drafts = await base.env.DB.prepare(
     "SELECT i.id,i.version,r.managed_by_user_id,MIN(t.id) AS update_id,MAX(t.attempts) AS attempts FROM intake_items i JOIN telegram_updates t ON t.intake_id=i.id LEFT JOIN telegram_albums a ON a.id=t.album_id JOIN telegram_routes r ON r.chat_id=CAST(json_extract(t.payload,'$.message.chat.id') AS TEXT) AND coalesce(r.topic_id,0)=coalesce(json_extract(t.payload,'$.message.message_thread_id'),0) AND r.route_type='intake_source' AND r.is_active=1 WHERE i.status IN ('received','processing') AND t.status='done' AND (a.id IS NULL OR a.finalized_at IS NOT NULL) AND NOT EXISTS(SELECT 1 FROM telegram_updates pending WHERE pending.intake_id=i.id AND pending.status<>'done') AND NOT EXISTS(SELECT 1 FROM telegram_albums collecting WHERE collecting.intake_id=i.id AND collecting.finalized_at IS NULL) GROUP BY i.id LIMIT 20",
@@ -324,7 +369,7 @@ export async function processTelegramUpdates(
   }>();
   for (const draft of drafts.results) {
     try {
-      await processIntake(
+      await finalizeTelegramDraft(
         await telegramPrincipal(base, draft.managed_by_user_id),
         { id: draft.id, expectedVersion: draft.version },
       );
@@ -406,7 +451,7 @@ export async function finalizeAlbums(base: Context, now = Date.now()) {
         .first<{ version: number; status: string }>();
       if (row && ['received', 'processing'].includes(row.status)) {
         try {
-          await processIntake(context, {
+          await finalizeTelegramDraft(context, {
             id: album.intakeId,
             expectedVersion: row.version,
           });
@@ -424,5 +469,7 @@ export async function runTelegramProcessing(
 ) {
   await processTelegramUpdates(context, client, now);
   await processOutbound(context, client, now);
+  const provider = imageExtractionProvider(context.env);
+  if (provider) await processImageExtractionJobs(context, provider, now);
   return { processed: true };
 }

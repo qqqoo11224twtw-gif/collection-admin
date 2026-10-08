@@ -64,7 +64,7 @@ test.describe('Local case workspace', () => {
     for (const name of ['Payment history']) {
       await page.getByRole('tab', { name, exact: true }).click();
       await expect(
-        page.getByText('This section is reserved for the next phase.'),
+        page.getByText('No payments yet.', { exact: true }),
       ).toBeVisible();
     }
     await search.fill('測試路 2 號');

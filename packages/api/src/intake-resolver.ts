@@ -107,6 +107,17 @@ export async function resolveIntake(
     };
   }
   if (row.version !== input.expectedVersion) throw new ORPCError('CONFLICT');
+  if (
+    input.action !== 'reject' &&
+    (await context.env.DB.prepare(
+      "SELECT id FROM ai_image_jobs WHERE intake_id=? AND status IN ('pending','processing') LIMIT 1",
+    )
+      .bind(row.id)
+      .first())
+  )
+    throw new ORPCError('CONFLICT', {
+      message: 'Image extraction is still processing.',
+    });
   if (row.source === 'telegram' && input.action !== 'reject') {
     const collecting = await context.env.DB.prepare(
       "SELECT id FROM telegram_albums WHERE intake_id=? AND finalized_at IS NULL UNION ALL SELECT id FROM telegram_updates WHERE intake_id=? AND status<>'done' LIMIT 1",
@@ -137,6 +148,10 @@ export async function resolveIntake(
     !review && input.confirmedData
       ? await intakeMatching(context, row, proposed)
       : matching;
+  const uncertainExtraction =
+    !review &&
+    row.confidence !== null &&
+    row.confidence < INTAKE_DRAFT_CONFIDENCE_THRESHOLD;
   if (
     (matching.truncated || originalMatching.truncated) &&
     input.action !== 'reject'
@@ -165,7 +180,7 @@ export async function resolveIntake(
     const ambiguousMatching =
       originalMatching.kind === 'ambiguous' ? originalMatching : matching;
     reviewProposal =
-      ambiguousMatching.kind === 'ambiguous'
+      ambiguousMatching.kind === 'ambiguous' && !uncertainExtraction
         ? {
             type: 'case_match' as const,
             query: {
@@ -313,12 +328,14 @@ export async function resolveIntake(
     row.source === 'telegram'
       ? " AND NOT EXISTS(SELECT 1 FROM telegram_albums collecting WHERE collecting.intake_id=intake_items.id AND collecting.finalized_at IS NULL) AND NOT EXISTS(SELECT 1 FROM telegram_updates pending WHERE pending.intake_id=intake_items.id AND pending.status<>'done')"
       : '';
+  const extractionGuard =
+    " AND NOT EXISTS(SELECT 1 FROM ai_image_jobs j WHERE j.intake_id=intake_items.id AND j.status IN ('pending','processing'))";
   // Insert the case before setting the FK in intake, while the case insert is guarded by the draft version.
   const statements: D1PreparedStatement[] = [];
   if (create)
     statements.push(
       context.env.DB.prepare(
-        `INSERT INTO cases(id,case_no,code,customer_name,address,amount_due,status,revisit_status,revisit_reason,source,created_at,updated_at,write_token) SELECT ?,?,?,?,?,?,'pending','pending','',?,?,?,? WHERE EXISTS(SELECT 1 FROM intake_items WHERE id=? AND version=? AND status IN ('received','processing','failed','needs_review')${collectionGuard})`,
+        `INSERT INTO cases(id,case_no,code,customer_name,address,amount_due,status,revisit_status,revisit_reason,source,created_at,updated_at,write_token) SELECT ?,?,?,?,?,?,'pending','pending','',?,?,?,? WHERE EXISTS(SELECT 1 FROM intake_items WHERE id=? AND version=? AND status IN ('received','processing','failed','needs_review')${collectionGuard}${extractionGuard})`,
       ).bind(
         caseId,
         generateCaseNumber(caseId, now),
@@ -336,7 +353,7 @@ export async function resolveIntake(
     );
   statements.push(
     context.env.DB.prepare(
-      `UPDATE intake_items SET status=?,confirmed_data=?,matched_case_id=?,processed_at=?,updated_at=?,version=version+1,write_token=? WHERE id=? AND version=?${guard}${collectionGuard}`,
+      `UPDATE intake_items SET status=?,confirmed_data=?,matched_case_id=?,processed_at=?,updated_at=?,version=version+1,write_token=? WHERE id=? AND version=?${guard}${collectionGuard}${extractionGuard}`,
     ).bind(
       status,
       JSON.stringify(confirmed),

@@ -16,7 +16,23 @@ async function rpc(page: Page, path: string, input: unknown) {
     { data: { json: input } },
   );
   expect(r.status()).toBe(200);
-  return (await r.json()).json;
+  const body = (await r.json()).json;
+  if (path === 'cases.create' && body.kind === 'duplicate_warning') {
+    const confirmed = await page.request.post(
+      `${SERVER_URL}/rpc/cases/create`,
+      {
+        data: {
+          json: {
+            ...(input as Record<string, unknown>),
+            duplicateOverride: true,
+          },
+        },
+      },
+    );
+    expect(confirmed.status()).toBe(200);
+    return (await confirmed.json()).json;
+  }
+  return body;
 }
 test.describe('Unified intake inbox', () => {
   test.skip(isRemote, 'Intake workflows are local and fictional');

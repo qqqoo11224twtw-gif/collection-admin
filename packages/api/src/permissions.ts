@@ -23,6 +23,18 @@ export const PERMISSIONS = [
   'intake.resolve',
   'intake.reject',
   'telegram_route.manage',
+  'installment.view',
+  'installment.create',
+  'installment.manage',
+  'installment.cancel',
+  'payment.view',
+  'payment.create',
+  'payment.void',
+  'settlement.view',
+  'settlement.mark_returned',
+  'settlement.mark_pending',
+  'finance.export',
+  'assignment.correct',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 interface Policy {
@@ -46,6 +58,10 @@ const ROLE_POLICIES: Record<string, Policy> = {
       'report.create',
       'intake.view',
       'intake.create',
+      'installment.view',
+      'installment.create',
+      'payment.view',
+      'payment.create',
     ],
     scope: 'assigned',
   },
@@ -59,6 +75,20 @@ const ROLE_POLICIES: Record<string, Policy> = {
       'review.resolve',
     ],
     scope: 'assigned',
+  },
+  finance: {
+    permissions: [
+      'case.view',
+      'payment.view',
+      'payment.create',
+      'payment.void',
+      'settlement.view',
+      'settlement.mark_returned',
+      'settlement.mark_pending',
+      'finance.export',
+      'installment.view',
+    ],
+    scope: 'all',
   },
 };
 export function permissionPolicy(context: Pick<Context, 'user'>): Policy {

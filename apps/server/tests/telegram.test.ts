@@ -3,6 +3,7 @@ import { CaseMatchingService } from '@saasflare-dev/api/case-matching';
 import type { Context } from '@saasflare-dev/api/context';
 import { FakeTelegramClient } from '@saasflare-dev/api/telegram-client';
 import {
+  callbackFixture,
   photoFixture,
   reportFixture,
 } from '@saasflare-dev/api/telegram-fixtures';
@@ -101,8 +102,24 @@ async function receive(raw: unknown) {
 }
 async function run(client = new FakeTelegramClient(), now = tick()) {
   await processTelegramUpdates(base, client, now);
+  // Phase-six transport fixtures now explicitly simulate the phase-seven human button.
+  const waiting = await env.DB.prepare(
+    "SELECT r.callback_token FROM reports r JOIN assignments a ON a.id=r.assignment_id JOIN telegram_identities ti ON ti.collector_id=r.collector_id WHERE r.workflow_status='awaiting_status' AND a.unassigned_at IS NULL AND ti.is_active=1",
+  ).all<{ callback_token: string }>();
+  for (const row of waiting.results)
+    await receive(
+      callbackFixture(
+        ++legacyCallbackId,
+        collectorChat,
+        900001,
+        row.callback_token,
+        'settled',
+      ),
+    );
+  if (waiting.results.length) await processTelegramUpdates(base, client, now);
   return client;
 }
+let legacyCallbackId = 9000000;
 async function assignedCase() {
   const name = `虛構外收-${crypto.randomUUID()}`;
   const code = `T-${crypto.randomUUID().slice(0, 8)}`;
@@ -162,6 +179,364 @@ beforeAll(async () => {
     { cookie: admin },
   );
   expect(i.status).toBe(200);
+});
+describe('Telegram manual report confirmation', () => {
+  let sequence = 9100000;
+  async function pending() {
+    const c = await assignedCase();
+    const id = ++sequence;
+    const client = new FakeTelegramClient();
+    await receive(reportFixture(id, collectorChat, 900001, c.code));
+    await processTelegramUpdates(base, client, tick());
+    const update = await updateRow(id);
+    const row = await env.DB.prepare('SELECT * FROM reports WHERE id=?')
+      .bind(update?.report_id)
+      .first<{
+        id: string;
+        callback_token: string;
+        workflow_status: string;
+        assignment_id: string;
+      }>();
+    expect(row?.workflow_status).toBe('awaiting_status');
+    return { c, row: row as NonNullable<typeof row>, client };
+  }
+  it('pending report leaves case status unchanged, creates no classification review or business job and sends four opaque buttons', async () => {
+    const { c, row, client } = await pending();
+    expect(
+      (
+        await env.DB.prepare('SELECT status FROM cases WHERE id=?')
+          .bind(c.id)
+          .first()
+      )?.status,
+    ).toBe('pending');
+    expect(
+      (
+        await env.DB.prepare(
+          'SELECT count(*) AS n FROM review_items WHERE entity_id=?',
+        )
+          .bind(row.id)
+          .first()
+      )?.n,
+    ).toBe(0);
+    expect(
+      (
+        await env.DB.prepare(
+          "SELECT count(*) AS n FROM telegram_outbound_jobs WHERE report_id=? AND message_type='report_destination'",
+        )
+          .bind(row.id)
+          .first()
+      )?.n,
+    ).toBe(0);
+    await processOutbound(base, client, tick());
+    const buttons =
+      client.sent
+        .find((x) => x.replyMarkup)
+        ?.replyMarkup?.inline_keyboard.flat() ?? [];
+    expect(buttons.map((x) => x.text)).toEqual([
+      '✅ 結清',
+      '💰 分期',
+      '❌ 無解',
+      '🔁 安排二訪',
+    ]);
+    expect(
+      buttons.every(
+        (x) =>
+          x.callback_data.length <= 64 && !x.callback_data.includes(c.code),
+      ),
+    ).toBe(true);
+  });
+  it.each([
+    'settled',
+    'installment',
+    'unresolved',
+    'follow_up',
+  ] as const)('manual %s completes and forwards once, even with a different repeated selection', async (status) => {
+    const { c, row, client } = await pending();
+    await receive(
+      callbackFixture(
+        ++sequence,
+        collectorChat,
+        900001,
+        row.callback_token,
+        status,
+      ),
+    );
+    await processTelegramUpdates(base, client, tick());
+    await receive(
+      callbackFixture(
+        ++sequence,
+        collectorChat,
+        900001,
+        row.callback_token,
+        status === 'settled' ? 'unresolved' : 'settled',
+      ),
+    );
+    await processTelegramUpdates(base, client, tick());
+    expect(
+      await env.DB.prepare(
+        'SELECT status,workflow_status,selected_status,completed_by_user_id FROM reports WHERE id=?',
+      )
+        .bind(row.id)
+        .first(),
+    ).toMatchObject({
+      status,
+      workflow_status: 'completed',
+      selected_status: status,
+      completed_by_user_id: userId,
+    });
+    expect(
+      (
+        await env.DB.prepare('SELECT status FROM cases WHERE id=?')
+          .bind(c.id)
+          .first()
+      )?.status,
+    ).toBe(status);
+    expect(
+      (
+        await env.DB.prepare(
+          "SELECT count(*) AS n FROM audit_logs WHERE entity_id=? AND action='report.completed'",
+        )
+          .bind(c.id)
+          .first()
+      )?.n,
+    ).toBe(1);
+    expect(
+      (
+        await env.DB.prepare(
+          "SELECT count(*) AS n FROM telegram_outbound_jobs WHERE report_id=? AND message_type='report_destination'",
+        )
+          .bind(row.id)
+          .first()
+      )?.n,
+    ).toBe(1);
+    expect(client.answered.at(-1)?.text).toContain('已完成');
+  });
+  it('completion rollback leaves the report pending and repairs one business job on retry', async () => {
+    const { c, row, client } = await pending();
+    const id = ++sequence;
+    await receive(
+      callbackFixture(id, collectorChat, 900001, row.callback_token, 'settled'),
+    );
+    await env.DB.exec(
+      "CREATE TRIGGER fail_manual_completion BEFORE UPDATE OF workflow_status ON reports WHEN NEW.workflow_status='completed' BEGIN SELECT RAISE(ABORT,'synthetic completion rollback'); END",
+    );
+    try {
+      await processTelegramUpdates(base, client, tick());
+    } finally {
+      await env.DB.exec('DROP TRIGGER fail_manual_completion');
+    }
+    expect(
+      (
+        await env.DB.prepare('SELECT status FROM cases WHERE id=?')
+          .bind(c.id)
+          .first()
+      )?.status,
+    ).toBe('pending');
+    expect(
+      (
+        await env.DB.prepare('SELECT workflow_status FROM reports WHERE id=?')
+          .bind(row.id)
+          .first()
+      )?.workflow_status,
+    ).toBe('awaiting_status');
+    await processTelegramUpdates(base, client, Date.now() + 400000);
+    expect(
+      (
+        await env.DB.prepare('SELECT status FROM cases WHERE id=?')
+          .bind(c.id)
+          .first()
+      )?.status,
+    ).toBe('settled');
+    expect(
+      (
+        await env.DB.prepare(
+          "SELECT count(*) AS n FROM telegram_outbound_jobs WHERE report_id=? AND message_type='report_destination'",
+        )
+          .bind(row.id)
+          .first()
+      )?.n,
+    ).toBe(1);
+  });
+  it.each([
+    'deadline',
+    'weekly',
+    'monthly',
+  ] as const)('persists %s installment setup and creates schedules only after an idempotent confirmation', async (type) => {
+    await env.DB.prepare(
+      "UPDATE installment_workflows SET status='cancelled' WHERE telegram_user_id='900001' AND status='active'",
+    ).run();
+    const { c, row, client } = await pending();
+    await receive(
+      callbackFixture(
+        ++sequence,
+        collectorChat,
+        900001,
+        row.callback_token,
+        'installment',
+      ),
+    );
+    await processTelegramUpdates(base, client, tick());
+    async function workflow() {
+      return await env.DB.prepare(
+        'SELECT * FROM installment_workflows WHERE report_id=?',
+      )
+        .bind(row.id)
+        .first<{
+          id: string;
+          token: string;
+          version: number;
+          status: string;
+          step: string;
+        }>();
+    }
+    async function button(action: string, wrongSender = false) {
+      const state = await workflow();
+      const update = callbackFixture(
+        ++sequence,
+        collectorChat,
+        wrongSender ? 900002 : 900001,
+        row.callback_token,
+        'installment',
+      );
+      if (update.callback_query)
+        update.callback_query.data = `ip:${state?.token}:${state?.version}:${action}`;
+      await receive(update);
+      await processTelegramUpdates(base, client, tick());
+      return update;
+    }
+    async function text(content: string) {
+      const update = reportFixture(++sequence, collectorChat, 900001, c.code);
+      if (update.message) update.message.text = content;
+      await receive(update);
+      await processTelegramUpdates(base, client, tick());
+    }
+    expect((await workflow())?.step).toBe('type');
+    await button(type, true);
+    expect((await workflow())?.step).toBe('type');
+    await button(type);
+    if (type === 'deadline') {
+      await text('2026/02/30');
+      expect((await workflow())?.step).toBe('deadline');
+      await text('2090/10/20');
+    } else if (type === 'weekly') await button('week3');
+    else await button('day10');
+    if (type !== 'deadline') {
+      await text('-1');
+      expect((await workflow())?.step).toBe('per');
+      await text('5000');
+    }
+    await text(type === 'deadline' ? '15000' : '23000');
+    expect((await workflow())?.step).toBe('confirm');
+    expect(
+      (
+        await env.DB.prepare(
+          'SELECT count(*) AS n FROM installment_plans WHERE report_id=?',
+        )
+          .bind(row.id)
+          .first()
+      )?.n,
+    ).toBe(0);
+    const confirmation = await button('confirm');
+    await receive(confirmation);
+    await processTelegramUpdates(base, client, tick());
+    const completed = await workflow();
+    expect(completed?.status).toBe('completed');
+    expect(
+      (
+        await env.DB.prepare(
+          'SELECT count(*) AS n FROM installment_plans WHERE report_id=?',
+        )
+          .bind(row.id)
+          .first()
+      )?.n,
+    ).toBe(1);
+    const schedules = await env.DB.prepare(
+      'SELECT expected_amount FROM installment_schedules WHERE case_id=? ORDER BY sequence',
+    )
+      .bind(c.id)
+      .all();
+    expect(schedules.results.map((s) => s.expected_amount)).toEqual(
+      type === 'deadline' ? [15000] : [5000, 5000, 5000, 5000, 3000],
+    );
+    expect(
+      (
+        await env.DB.prepare(
+          'SELECT count(*) AS n FROM payments WHERE case_id=?',
+        )
+          .bind(c.id)
+          .first()
+      )?.n,
+    ).toBe(0);
+    expect(
+      (
+        await env.DB.prepare(
+          "SELECT count(*) AS n FROM audit_logs WHERE entity_id=? AND action='installment.plan_created'",
+        )
+          .bind(c.id)
+          .first()
+      )?.n,
+    ).toBe(1);
+  });
+  it('rejects another sender, malformed token, wrong source topic and an ended assignment', async () => {
+    const { row, client } = await pending();
+    const bad = [
+      callbackFixture(
+        ++sequence,
+        collectorChat,
+        900002,
+        row.callback_token,
+        'settled',
+      ),
+      callbackFixture(
+        ++sequence,
+        collectorChat,
+        900001,
+        '0'.repeat(32),
+        'settled',
+      ),
+      callbackFixture(
+        ++sequence,
+        collectorChat,
+        900001,
+        row.callback_token,
+        'settled',
+        42,
+      ),
+    ];
+    for (const callback of bad) {
+      await receive(callback);
+      await processTelegramUpdates(base, client, tick());
+    }
+    await env.DB.prepare('UPDATE assignments SET unassigned_at=? WHERE id=?')
+      .bind(Date.now(), row.assignment_id)
+      .run();
+    await receive(
+      callbackFixture(
+        ++sequence,
+        collectorChat,
+        900001,
+        row.callback_token,
+        'settled',
+      ),
+    );
+    await processTelegramUpdates(base, client, tick());
+    expect(
+      (
+        await env.DB.prepare('SELECT workflow_status FROM reports WHERE id=?')
+          .bind(row.id)
+          .first()
+      )?.workflow_status,
+    ).toBe('awaiting_status');
+    expect(
+      (
+        await env.DB.prepare(
+          "SELECT count(*) AS n FROM telegram_outbound_jobs WHERE report_id=? AND message_type='report_destination'",
+        )
+          .bind(row.id)
+          .first()
+      )?.n,
+    ).toBe(0);
+  });
 });
 describe('Telegram local integration', () => {
   it('rejects invalid secret and oversized malformed requests without persistence', async () => {
@@ -361,7 +736,7 @@ describe('Telegram local integration', () => {
       ).body,
     ).toMatchObject({ status: 'needs_review' });
   });
-  it('collector reports assigned case, creates a manual pending review and idempotent outbound job', async () => {
+  it('collector reports assigned case, confirms manually and queues an idempotent outbound job', async () => {
     const c = await assignedCase();
     const update = reportFixture(600009, collectorChat, 900001, c.code);
     await receive(update);
@@ -371,7 +746,7 @@ describe('Telegram local integration', () => {
     const row = await updateRow(600009);
     expect(row).toMatchObject({
       status: 'done',
-      result_code: 'REPORT_CREATED',
+      result_code: 'REPORT_PENDING',
     });
     const reports = await env.DB.prepare(
       'SELECT id,status,source FROM reports WHERE origin_key=?',
@@ -380,7 +755,7 @@ describe('Telegram local integration', () => {
       .all<{ id: string; status: string; source: string }>();
     expect(reports.results).toHaveLength(1);
     expect(reports.results[0]).toMatchObject({
-      status: 'needs_review',
+      status: 'settled',
       source: 'telegram',
     });
     const jobs = await env.DB.prepare(
@@ -403,7 +778,7 @@ describe('Telegram local integration', () => {
           .bind(c.id)
           .first<{ status: string }>()
       )?.status,
-    ).toBe('pending');
+    ).toBe('settled');
   });
   it('cannot report another collector case and denies unbound Telegram user', async () => {
     const c = await createCase(
@@ -442,7 +817,7 @@ describe('Telegram local integration', () => {
     await createCase(c.name, crypto.randomUUID());
     await receive(reportFixture(600013, collectorChat, 900001, c.name));
     await run();
-    expect((await updateRow(600013))?.result_code).toBe('REPORT_CREATED');
+    expect((await updateRow(600013))?.result_code).toBe('REPORT_PENDING');
   });
   it('outbound failure preserves report, retries once successfully and never resends sent jobs', async () => {
     const c = await assignedCase();
@@ -597,7 +972,7 @@ describe('Telegram local integration', () => {
       .run();
     await run(new FakeTelegramClient(), tick() + 10000);
     const row = await updateRow(600018);
-    expect(row?.result_code).toBe('REPORT_CREATED');
+    expect(row?.result_code).toBe('REPORT_PENDING');
     expect(
       (
         await env.DB.prepare(
@@ -757,7 +1132,7 @@ describe('Telegram local integration', () => {
     await receive(reportFixture(600024, collectorChat, 900001, c.code));
     await run();
     const row = await updateRow(600024);
-    expect(row?.result_code).toBe('REPORT_CREATED');
+    expect(row?.result_code).toBe('REPORT_PENDING');
     expect(
       await env.DB.prepare(
         'SELECT id FROM telegram_outbound_jobs WHERE report_id=? AND route_id=?',

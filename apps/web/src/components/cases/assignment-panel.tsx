@@ -27,6 +27,7 @@ export function AssignmentPanel({
   const refresh = useRefreshCases();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
+  const [correcting, setCorrecting] = useState(false);
   const options = orpc.cases.assignments.queryOptions({
     input: { id: caseId },
   });
@@ -41,6 +42,9 @@ export function AssignmentPanel({
     enabled: permissions.can('assignment.create'),
   });
   const mutation = useMutation(orpc.cases.assign.mutationOptions());
+  const correction = useMutation(
+    orpc.cases.correctAssignment.mutationOptions(),
+  );
   const current = result.data?.find((item) => !item.unassignedAt);
   const canAssign = permissions.can(
     current ? 'assignment.reassign' : 'assignment.create',
@@ -51,19 +55,36 @@ export function AssignmentPanel({
         <Dialog
           open={open}
           onOpenChange={(value) => {
-            if (!mutation.isPending) {
+            if (!mutation.isPending && !correction.isPending) {
               setOpen(value);
               setError('');
             }
           }}
         >
           <DialogTrigger asChild>
-            <Button>{current ? 'Change assignment' : 'Assign case'}</Button>
+            <Button onClick={() => setCorrecting(false)}>
+              {current ? 'Change assignment' : 'Assign case'}
+            </Button>
           </DialogTrigger>
+          {current && permissions.can('assignment.correct') && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCorrecting(true);
+                setOpen(true);
+              }}
+            >
+              Correct historical collector
+            </Button>
+          )}
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {current ? 'Change assignment' : 'Assign case'}
+                {correcting
+                  ? 'Correct historical collector'
+                  : current
+                    ? 'Change assignment'
+                    : 'Assign case'}
               </DialogTitle>
               <DialogDescription>
                 Only active collectors can receive cases. Changes preserve the
@@ -78,12 +99,20 @@ export function AssignmentPanel({
                   setError('');
                   const data = new FormData(event.currentTarget);
                   try {
-                    await mutation.mutateAsync({
-                      caseId,
-                      expectedVersion: version,
-                      collectorId: String(data.get('collectorId')) || null,
-                      note: String(data.get('note') ?? '').trim() || null,
-                    });
+                    if (correcting)
+                      await correction.mutateAsync({
+                        caseId,
+                        expectedVersion: version,
+                        collectorId: String(data.get('collectorId')),
+                        reason: String(data.get('note') ?? ''),
+                      });
+                    else
+                      await mutation.mutateAsync({
+                        caseId,
+                        expectedVersion: version,
+                        collectorId: String(data.get('collectorId')) || null,
+                        note: String(data.get('note') ?? '').trim() || null,
+                      });
                     await refresh();
                     setOpen(false);
                   } catch (failure: unknown) {
@@ -112,8 +141,15 @@ export function AssignmentPanel({
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="assignment-note">Note</Label>
-                  <Textarea id="assignment-note" name="note" maxLength={1000} />
+                  <Label htmlFor="assignment-note">
+                    {correcting ? 'Correction reason' : 'Note'}
+                  </Label>
+                  <Textarea
+                    id="assignment-note"
+                    name="note"
+                    maxLength={1000}
+                    required={correcting}
+                  />
                 </div>
                 {choices.isError && (
                   <p role="alert" className="text-sm text-destructive">
@@ -128,10 +164,17 @@ export function AssignmentPanel({
                 <Button
                   type="submit"
                   disabled={
-                    mutation.isPending || choices.isPending || choices.isError
+                    mutation.isPending ||
+                    correction.isPending ||
+                    choices.isPending ||
+                    choices.isError
                   }
                 >
-                  {mutation.isPending ? 'Saving…' : 'Save assignment'}
+                  {mutation.isPending || correction.isPending
+                    ? 'Saving…'
+                    : correcting
+                      ? 'Save correction'
+                      : 'Save assignment'}
                 </Button>
               </form>
             )}
@@ -162,22 +205,39 @@ export function AssignmentPanel({
                 </h3>
                 <Badge variant="secondary">
                   {item.unassignedAt
-                    ? 'Ended'
+                    ? result.data.some(
+                        (entry) => entry.correctedFromId === item.id,
+                      )
+                      ? 'Corrected'
+                      : 'Ended'
                     : item.collectorActive
                       ? 'Current'
                       : 'Current · collector inactive'}
                 </Badge>
               </div>
               <p className="mt-3 text-sm text-muted-foreground">
-                Assigned {timestamp(item.assignedAt)} · By {item.assignedBy}
+                {item.recordType === 'correction'
+                  ? 'Historical correction · Original assignment'
+                  : 'Assigned'}{' '}
+                {timestamp(item.assignedAt)} · By {item.assignedBy}
               </p>
               {item.unassignedAt && (
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Ended {timestamp(item.unassignedAt)}
+                  {result.data.some(
+                    (entry) => entry.correctedFromId === item.id,
+                  )
+                    ? 'Corrected on'
+                    : 'Ended'}{' '}
+                  {timestamp(item.unassignedAt)}
                 </p>
               )}
               {item.note && (
                 <p className="mt-3 whitespace-pre-wrap text-sm">{item.note}</p>
+              )}
+              {item.correctionReason && (
+                <p className="mt-3 text-sm">
+                  Correction reason: {item.correctionReason}
+                </p>
               )}
             </li>
           ))}

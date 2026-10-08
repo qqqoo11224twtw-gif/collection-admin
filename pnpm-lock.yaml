@@ -143,6 +143,9 @@ importers:
       drizzle-kit:
         specifier: 'catalog:'
         version: 0.31.8
+      fflate:
+        specifier: 0.8.2
+        version: 0.8.2
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -270,6 +273,9 @@ importers:
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.2(@cloudflare/workers-types@4.20260702.1)(kysely@0.29.3)
+      fflate:
+        specifier: 0.8.2
+        version: 0.8.2
       hono:
         specifier: 'catalog:'
         version: 4.11.3
@@ -5274,6 +5280,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  fflate@0.8.2:
+    resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
 
   figlet@1.11.0:
     resolution: {integrity: sha512-EEx3OS/l2bFqcUNN2NM9FPJp8vAMrgbCxsbl2hbcJNNxOEwVe3mEzrhan7TbJQViZa8mMqhihlbCaqD+LyYKTQ==}
@@ -13398,6 +13407,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.4):
     optionalDependencies:
       picomatch: 4.0.4
+
+  fflate@0.8.2: {}
 
   figlet@1.11.0:
     dependencies:

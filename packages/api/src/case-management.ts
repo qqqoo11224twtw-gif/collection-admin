@@ -20,12 +20,33 @@ export const caseManagementApi = {
     .input(caseCreateSchema)
     .handler(async ({ context, input }) => {
       const actor = requirePermission(context, 'case.create');
+      const duplicate = await context.env.DB.prepare(
+        'SELECT max(created_at) AS latest FROM cases WHERE code=? COLLATE NOCASE',
+      )
+        .bind(input.code)
+        .first<{ latest: number | null }>();
+      if (
+        input.source === 'manual' &&
+        duplicate?.latest !== null &&
+        duplicate?.latest !== undefined &&
+        !input.duplicateOverride
+      ) {
+        await context.env.DB.prepare(
+          "INSERT INTO audit_logs(id,user_id,action,entity_type,entity_id,metadata,created_at) VALUES(?,?,'duplicate_warning_detected','manual_case',?,'{}',?)",
+        )
+          .bind(crypto.randomUUID(), actor.id, crypto.randomUUID(), Date.now())
+          .run();
+        return {
+          kind: 'duplicate_warning' as const,
+          lastCreatedAt: new Date(duplicate.latest),
+        };
+      }
       const id = crypto.randomUUID();
       const now = Date.now();
       const caseNo = generateCaseNumber(id, now);
       await atomicCaseWrite(context, [
         context.env.DB.prepare(
-          'INSERT INTO cases (id,case_no,code,customer_name,address,amount_due,status,revisit_status,revisit_reason,source,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+          "INSERT INTO cases (id,case_no,code,customer_name,address,amount_due,status,revisit_status,revisit_reason,source,created_at,updated_at,region,write_token) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE ?<>'manual' OR ?=1 OR NOT EXISTS(SELECT 1 FROM cases WHERE code=? COLLATE NOCASE)",
         ).bind(
           id,
           caseNo,
@@ -39,13 +60,34 @@ export const caseManagementApi = {
           input.source,
           now,
           now,
+          input.region,
+          id,
+          input.source,
+          Number(input.duplicateOverride),
+          input.code,
         ),
-        auditStatement(context, 'case.created', 'case', id, {
-          fields: Object.keys(input),
-          version: 0,
-        }),
+        auditStatement(
+          context,
+          'case.created',
+          'case',
+          id,
+          {
+            fields: Object.keys(input),
+            version: 0,
+          },
+          id,
+        ),
+        ...(input.duplicateOverride &&
+        input.source === 'manual' &&
+        duplicate?.latest
+          ? [
+              context.env.DB.prepare(
+                "INSERT INTO audit_logs(id,user_id,action,entity_type,entity_id,metadata,created_at) SELECT ?,?,'duplicate_warning_overridden','case',?,'{}',? WHERE EXISTS(SELECT 1 FROM cases WHERE id=?)",
+              ).bind(crypto.randomUUID(), actor.id, id, now, id),
+            ]
+          : []),
       ]);
-      return { id, caseNo, createdBy: actor.id };
+      return { kind: 'created' as const, id, caseNo, createdBy: actor.id };
     }),
   edit: protectedProcedure
     .input(caseEditSchema)
@@ -61,7 +103,7 @@ export const caseManagementApi = {
       if (!changed.length) return { id, version: record.version };
       await atomicCaseWrite(context, [
         context.env.DB.prepare(
-          'UPDATE cases SET customer_name=?,code=?,address=?,amount_due=?,status=?,revisit_status=?,revisit_reason=?,updated_at=?,version=version+1,write_token=? WHERE id=? AND version=?',
+          'UPDATE cases SET customer_name=?,code=?,address=?,amount_due=?,status=?,revisit_status=?,revisit_reason=?,region=?,updated_at=?,version=version+1,write_token=? WHERE id=? AND version=?',
         ).bind(
           input.customerName,
           input.code,
@@ -70,6 +112,7 @@ export const caseManagementApi = {
           input.status,
           input.revisitStatus,
           input.revisitReason,
+          input.region,
           Date.now(),
           token,
           id,
@@ -83,6 +126,34 @@ export const caseManagementApi = {
           { fields: changed, version: expectedVersion + 1 },
           token,
         ),
+        ...(changed.includes('region')
+          ? [
+              auditStatement(
+                context,
+                'case.region_changed',
+                'case',
+                id,
+                { fields: ['region'] },
+                token,
+              ),
+            ]
+          : []),
+        ...(changed.includes('customerName') || changed.includes('code')
+          ? [
+              auditStatement(
+                context,
+                'case.customer_code_corrected',
+                'case',
+                id,
+                {
+                  fields: changed.filter(
+                    (field) => field === 'customerName' || field === 'code',
+                  ),
+                },
+                token,
+              ),
+            ]
+          : []),
       ]);
       return { id, version: expectedVersion + 1 };
     }),
@@ -194,6 +265,9 @@ export const caseManagementApi = {
         assignedAt: assignments.assignedAt,
         unassignedAt: assignments.unassignedAt,
         note: assignments.note,
+        recordType: assignments.recordType,
+        correctedFromId: assignments.correctedFromId,
+        correctionReason: assignments.correctionReason,
       })
         .from(assignments)
         .innerJoin(collectors, eq(collectors.id, assignments.collectorId))

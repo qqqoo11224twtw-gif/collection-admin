@@ -14,6 +14,7 @@ async function login(page: import('@playwright/test').Page) {
 async function newCase(page: import('@playwright/test').Page, code: string) {
   await page.getByRole('button', { name: 'New case', exact: true }).click();
   const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Region', { exact: true }).selectOption('台北市');
   await dialog.getByLabel('Customer name').fill('虛構二階段測試戶');
   await dialog.getByLabel('Code', { exact: true }).fill(code);
   await dialog

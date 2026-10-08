@@ -84,9 +84,18 @@ function IntakeDetail() {
     queryKey: [permissions.userId, ...options.queryKey],
     enabled: permissions.can('intake.view'),
     retry: false,
+    refetchInterval: (query) =>
+      query.state.data?.extractionJobs.length &&
+      (query.state.data.status === 'received' ||
+        query.state.data.extractionJobs.some(
+          (job) => job.status === 'pending' || job.status === 'processing',
+        ))
+        ? 1000
+        : false,
   });
   const resolve = useMutation(orpc.intake.resolve.mutationOptions());
   const process = useMutation(orpc.intake.process.mutationOptions());
+  const extract = useMutation(orpc.intake.extractImages.mutationOptions());
   const refresh = useRefreshCases();
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -101,7 +110,15 @@ function IntakeDetail() {
   if (result.isError) return <CaseError retry={() => void result.refetch()} />;
   const row = result.data;
   const terminal = ['created', 'matched', 'rejected'].includes(row.status);
-  const busy = resolve.isPending || process.isPending || uploading;
+  const aiPending = row.extractionJobs.some(
+    (job) => job.status === 'pending' || job.status === 'processing',
+  );
+  const busy =
+    resolve.isPending ||
+    process.isPending ||
+    uploading ||
+    aiPending ||
+    extract.isPending;
   async function action(
     value: 'create' | 'match' | 'review' | 'reject',
     caseId?: string,
@@ -140,6 +157,50 @@ function IntakeDetail() {
         <Badge variant="secondary">{row.status.replaceAll('_', ' ')}</Badge>
       </div>
       {/* Proposed and confirmed records remain distinct. */}
+      <section className="rounded-xl border bg-card p-5 space-y-3">
+        <h2 className="text-lg font-medium">Image extraction</h2>
+        <p className="text-sm text-muted-foreground">
+          Confidence:{' '}
+          {row.confidence === null
+            ? 'Not supplied'
+            : `${Math.round(row.confidence * 100)}%`}{' '}
+          ·{' '}
+          {row.review?.status === 'pending'
+            ? 'Human confirmation required'
+            : aiPending
+              ? 'Processing images'
+              : 'Results are validated before case resolution'}
+        </p>
+        {row.extractionJobs.map((job) => (
+          <p key={job.id} className="text-sm text-muted-foreground">
+            {job.provider} · {job.model} · {job.status}
+            {job.errorCode && ` · ${job.errorCode}`}
+          </p>
+        ))}
+        {!terminal &&
+          row.status !== 'needs_review' &&
+          row.media.length > 0 &&
+          permissions.can('intake.resolve') && (
+            <Button
+              variant="outline"
+              disabled={busy || extract.isPending || aiPending}
+              onClick={async () => {
+                try {
+                  await extract.mutateAsync({ id: intakeId });
+                  await refresh();
+                } catch (e: unknown) {
+                  setError(
+                    e instanceof Error
+                      ? e.message
+                      : 'Extraction could not be queued.',
+                  );
+                }
+              }}
+            >
+              Extract image fields
+            </Button>
+          )}
+      </section>
       <div className="grid gap-5 md:grid-cols-2">
         {[
           ['Original proposal', row.proposedData],

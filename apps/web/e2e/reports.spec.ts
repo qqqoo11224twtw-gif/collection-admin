@@ -11,6 +11,7 @@ test.describe('Local case reports', () => {
     await signIn(page, 'phase3-admin@example.test');
     await page.getByRole('button', { name: 'New case', exact: true }).click();
     const create = page.getByRole('dialog');
+    await create.getByLabel('Region', { exact: true }).selectOption('台北市');
     await create.getByLabel('Customer name').fill('虛構三階段瀏覽器測試戶');
     await create
       .getByLabel('Code', { exact: true })

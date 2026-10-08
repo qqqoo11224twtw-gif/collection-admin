@@ -272,19 +272,31 @@ export function ReportsPanel({
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <Badge variant="secondary">{statuses[record.status]}</Badge>
-                {permissions.can('report.edit') && (
-                  <ReportEditor
-                    caseId={caseId}
-                    version={version}
-                    record={record}
-                  />
-                )}
+                <Badge variant="secondary">
+                  {record.workflowStatus === 'awaiting_status'
+                    ? 'Awaiting collector selection'
+                    : statuses[record.status]}
+                </Badge>
+                {permissions.can('report.edit') &&
+                  record.workflowStatus === 'completed' && (
+                    <ReportEditor
+                      caseId={caseId}
+                      version={version}
+                      record={record}
+                    />
+                  )}
               </div>
             </div>
             <p className="mt-5 whitespace-pre-wrap break-words text-sm">
               {record.content}
             </p>
+            {record.selectedStatus && (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Collector selected: {statuses[record.selectedStatus]} ·
+                Completed by {record.completedBy ?? record.author}
+                {record.completedAt && ` · ${timestamp(record.completedAt)}`}
+              </p>
+            )}
             <dl className="mt-5 grid gap-4 sm:grid-cols-2">
               <div>
                 <dt className="text-sm text-muted-foreground">

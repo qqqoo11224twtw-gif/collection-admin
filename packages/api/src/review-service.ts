@@ -160,6 +160,10 @@ export async function createReview(
       .where(eq(reports.id, input.reportId))
       .limit(1);
     if (!report) throw new ORPCError('NOT_FOUND');
+    if (report.workflowStatus === 'awaiting_status')
+      throw new ORPCError('CONFLICT', {
+        message: 'The collector must select this report status first.',
+      });
     await requireCaseAccess(context, report.caseId);
     caseId = report.caseId;
     entityId = report.id;

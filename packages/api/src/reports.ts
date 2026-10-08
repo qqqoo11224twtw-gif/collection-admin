@@ -75,9 +75,12 @@ export async function createReport(
   input: ReturnType<typeof reportCreateSchema.parse>,
   source: 'admin' | 'collector_portal' | 'telegram' | 'api',
   originKey?: string,
+  pending?: { telegramUserId: string; routeId: string },
 ) {
   requirePermission(context, 'report.create');
   input = reportCreateSchema.parse(input);
+  if (pending && (source !== 'telegram' || input.status !== 'needs_review'))
+    throw new ORPCError('BAD_REQUEST');
   await requireCaseAccess(context, input.caseId);
   if (originKey) {
     const existing = await context.env.DB.prepare(
@@ -116,6 +119,10 @@ export async function createReport(
     )
     .limit(1);
   const id = crypto.randomUUID();
+  if (pending && !current) throw new ORPCError('FORBIDDEN');
+  const callbackToken = pending
+    ? crypto.randomUUID().replaceAll('-', '')
+    : null;
   const token = crypto.randomUUID();
   const now = Date.now();
   await atomicCaseWrite(context, [
@@ -128,7 +135,7 @@ export async function createReport(
       fields.status !== 'needs_review',
     ),
     context.env.DB.prepare(
-      `INSERT INTO reports (id,case_id,assignment_id,collector_id,created_by_user_id,content,status,revisit_status,revisit_reason,payment_detected,payment_amount,source,created_at,updated_at,origin_key) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM cases WHERE id=? AND write_token=?)`,
+      `INSERT INTO reports (id,case_id,assignment_id,collector_id,created_by_user_id,content,status,revisit_status,revisit_reason,payment_detected,payment_amount,source,created_at,updated_at,origin_key,workflow_status,callback_token,telegram_user_id,callback_route_id,completed_by_user_id,completed_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM cases WHERE id=? AND write_token=?)`,
     ).bind(
       id,
       input.caseId,
@@ -145,6 +152,12 @@ export async function createReport(
       now,
       now,
       originKey ?? null,
+      pending ? 'awaiting_status' : 'completed',
+      callbackToken,
+      pending?.telegramUserId ?? null,
+      pending?.routeId ?? null,
+      pending ? null : (context.user?.id ?? null),
+      pending ? null : now,
       input.caseId,
       token,
     ),
@@ -156,7 +169,7 @@ export async function createReport(
       { reportId: id },
       token,
     ),
-    ...(fields.status === 'needs_review'
+    ...(fields.status === 'needs_review' && !pending
       ? pendingReportReviewStatements(
           context,
           id,
@@ -210,6 +223,12 @@ export const reportsApi = {
         createdAt: reports.createdAt,
         updatedAt: reports.updatedAt,
         version: reports.version,
+        workflowStatus: reports.workflowStatus,
+        selectedStatus: reports.selectedStatus,
+        completedAt: reports.completedAt,
+        completedBy: sql<
+          string | null
+        >`(SELECT coalesce(nullif(u.name,''),u.email) FROM user u WHERE u.id=${reports.completedByUserId})`,
         author: sql<string>`coalesce(nullif(${user.name}, ''), ${user.email})`,
       })
         .from(reports)
@@ -227,6 +246,10 @@ export const reportsApi = {
         .where(and(eq(reports.id, input.id), eq(reports.caseId, input.caseId)))
         .limit(1);
       if (!record) throw new ORPCError('NOT_FOUND');
+      if (record.workflowStatus === 'awaiting_status')
+        throw new ORPCError('CONFLICT', {
+          message: 'This report is awaiting its collector status selection.',
+        });
       if (record.version !== input.expectedVersion)
         throw new ORPCError('CONFLICT');
       const [latest] = await context.DB.select({ id: reports.id })

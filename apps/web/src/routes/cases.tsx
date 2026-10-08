@@ -29,6 +29,20 @@ function CaseWorkspace() {
               </Link>
             )}
             <ReviewNotice />
+            <Link
+              to="/cases/regions"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              Regions
+            </Link>
+            {permissions.can('settlement.view') && (
+              <Link
+                to="/cases/finance"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Finance
+              </Link>
+            )}
             {permissions.can('telegram_route.manage') && (
               <Link
                 to="/cases/telegram"

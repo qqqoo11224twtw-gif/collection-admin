@@ -4,6 +4,22 @@ import { useCasePermissions } from './management-hooks';
 import { CaseError, LoadingCases, timestamp } from './presentation';
 
 const actionLabels: Record<string, string> = {
+  'manual.case_created': 'Case created',
+  'manual.image_uploaded': 'Finished images uploaded',
+  duplicate_warning_overridden: 'Duplicate warning overridden',
+  'case.region_changed': 'Region corrected',
+  'case.customer_code_corrected': 'Customer or code corrected',
+  'assignment.corrected': 'Historical collector corrected',
+  'installment.plan_created': 'Installment plan created',
+  'installment.plan_cancelled': 'Installment plan cancelled',
+  'installment.workflow_started': 'Installment setup started',
+  'installment.workflow_advanced': 'Installment setup updated',
+  'installment.workflow_cancelled': 'Installment setup cancelled',
+  'payment.received': 'Payment received',
+  'payment.voided': 'Payment voided',
+  'settlement.created': 'Return ledger entry created',
+  'settlement.marked_returned': 'Marked returned',
+  'settlement.marked_pending': 'Marked pending return',
   'review.created': 'Review created',
   'review.approved': 'Review approved',
   'review.corrected': 'Review corrected',

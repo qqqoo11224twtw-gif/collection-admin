@@ -13,10 +13,12 @@ import {
 import { caseImageResponse } from '@saasflare-dev/api/case-image';
 import { uploadCaseImages } from '@saasflare-dev/api/case-media-management';
 import { createContext } from '@saasflare-dev/api/context';
+import { exportSettlements } from '@saasflare-dev/api/finance-export';
 import {
   intakeImageResponse,
   uploadIntakeImages,
 } from '@saasflare-dev/api/intake-media';
+import { createManualCase } from '@saasflare-dev/api/manual-cases';
 import { telegramClient } from '@saasflare-dev/api/telegram-client';
 import {
   runTelegramProcessing,
@@ -62,6 +64,43 @@ app.use(
     credentials: true,
   }),
 );
+
+app.post('/api/cases/manual', async (c) => {
+  try {
+    const result = await createManualCase(await createContext(c), c.req.raw);
+    return c.json(result, result.kind === 'created' ? 201 : 200);
+  } catch (error: unknown) {
+    if (error instanceof ORPCError)
+      return c.json(
+        { error: error.code, message: error.message },
+        error.status as 400 | 401 | 403 | 409 | 500,
+      );
+    return c.json({ error: 'INVALID_INPUT' }, 400);
+  }
+});
+app.get('/api/finance/settlements.xlsx', async (c) => {
+  try {
+    const result = await exportSettlements(await createContext(c), {
+      dateFrom: c.req.query('dateFrom'),
+      dateTo: c.req.query('dateTo'),
+    });
+    return new Response(new Uint8Array(result.bytes).buffer, {
+      headers: {
+        'Content-Type':
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${result.filename}"`,
+        'Cache-Control': 'private, no-store',
+      },
+    });
+  } catch (error: unknown) {
+    if (error instanceof ORPCError)
+      return c.json(
+        { error: error.code },
+        error.status as 400 | 401 | 403 | 500,
+      );
+    return c.json({ error: 'INVALID_DATE_RANGE' }, 400);
+  }
+});
 
 // ── Auth (better-auth), gated by AUTH_MODE — see docs/auth.md ─────────────
 

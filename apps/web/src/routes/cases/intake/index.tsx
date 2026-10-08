@@ -33,14 +33,7 @@ const statuses = [
   'rejected',
   'failed',
 ] as const;
-const sources = [
-  'manual',
-  'telegram',
-  'line',
-  'poster_builder',
-  'historical_import',
-  'api',
-] as const;
+const sources = ['manual', 'telegram', 'historical_import', 'api'] as const;
 export const Route = createFileRoute('/cases/intake/')({
   validateSearch: (s: Record<string, unknown>) => ({
     page: Math.max(1, Math.min(100000, Math.floor(Number(s.page) || 1))),

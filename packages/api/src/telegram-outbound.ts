@@ -5,6 +5,7 @@ import { telegramAudit } from './telegram-adapter';
 import { type TelegramClient, TelegramFailure } from './telegram-client';
 import {
   backoff,
+  type InlineKeyboard,
   MAX_ATTEMPTS,
   outboundPayloadSchema,
   type TelegramSettings,
@@ -41,6 +42,7 @@ export async function queueTelegramMessage(
   key: string,
   text: string,
   reportId: string | null = null,
+  options: { replyMarkup?: InlineKeyboard; commandReply?: boolean } = {},
 ) {
   const id = crypto.randomUUID();
   const now = Date.now();
@@ -48,6 +50,7 @@ export async function queueTelegramMessage(
     chatId: route.chatId,
     topicId: route.topicId,
     text,
+    replyMarkup: options.replyMarkup,
   });
   await context.env.DB.batch([
     context.env.DB.prepare(
@@ -55,7 +58,9 @@ export async function queueTelegramMessage(
     ).bind(
       id,
       key,
-      reportId ? 'report_destination' : 'command_reply',
+      reportId && !options.commandReply
+        ? 'report_destination'
+        : 'command_reply',
       reportId,
       route.id,
       JSON.stringify(payload),
@@ -64,7 +69,9 @@ export async function queueTelegramMessage(
     ),
     telegramAudit(
       context,
-      reportId ? 'report.outbound_queued' : 'telegram.reply_queued',
+      reportId && !options.commandReply
+        ? 'report.outbound_queued'
+        : 'telegram.reply_queued',
       id,
       { reportId, routeId: route.id },
       {
@@ -80,7 +87,7 @@ export async function queueReportDestination(
 ) {
   const settings: TelegramSettings = context.env;
   const report = await context.env.DB.prepare(
-    'SELECT r.content,r.created_at,r.collector_id,c.code,c.customer_name FROM reports r JOIN cases c ON c.id=r.case_id WHERE r.id=?',
+    "SELECT r.content,r.created_at,r.collector_id,c.code,c.customer_name FROM reports r JOIN cases c ON c.id=r.case_id WHERE r.id=? AND r.workflow_status='completed'",
   )
     .bind(reportId)
     .first<{
@@ -118,9 +125,18 @@ export async function queueReportDestination(
       reportId,
     );
   if (!routes.length)
-    await telegramAudit(context, 'report.outbound_no_destination', reportId, {
+    await telegramAudit(
+      context,
+      'report.outbound_no_destination',
       reportId,
-    }).run();
+      {
+        reportId,
+      },
+      {
+        sql: "NOT EXISTS(SELECT 1 FROM audit_logs WHERE entity_id=? AND action='report.outbound_no_destination')",
+        values: [reportId],
+      },
+    ).run();
 }
 export async function processOutbound(
   context: Context,
@@ -161,7 +177,7 @@ export async function processOutbound(
     const claim = await context.env.DB.prepare(
       "UPDATE telegram_outbound_jobs SET status='sending',attempts=attempts+1,lease_until=?,lease_token=? WHERE id=? AND status='pending' AND next_attempt_at<=?",
     )
-      .bind(now + 120000, token, candidate.id, now)
+      .bind(Math.max(now, Date.now()) + 120000, token, candidate.id, now)
       .run();
     if (claim.meta.changes !== 1) continue;
     const [job] = await context.DB.select()

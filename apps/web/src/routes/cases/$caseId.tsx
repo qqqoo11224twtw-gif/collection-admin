@@ -11,6 +11,7 @@ import { AssignmentPanel } from '~/components/cases/assignment-panel';
 import { AuditTimeline } from '~/components/cases/audit-timeline';
 import { CaseEditor } from '~/components/cases/case-editor';
 import { useCasePermissions } from '~/components/cases/management-hooks';
+import { PaymentsPanel } from '~/components/cases/payments-panel';
 import {
   CaseError,
   LoadingCases,
@@ -59,6 +60,7 @@ function CaseDetail() {
     ['Customer', record.customerName],
     ['Case no.', record.caseNo],
     ['Code', record.code],
+    ['Region', record.region ?? 'Not recorded'],
     ['Address', record.address],
     ['Amount due', money(record.amountDue)],
     ['Revisit recommendation', revisit[record.revisitStatus]],
@@ -150,16 +152,9 @@ function CaseDetail() {
         <TabsContent value="reports">
           <ReportsPanel caseId={caseId} version={record.version} />
         </TabsContent>
-        {placeholders.map((tab) => (
-          <TabsContent key={tab.value} value={tab.value}>
-            <div className="rounded-xl bg-muted/50 p-12 text-center">
-              <h2 className="text-lg font-medium">{tab.label}</h2>
-              <p className="mt-3 text-sm text-muted-foreground">
-                This section is reserved for the next phase.
-              </p>
-            </div>
-          </TabsContent>
-        ))}
+        <TabsContent value="payments">
+          <PaymentsPanel caseId={caseId} />
+        </TabsContent>
         <TabsContent value="assignments">
           <AssignmentPanel caseId={caseId} version={record.version} />
         </TabsContent>

@@ -82,12 +82,19 @@ export async function receiveIntake(context: Context, raw: unknown) {
   const replay = async (existing: (typeof intakeItems.$inferSelect)[]) => {
     if (existing.length !== 1) throw new ORPCError('CONFLICT');
     const row = await requireIntake(context, existing[0].id);
+    const original = row.receivedData
+      ? intakeReceiveSchema.parse(JSON.parse(row.receivedData))
+      : {
+          proposedData: intakeProposalSchema.parse(
+            JSON.parse(row.proposedData),
+          ),
+          confidence: row.confidence,
+        };
     if (
-      JSON.stringify(
-        intakeProposalSchema.parse(JSON.parse(row.proposedData)),
-      ) !== JSON.stringify(input.proposedData) ||
+      JSON.stringify(original.proposedData) !==
+        JSON.stringify(input.proposedData) ||
       row.caseNoHint !== input.caseNo ||
-      row.confidence !== input.confidence
+      original.confidence !== input.confidence
     )
       throw new ORPCError('CONFLICT', {
         message: 'The dedupe identity has different content.',
@@ -104,7 +111,7 @@ export async function receiveIntake(context: Context, raw: unknown) {
   const now = Date.now();
   const result = await context.env.DB.batch([
     context.env.DB.prepare(
-      "INSERT INTO intake_items(id,source,external_id,dedupe_key,status,proposed_data,created_by_user_id,created_at,updated_at,write_token,case_no_hint,confidence) VALUES(?,?,?,?,'received',?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
+      "INSERT INTO intake_items(id,source,external_id,dedupe_key,status,proposed_data,created_by_user_id,created_at,updated_at,write_token,case_no_hint,confidence,received_data) VALUES(?,?,?,?,'received',?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING",
     ).bind(
       id,
       input.source,
@@ -117,6 +124,7 @@ export async function receiveIntake(context: Context, raw: unknown) {
       token,
       input.caseNo,
       input.confidence,
+      JSON.stringify(input),
     ),
     intakeAudit(context, id, 'intake.received', {}, token),
   ]);

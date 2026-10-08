@@ -52,7 +52,11 @@ export const extractionOutputSchema = intakeProposalSchema
   .extend({ confidence: z.number().min(0).max(1) })
   .strict();
 export interface ImageExtractionProvider {
-  extract(input: { mediaId: string }): Promise<unknown>;
+  extract(input: ImageExtractionInput): Promise<unknown>;
+}
+export interface ImageExtractionInput {
+  mediaId: string;
+  image?: { bytes: ArrayBuffer; mediaType: string };
 }
 export async function validatedExtraction(
   provider: ImageExtractionProvider,

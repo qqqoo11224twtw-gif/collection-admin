@@ -2,6 +2,9 @@ import { ORPCError } from '@orpc/server';
 import type { Context } from './context';
 
 export type AuditAction =
+  | 'case.region_changed'
+  | 'case.customer_code_corrected'
+  | 'report.completed'
   | 'review.created'
   | 'review.approved'
   | 'review.corrected'

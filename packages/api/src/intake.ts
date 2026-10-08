@@ -1,4 +1,6 @@
+import { ORPCError } from '@orpc/server';
 import {
+  aiImageJobs,
   auditLogs,
   cases,
   intakeItems,
@@ -8,6 +10,7 @@ import {
 } from '@saasflare-dev/db';
 import { and, asc, count, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { enqueueImageExtraction } from './image-extraction-service';
 import {
   intakeListSchema,
   intakeProposalSchema,
@@ -22,9 +25,30 @@ import {
   requireIntake,
 } from './intake-service';
 import { protectedProcedure } from './middleware';
+import {
+  ImageExtractionFailure,
+  imageExtractionProvider,
+} from './openai-image-extraction';
+import { requirePermission } from './permissions';
 
 const idSchema = z.object({ id: z.string().min(1).max(128) }).strict();
 export const intakeApi = {
+  extractImages: protectedProcedure
+    .input(idSchema)
+    .handler(async ({ context, input }) => {
+      requirePermission(context, 'intake.resolve');
+      requirePermission(context, 'media.view');
+      try {
+        const provider = imageExtractionProvider(context.env);
+        if (!provider)
+          throw new ImageExtractionFailure('AI_NOT_CONFIGURED', false);
+        return await enqueueImageExtraction(context, input.id, provider);
+      } catch (error: unknown) {
+        if (error instanceof ImageExtractionFailure)
+          throw new ORPCError('BAD_REQUEST', { message: error.code });
+        throw error;
+      }
+    }),
   receive: protectedProcedure
     .input(intakeReceiveSchema)
     .handler(({ context, input }) => receiveIntake(context, input)),
@@ -42,6 +66,16 @@ export const intakeApi = {
     .handler(async ({ context, input }) => {
       const row = await requireIntake(context, input.id);
       const { writeToken: _token, ...safe } = row;
+      const extractionJobs = await context.DB.select({
+        id: aiImageJobs.id,
+        status: aiImageJobs.status,
+        provider: aiImageJobs.provider,
+        model: aiImageJobs.model,
+        errorCode: aiImageJobs.errorCode,
+        updatedAt: aiImageJobs.updatedAt,
+      })
+        .from(aiImageJobs)
+        .where(eq(aiImageJobs.intakeId, row.id));
       const media = await context.DB.select({
         id: intakeMedia.id,
         originalFilename: intakeMedia.originalFilename,
@@ -93,6 +127,10 @@ export const intakeApi = {
         .limit(100);
       return {
         ...safe,
+        extractionJobs,
+        receivedData: row.receivedData
+          ? intakeReceiveSchema.parse(JSON.parse(row.receivedData)).proposedData
+          : null,
         proposedData: intakeProposalSchema.parse(JSON.parse(row.proposedData)),
         confirmedData: row.confirmedData
           ? intakeProposalSchema.parse(JSON.parse(row.confirmedData))

@@ -4,8 +4,11 @@ import { caseManagementApi, collectorsApi } from './case-management';
 import { caseMediaManagementApi } from './case-media-management';
 import { casesApi } from './cases';
 import { configApi } from './config';
+import { financeApi } from './finance';
 import { connection, db, kv, r2 } from './health-check';
+import { installmentsApi } from './installments';
 import { intakeApi } from './intake';
+import { manualCaseApi } from './manual-cases';
 import { planetApi } from './planet';
 import { caseLookupApi, reportsApi } from './reports';
 import { reviewsApi } from './reviews';
@@ -18,9 +21,12 @@ export const appRouter = {
     ...casesApi,
     ...caseManagementApi,
     ...caseMediaManagementApi,
+    ...manualCaseApi,
     lookup: caseLookupApi,
   },
   reports: reportsApi,
+  finance: financeApi,
+  installments: installmentsApi,
   reviews: reviewsApi,
   intake: intakeApi,
   telegram: telegramApi,

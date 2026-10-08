@@ -11,7 +11,11 @@ const env: NodeJS.ProcessEnv = {
   WRANGLER_SEND_METRICS: 'false',
 };
 for (const key of Object.keys(env)) {
-  if (/^(CLOUDFLARE_|ALCHEMY_|R2_|RESEND_|TELEGRAM_)/.test(key))
+  if (
+    /^(CLOUDFLARE_|ALCHEMY_|R2_|RESEND_|TELEGRAM_|OPENAI_|IMAGE_EXTRACTION_MODE)/.test(
+      key,
+    )
+  )
     delete env[key];
 }
 const children = new Set<ReturnType<typeof spawn>>();

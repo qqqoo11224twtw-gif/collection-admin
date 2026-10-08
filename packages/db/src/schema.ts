@@ -168,12 +168,17 @@ export const REVISIT_STATUSES = [
   'not_needed',
 ] as const;
 
+import { REGIONS } from './regions';
+
+export { REGIONS } from './regions';
 export const cases = sqliteTable(
   'cases',
   {
     id: text('id').primaryKey(),
     caseNo: text('case_no').notNull(),
     code: text('code').notNull(),
+    region: text('region', { enum: REGIONS }),
+    manualEntryKey: text('manual_entry_key').unique(),
     customerName: text('customer_name').notNull(),
     address: text('address').notNull(),
     // Phase one stores whole TWD dollars, never floating-point money.
@@ -199,6 +204,7 @@ export const cases = sqliteTable(
     index('cases_code_idx').on(sql`${t.code} COLLATE NOCASE`),
     index('cases_customer_name_idx').on(sql`${t.customerName} COLLATE NOCASE`),
     index('cases_updated_idx').on(t.updatedAt, t.id),
+    index('cases_region_updated_idx').on(t.region, t.updatedAt, t.id),
     index('cases_agent_updated_idx').on(t.assignedAgentId, t.updatedAt, t.id),
     check(
       'cases_amount_check',
@@ -298,6 +304,11 @@ export const assignments = sqliteTable(
     assignedAt: integer('assigned_at', { mode: 'timestamp_ms' }).notNull(),
     unassignedAt: integer('unassigned_at', { mode: 'timestamp_ms' }),
     note: text('note'),
+    recordType: text('record_type', { enum: ['assignment', 'correction'] })
+      .notNull()
+      .default('assignment'),
+    correctedFromId: text('corrected_from_id'),
+    correctionReason: text('correction_reason'),
   },
   (t) => [
     uniqueIndex('assignments_current_case_idx')
@@ -383,6 +394,24 @@ export const reports = sqliteTable(
     paymentAmount: integer('payment_amount'),
     source: text('source', { enum: REPORT_SOURCES }).notNull(),
     originKey: text('origin_key').unique(),
+    workflowStatus: text('workflow_status', {
+      enum: ['awaiting_status', 'completed'],
+    })
+      .notNull()
+      .default('completed'),
+    selectedStatus: text('selected_status', {
+      enum: ['settled', 'installment', 'unresolved', 'follow_up'],
+    }),
+    completedByUserId: text('completed_by_user_id').references(() => user.id, {
+      onDelete: 'restrict',
+    }),
+    completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+    callbackToken: text('callback_token').unique(),
+    telegramUserId: text('telegram_user_id'),
+    callbackRouteId: text('callback_route_id').references(
+      () => telegramRoutes.id,
+      { onDelete: 'restrict' },
+    ),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
     version: integer('version').notNull().default(0),
@@ -412,6 +441,10 @@ export const reports = sqliteTable(
       sql`${t.paymentDetected} IN (0,1) AND (${t.paymentAmount} IS NULL OR (${t.paymentDetected}=1 AND ${t.paymentAmount} BETWEEN 0 AND 1000000000000))`,
     ),
     check('reports_dates_check', sql`${t.updatedAt} >= ${t.createdAt}`),
+    check(
+      'reports_workflow_check',
+      sql`${t.workflowStatus} IN ('awaiting_status','completed') AND (${t.workflowStatus}<>'awaiting_status' OR (${t.source}='telegram' AND ${t.callbackToken} IS NOT NULL AND ${t.telegramUserId} IS NOT NULL AND ${t.callbackRouteId} IS NOT NULL AND ${t.assignmentId} IS NOT NULL AND ${t.status}='needs_review' AND ${t.completedAt} IS NULL))`,
+    ),
   ],
 );
 
@@ -541,6 +574,8 @@ export const intakeItems = sqliteTable(
       .notNull()
       .default('received'),
     proposedData: text('proposed_data').notNull(),
+    receivedData: text('received_data'),
+    extractionKey: text('extraction_key'),
     confirmedData: text('confirmed_data'),
     matchedCaseId: text('matched_case_id').references(() => cases.id, {
       onDelete: 'restrict',
@@ -780,6 +815,325 @@ export const telegramOutboundJobs = sqliteTable(
     check(
       'telegram_outbound_status_check',
       sql`${t.status} IN ('pending','sending','sent','failed')`,
+    ),
+  ],
+);
+
+export const aiImageJobs = sqliteTable(
+  'ai_image_jobs',
+  {
+    id: text('id').primaryKey(),
+    intakeId: text('intake_id')
+      .notNull()
+      .references(() => intakeItems.id, { onDelete: 'restrict' }),
+    mediaId: text('media_id')
+      .notNull()
+      .references(() => intakeMedia.id, { onDelete: 'restrict' }),
+    sha256: text('sha256').notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    providerVersion: text('provider_version').notNull(),
+    status: text('status', {
+      enum: ['pending', 'processing', 'succeeded', 'failed'],
+    })
+      .notNull()
+      .default('pending'),
+    result: text('result'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: integer('next_attempt_at', {
+      mode: 'timestamp_ms',
+    }).notNull(),
+    leaseUntil: integer('lease_until', { mode: 'timestamp_ms' }),
+    leaseToken: text('lease_token'),
+    errorCode: text('error_code'),
+    createdByUserId: text('created_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('ai_image_jobs_dedupe_idx').on(
+      t.intakeId,
+      t.sha256,
+      t.provider,
+      t.model,
+      t.providerVersion,
+    ),
+    index('ai_image_jobs_due_idx').on(t.status, t.nextAttemptAt),
+    check(
+      'ai_image_result_json_check',
+      sql`${t.result} IS NULL OR json_valid(${t.result})`,
+    ),
+    check(
+      'ai_image_status_check',
+      sql`${t.status} IN ('pending','processing','succeeded','failed')`,
+    ),
+  ],
+);
+export const aiUsageLogs = sqliteTable(
+  'ai_usage_logs',
+  {
+    id: text('id').primaryKey(),
+    jobId: text('job_id').references(() => aiImageJobs.id, {
+      onDelete: 'restrict',
+    }),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    taskType: text('task_type', { enum: ['image_extraction'] }).notNull(),
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    durationMs: integer('duration_ms').notNull(),
+    success: integer('success', { mode: 'boolean' }).notNull(),
+    errorCode: text('error_code'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    index('ai_usage_model_time_idx').on(t.provider, t.model, t.createdAt),
+    check('ai_usage_task_check', sql`${t.taskType}='image_extraction'`),
+    check(
+      'ai_usage_count_check',
+      sql`(${t.inputTokens} IS NULL OR ${t.inputTokens}>=0) AND (${t.outputTokens} IS NULL OR ${t.outputTokens}>=0) AND ${t.durationMs}>=0`,
+    ),
+  ],
+);
+
+export const installmentPlans = sqliteTable(
+  'installment_plans',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => cases.id, { onDelete: 'restrict' }),
+    reportId: text('report_id').references(() => reports.id, {
+      onDelete: 'restrict',
+    }),
+    collectorId: text('collector_id').references(() => collectors.id, {
+      onDelete: 'restrict',
+    }),
+    planType: text('plan_type', {
+      enum: ['deadline', 'weekly', 'monthly'],
+    }).notNull(),
+    totalAmount: integer('total_amount').notNull(),
+    perPaymentAmount: integer('per_payment_amount'),
+    weekday: integer('weekday'),
+    dayOfMonth: integer('day_of_month'),
+    deadlineDate: text('deadline_date'),
+    status: text('status', { enum: ['active', 'completed', 'cancelled'] })
+      .notNull()
+      .default('active'),
+    createdByUserId: text('created_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(0),
+    writeToken: text('write_token').notNull().default(''),
+  },
+  (t) => [
+    uniqueIndex('installment_report_idx').on(t.reportId),
+    uniqueIndex('installment_active_case_idx')
+      .on(t.caseId)
+      .where(sql`${t.status}='active'`),
+    index('installment_case_idx').on(t.caseId, t.createdAt),
+    check(
+      'installment_amount_check',
+      sql`${t.totalAmount}>0 AND ${t.totalAmount}<=1000000000000 AND (${t.perPaymentAmount} IS NULL OR (${t.perPaymentAmount}>0 AND ${t.perPaymentAmount}<=${t.totalAmount}))`,
+    ),
+    check(
+      'installment_type_check',
+      sql`(${t.planType}='deadline' AND ${t.deadlineDate} IS NOT NULL AND ${t.perPaymentAmount} IS NULL AND ${t.weekday} IS NULL AND ${t.dayOfMonth} IS NULL) OR (${t.planType}='weekly' AND ${t.weekday} BETWEEN 1 AND 7 AND ${t.perPaymentAmount} IS NOT NULL AND ${t.dayOfMonth} IS NULL AND ${t.deadlineDate} IS NULL) OR (${t.planType}='monthly' AND ${t.dayOfMonth} BETWEEN 1 AND 31 AND ${t.perPaymentAmount} IS NOT NULL AND ${t.weekday} IS NULL AND ${t.deadlineDate} IS NULL)`,
+    ),
+    check(
+      'installment_status_check',
+      sql`${t.status} IN ('active','completed','cancelled')`,
+    ),
+  ],
+);
+
+export const installmentSchedules = sqliteTable(
+  'installment_schedules',
+  {
+    id: text('id').primaryKey(),
+    planId: text('plan_id')
+      .notNull()
+      .references(() => installmentPlans.id, { onDelete: 'restrict' }),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => cases.id, { onDelete: 'restrict' }),
+    sequence: integer('sequence').notNull(),
+    dueDate: text('due_date').notNull(),
+    expectedAmount: integer('expected_amount').notNull(),
+    paidAmount: integer('paid_amount').notNull().default(0),
+    status: text('status', {
+      enum: ['pending', 'partial', 'paid', 'overdue', 'cancelled'],
+    })
+      .notNull()
+      .default('pending'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('schedule_plan_sequence_idx').on(t.planId, t.sequence),
+    index('schedule_case_due_idx').on(t.caseId, t.dueDate),
+    check(
+      'schedule_amount_check',
+      sql`${t.expectedAmount}>0 AND ${t.paidAmount}>=0 AND ${t.paidAmount}<=${t.expectedAmount}`,
+    ),
+    check(
+      'schedule_status_check',
+      sql`${t.status} IN ('pending','partial','paid','overdue','cancelled')`,
+    ),
+  ],
+);
+
+export const payments = sqliteTable(
+  'payments',
+  {
+    id: text('id').primaryKey(),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => cases.id, { onDelete: 'restrict' }),
+    installmentPlanId: text('installment_plan_id').references(
+      () => installmentPlans.id,
+      { onDelete: 'restrict' },
+    ),
+    installmentScheduleId: text('installment_schedule_id').references(
+      () => installmentSchedules.id,
+      { onDelete: 'restrict' },
+    ),
+    collectorId: text('collector_id').references(() => collectors.id, {
+      onDelete: 'restrict',
+    }),
+    receivedDate: text('received_date').notNull(),
+    receivedAmount: integer('received_amount').notNull(),
+    status: text('status', { enum: ['received', 'voided'] })
+      .notNull()
+      .default('received'),
+    source: text('source', {
+      enum: ['telegram', 'admin', 'installment', 'manual'],
+    }).notNull(),
+    createdByUserId: text('created_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(0),
+    writeToken: text('write_token').notNull().default(''),
+  },
+  (t) => [
+    index('payments_case_date_idx').on(t.caseId, t.receivedDate),
+    index('payments_schedule_idx').on(t.installmentScheduleId, t.status),
+    check(
+      'payments_amount_check',
+      sql`${t.receivedAmount}>0 AND ${t.receivedAmount}<=1000000000000`,
+    ),
+    check('payments_status_check', sql`${t.status} IN ('received','voided')`),
+    check(
+      'payments_source_check',
+      sql`${t.source} IN ('telegram','admin','installment','manual')`,
+    ),
+  ],
+);
+
+export const settlements = sqliteTable(
+  'settlements',
+  {
+    id: text('id').primaryKey(),
+    paymentId: text('payment_id')
+      .notNull()
+      .unique()
+      .references(() => payments.id, { onDelete: 'restrict' }),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => cases.id, { onDelete: 'restrict' }),
+    collectorId: text('collector_id').references(() => collectors.id, {
+      onDelete: 'restrict',
+    }),
+    receivedDate: text('received_date').notNull(),
+    agentCodeSnapshot: text('agent_code_snapshot').notNull(),
+    customerNameSnapshot: text('customer_name_snapshot').notNull(),
+    receivedAmount: integer('received_amount').notNull(),
+    commissionRate: real('commission_rate').notNull(),
+    commissionAmount: integer('commission_amount').notNull(),
+    returnAmount: integer('return_amount').notNull(),
+    returnStatus: text('return_status', { enum: ['pending', 'returned'] })
+      .notNull()
+      .default('pending'),
+    returnedAt: integer('returned_at', { mode: 'timestamp_ms' }),
+    returnedByUserId: text('returned_by_user_id').references(() => user.id, {
+      onDelete: 'restrict',
+    }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(0),
+    writeToken: text('write_token').notNull().default(''),
+  },
+  (t) => [
+    index('settlements_date_status_idx').on(t.receivedDate, t.returnStatus),
+    check(
+      'settlement_amount_check',
+      sql`${t.commissionRate} BETWEEN 0 AND 1 AND ${t.commissionAmount}>=0 AND ${t.returnAmount}>=0 AND ${t.commissionAmount}+${t.returnAmount}=${t.receivedAmount}`,
+    ),
+    check(
+      'settlement_return_check',
+      sql`(${t.returnStatus}='pending' AND ${t.returnedAt} IS NULL AND ${t.returnedByUserId} IS NULL) OR (${t.returnStatus}='returned' AND ${t.returnedAt} IS NOT NULL AND ${t.returnedByUserId} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export const installmentWorkflows = sqliteTable(
+  'installment_workflows',
+  {
+    id: text('id').primaryKey(),
+    token: text('token').notNull().unique(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => cases.id, { onDelete: 'restrict' }),
+    reportId: text('report_id')
+      .notNull()
+      .unique()
+      .references(() => reports.id, { onDelete: 'restrict' }),
+    assignmentId: text('assignment_id')
+      .notNull()
+      .references(() => assignments.id, { onDelete: 'restrict' }),
+    collectorId: text('collector_id')
+      .notNull()
+      .references(() => collectors.id, { onDelete: 'restrict' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    telegramUserId: text('telegram_user_id').notNull(),
+    routeId: text('route_id')
+      .notNull()
+      .references(() => telegramRoutes.id, { onDelete: 'restrict' }),
+    step: text('step').notNull(),
+    data: text('data').notNull().default('{}'),
+    status: text('status', {
+      enum: ['active', 'completed', 'cancelled', 'expired'],
+    })
+      .notNull()
+      .default('active'),
+    planId: text('plan_id').references(() => installmentPlans.id, {
+      onDelete: 'restrict',
+    }),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    version: integer('version').notNull().default(0),
+    lastUpdateId: text('last_update_id'),
+    writeToken: text('write_token').notNull().default(''),
+  },
+  (t) => [
+    uniqueIndex('workflow_active_sender_route_idx')
+      .on(t.telegramUserId, t.routeId)
+      .where(sql`${t.status}='active'`),
+    index('workflow_expiry_idx').on(t.status, t.expiresAt),
+    check('workflow_json_check', sql`json_valid(${t.data})`),
+    check(
+      'workflow_status_check',
+      sql`${t.status} IN ('active','completed','cancelled','expired')`,
     ),
   ],
 );

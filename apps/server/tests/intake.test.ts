@@ -65,6 +65,7 @@ async function existing(values: Partial<typeof fields> = {}) {
     'cases.create',
     {
       customerName: values.customer_name ?? fields.customer_name,
+      duplicateOverride: true,
       code: values.code ?? crypto.randomUUID(),
       address: values.address ?? fields.address,
       amountDue: values.amount_due ?? 100,

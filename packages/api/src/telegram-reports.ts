@@ -8,11 +8,33 @@ import type { Context } from './context';
 import { createReport } from './reports';
 import { telegramAudit } from './telegram-adapter';
 import type { TelegramUpdate } from './telegram-contract';
-import {
-  queueReportDestination,
-  queueTelegramMessage,
-} from './telegram-outbound';
+import { reportStatusKeyboard } from './telegram-contract';
+import { queueTelegramMessage } from './telegram-outbound';
 import { telegramPrincipal } from './telegram-principal';
+
+async function queueStatusPrompt(
+  context: Context,
+  route: typeof telegramRoutes.$inferSelect,
+  id: string,
+) {
+  const report = await context.env.DB.prepare(
+    "SELECT r.callback_token,c.code,c.customer_name FROM reports r JOIN cases c ON c.id=r.case_id WHERE r.id=? AND r.workflow_status='awaiting_status'",
+  )
+    .bind(id)
+    .first<{ callback_token: string; code: string; customer_name: string }>();
+  if (!report) return;
+  await queueTelegramMessage(
+    context,
+    route,
+    `report-status-prompt:${id}`,
+    `已收到回報\n案件：${report.customer_name} / ${report.code}\n請選擇案件狀態`,
+    id,
+    {
+      commandReply: true,
+      replyMarkup: reportStatusKeyboard(report.callback_token),
+    },
+  );
+}
 export function parseReportCommand(text: string) {
   const match = /^\/回報(?:@[A-Za-z0-9_]+)?\s+(\S{1,120})\s+([\s\S]+)$/.exec(
     text.trim(),
@@ -35,21 +57,8 @@ export async function processReportCommand(
     .bind(updateId, `telegram-update:${updateId}`)
     .first<{ id: string; code: string; customer_name: string }>();
   if (committed) {
-    await queueReportDestination(base, committed.id);
-    await reply(
-      `已收到回報\n案件：${committed.customer_name} / ${committed.code}\n狀態：待分類`,
-    );
-    await telegramAudit(
-      base,
-      'telegram.report_created',
-      updateId,
-      { reportId: committed.id },
-      {
-        sql: "NOT EXISTS(SELECT 1 FROM audit_logs WHERE entity_id=? AND action='telegram.report_created')",
-        values: [updateId],
-      },
-    ).run();
-    return { code: 'REPORT_CREATED', reportId: committed.id };
+    await queueStatusPrompt(base, route, committed.id);
+    return { code: 'REPORT_PENDING', reportId: committed.id };
   }
   const command = parseReportCommand(m?.text ?? '');
   if (!command) {
@@ -146,6 +155,7 @@ export async function processReportCommand(
       },
       'telegram',
       `telegram-update:${updateId}`,
+      { telegramUserId: String(m?.from?.id), routeId: route.id },
     );
   } catch (error: unknown) {
     if (error instanceof ORPCError && error.code === 'NOT_FOUND') {
@@ -154,11 +164,8 @@ export async function processReportCommand(
     }
     throw error;
   }
-  // The report transaction has committed. A retry repairs missing jobs without creating a second report.
-  await queueReportDestination(context, report.id);
-  await reply(
-    `已收到回報\n案件：${candidate.customerName} / ${candidate.code}\n狀態：待分類`,
-  );
+  // Business forwarding waits for an authenticated manual status selection.
+  await queueStatusPrompt(context, route, report.id);
   await telegramAudit(
     context,
     'telegram.report_created',
@@ -169,5 +176,5 @@ export async function processReportCommand(
       values: [updateId],
     },
   ).run();
-  return { code: 'REPORT_CREATED', reportId: report.id };
+  return { code: 'REPORT_PENDING', reportId: report.id };
 }

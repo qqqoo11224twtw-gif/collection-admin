@@ -9,6 +9,12 @@ export type CloudflareEnv = typeof server.Env & {
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   BUSINESS_TIMEZONE?: string;
+  IMAGE_EXTRACTION_MODE?: string;
+  OPENAI_API_KEY?: string;
+  OPENAI_IMAGE_MODEL?: string;
+  OPENAI_REQUEST_TIMEOUT_MS?: string;
+  OPENAI_MAX_RETRIES?: string;
+  COMMISSION_RATE?: string;
 };
 
 declare global {

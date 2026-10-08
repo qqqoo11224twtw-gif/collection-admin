@@ -1,6 +1,7 @@
 import { DEMO_IMAGES } from '@saasflare-dev/db/demo-images';
 import {
   outboundPayloadSchema,
+  type TelegramMessagePayload,
   type TelegramSettings,
 } from './telegram-contract';
 export class TelegramFailure extends Error {
@@ -14,31 +15,29 @@ export class TelegramFailure extends Error {
   }
 }
 export interface TelegramClient {
-  sendMessage(input: {
-    chatId: string;
-    topicId: number | null;
-    text: string;
-  }): Promise<string>;
+  sendMessage(input: TelegramMessagePayload): Promise<string>;
+  answerCallbackQuery(id: string, text: string): Promise<void>;
   downloadFile(
     fileId: string,
   ): Promise<{ bytes: ArrayBuffer; mediaType: string }>;
 }
 export class FakeTelegramClient implements TelegramClient {
+  readonly answered: { id: string; text: string }[] = [];
+  async answerCallbackQuery(id: string, text: string) {
+    this.answered.push({ id, text });
+  }
   readonly sent: {
     chatId: string;
     topicId: number | null;
     text: string;
     id: string;
+    replyMarkup?: TelegramMessagePayload['replyMarkup'];
   }[] = [];
   readonly downloads: string[] = [];
   sendFailures = 0;
   downloadFailures = 0;
   uncertainSend = false;
-  async sendMessage(input: {
-    chatId: string;
-    topicId: number | null;
-    text: string;
-  }) {
+  async sendMessage(input: TelegramMessagePayload) {
     outboundPayloadSchema.parse(input);
     if (this.sendFailures-- > 0) throw new TelegramFailure('RATE_LIMIT', true);
     const id = String(this.sent.length + 1);
@@ -111,11 +110,10 @@ export class BotApiTelegramClient implements TelegramClient {
     }
     return body.result;
   }
-  async sendMessage(raw: {
-    chatId: string;
-    topicId: number | null;
-    text: string;
-  }) {
+  async answerCallbackQuery(id: string, text: string) {
+    await this.call('answerCallbackQuery', { callback_query_id: id, text });
+  }
+  async sendMessage(raw: TelegramMessagePayload) {
     const input = outboundPayloadSchema.parse(raw);
     const r = (await this.call(
       'sendMessage',
@@ -123,6 +121,7 @@ export class BotApiTelegramClient implements TelegramClient {
         chat_id: input.chatId,
         message_thread_id: input.topicId ?? undefined,
         text: input.text,
+        reply_markup: input.replyMarkup,
       },
       true,
     )) as { message_id?: number };

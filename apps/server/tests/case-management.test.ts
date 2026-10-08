@@ -30,7 +30,11 @@ const png = () =>
   Uint8Array.from(atob(DEMO_IMAGES[0].base64), (char) => char.charCodeAt(0))
     .buffer;
 async function createCase() {
-  const response = await rpc('cases.create', fields, { cookie: admin });
+  const response = await rpc(
+    'cases.create',
+    { ...fields, duplicateOverride: true },
+    { cookie: admin },
+  );
   expect(response.status).toBe(200);
   return response.body as { id: string; caseNo: string };
 }

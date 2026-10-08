@@ -24,7 +24,9 @@ import { Route as DesignOverviewRouteImport } from './routes/design/overview'
 import { Route as DesignComponentsRouteImport } from './routes/design/components'
 import { Route as CasesTelegramRouteImport } from './routes/cases/telegram'
 import { Route as CasesReviewsRouteImport } from './routes/cases/reviews'
+import { Route as CasesRegionsRouteImport } from './routes/cases/regions'
 import { Route as CasesIntakeRouteImport } from './routes/cases/intake'
+import { Route as CasesFinanceRouteImport } from './routes/cases/finance'
 import { Route as CasesCollectorsRouteImport } from './routes/cases/collectors'
 import { Route as CasesCaseIdRouteImport } from './routes/cases/$caseId'
 import { Route as CasesReviewsIndexRouteImport } from './routes/cases/reviews/index'
@@ -110,9 +112,19 @@ const CasesReviewsRoute = CasesReviewsRouteImport.update({
   path: '/reviews',
   getParentRoute: () => CasesRoute,
 } as any)
+const CasesRegionsRoute = CasesRegionsRouteImport.update({
+  id: '/regions',
+  path: '/regions',
+  getParentRoute: () => CasesRoute,
+} as any)
 const CasesIntakeRoute = CasesIntakeRouteImport.update({
   id: '/intake',
   path: '/intake',
+  getParentRoute: () => CasesRoute,
+} as any)
+const CasesFinanceRoute = CasesFinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
   getParentRoute: () => CasesRoute,
 } as any)
 const CasesCollectorsRoute = CasesCollectorsRouteImport.update({
@@ -171,7 +183,9 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/cases/collectors': typeof CasesCollectorsRoute
+  '/cases/finance': typeof CasesFinanceRoute
   '/cases/intake': typeof CasesIntakeRouteWithChildren
+  '/cases/regions': typeof CasesRegionsRoute
   '/cases/reviews': typeof CasesReviewsRouteWithChildren
   '/cases/telegram': typeof CasesTelegramRoute
   '/design/components': typeof DesignComponentsRoute
@@ -196,6 +210,8 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/cases/collectors': typeof CasesCollectorsRoute
+  '/cases/finance': typeof CasesFinanceRoute
+  '/cases/regions': typeof CasesRegionsRoute
   '/cases/telegram': typeof CasesTelegramRoute
   '/design/components': typeof DesignComponentsRoute
   '/design/overview': typeof DesignOverviewRoute
@@ -222,7 +238,9 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/cases/collectors': typeof CasesCollectorsRoute
+  '/cases/finance': typeof CasesFinanceRoute
   '/cases/intake': typeof CasesIntakeRouteWithChildren
+  '/cases/regions': typeof CasesRegionsRoute
   '/cases/reviews': typeof CasesReviewsRouteWithChildren
   '/cases/telegram': typeof CasesTelegramRoute
   '/design/components': typeof DesignComponentsRoute
@@ -251,7 +269,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/cases/$caseId'
     | '/cases/collectors'
+    | '/cases/finance'
     | '/cases/intake'
+    | '/cases/regions'
     | '/cases/reviews'
     | '/cases/telegram'
     | '/design/components'
@@ -276,6 +296,8 @@ export interface FileRouteTypes {
     | '/login'
     | '/cases/$caseId'
     | '/cases/collectors'
+    | '/cases/finance'
+    | '/cases/regions'
     | '/cases/telegram'
     | '/design/components'
     | '/design/overview'
@@ -301,7 +323,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/cases/$caseId'
     | '/cases/collectors'
+    | '/cases/finance'
     | '/cases/intake'
+    | '/cases/regions'
     | '/cases/reviews'
     | '/cases/telegram'
     | '/design/components'
@@ -436,11 +460,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CasesReviewsRouteImport
       parentRoute: typeof CasesRoute
     }
+    '/cases/regions': {
+      id: '/cases/regions'
+      path: '/regions'
+      fullPath: '/cases/regions'
+      preLoaderRoute: typeof CasesRegionsRouteImport
+      parentRoute: typeof CasesRoute
+    }
     '/cases/intake': {
       id: '/cases/intake'
       path: '/intake'
       fullPath: '/cases/intake'
       preLoaderRoute: typeof CasesIntakeRouteImport
+      parentRoute: typeof CasesRoute
+    }
+    '/cases/finance': {
+      id: '/cases/finance'
+      path: '/finance'
+      fullPath: '/cases/finance'
+      preLoaderRoute: typeof CasesFinanceRouteImport
       parentRoute: typeof CasesRoute
     }
     '/cases/collectors': {
@@ -540,7 +578,9 @@ const CasesReviewsRouteWithChildren = CasesReviewsRoute._addFileChildren(
 interface CasesRouteChildren {
   CasesCaseIdRoute: typeof CasesCaseIdRoute
   CasesCollectorsRoute: typeof CasesCollectorsRoute
+  CasesFinanceRoute: typeof CasesFinanceRoute
   CasesIntakeRoute: typeof CasesIntakeRouteWithChildren
+  CasesRegionsRoute: typeof CasesRegionsRoute
   CasesReviewsRoute: typeof CasesReviewsRouteWithChildren
   CasesTelegramRoute: typeof CasesTelegramRoute
   CasesIndexRoute: typeof CasesIndexRoute
@@ -549,7 +589,9 @@ interface CasesRouteChildren {
 const CasesRouteChildren: CasesRouteChildren = {
   CasesCaseIdRoute: CasesCaseIdRoute,
   CasesCollectorsRoute: CasesCollectorsRoute,
+  CasesFinanceRoute: CasesFinanceRoute,
   CasesIntakeRoute: CasesIntakeRouteWithChildren,
+  CasesRegionsRoute: CasesRegionsRoute,
   CasesReviewsRoute: CasesReviewsRouteWithChildren,
   CasesTelegramRoute: CasesTelegramRoute,
   CasesIndexRoute: CasesIndexRoute,

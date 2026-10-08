@@ -32,6 +32,7 @@
     "@types/node": "catalog:",
     "alchemy": "catalog:",
     "drizzle-kit": "catalog:",
+    "fflate": "0.8.2",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

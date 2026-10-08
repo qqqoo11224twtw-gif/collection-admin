@@ -30,6 +30,7 @@
     "@saasflare-dev/db": "workspace:*",
     "better-auth": "catalog:",
     "drizzle-orm": "catalog:",
+    "fflate": "0.8.2",
     "hono": "catalog:",
     "zod": "catalog:"
   },
