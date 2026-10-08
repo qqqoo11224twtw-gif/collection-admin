@@ -64,8 +64,10 @@ function ReviewForm({ record }: { record: Review }) {
   const payment =
     proposal.type === 'payment_detection' ? proposal.payment : classification;
   const canApprove =
-    proposal.type !== 'report_classification' ||
-    classification?.status !== 'needs_review';
+    (proposal.type !== 'report_classification' ||
+      classification?.status !== 'needs_review') &&
+    (proposal.type !== 'image_extraction' ||
+      Object.values(proposal.extraction).every((v) => v !== null));
   function confirmedFrom(form: HTMLFormElement): Confirmed {
     const data = new FormData(form);
     const text = (name: string) => String(data.get(name) ?? '');
@@ -292,7 +294,8 @@ function ReviewForm({ record }: { record: Review }) {
                       type={name === 'amount_due' ? 'number' : 'text'}
                       min={name === 'amount_due' ? 0 : undefined}
                       step={name === 'amount_due' ? 1 : undefined}
-                      defaultValue={value}
+                      defaultValue={value ?? ''}
+                      required
                     />
                   </div>
                 ))}

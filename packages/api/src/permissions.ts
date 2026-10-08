@@ -18,6 +18,10 @@ export const PERMISSIONS = [
   'report.edit',
   'review.view',
   'review.resolve',
+  'intake.view',
+  'intake.create',
+  'intake.resolve',
+  'intake.reject',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 interface Policy {
@@ -34,7 +38,14 @@ const ROLE_POLICIES: Record<string, Policy> = {
     scope: 'all',
   },
   user: {
-    permissions: ['case.view', 'media.view', 'report.view', 'report.create'],
+    permissions: [
+      'case.view',
+      'media.view',
+      'report.view',
+      'report.create',
+      'intake.view',
+      'intake.create',
+    ],
     scope: 'assigned',
   },
   reviewer: {

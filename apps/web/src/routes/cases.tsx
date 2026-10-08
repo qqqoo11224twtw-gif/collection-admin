@@ -19,6 +19,15 @@ function CaseWorkspace() {
             ← Starter console
           </Link>
           <div className="flex flex-wrap items-center gap-3">
+            {permissions.can('intake.view') && (
+              <Link
+                to="/cases/intake"
+                search={{ page: 1, query: '', status: '', source: '' }}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Intake inbox
+              </Link>
+            )}
             <ReviewNotice />
             {permissions.can('collector.manage') && (
               <Link

@@ -319,7 +319,7 @@ export const auditLogs = sqliteTable(
     userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
     action: text('action').notNull(),
     entityType: text('entity_type', {
-      enum: ['case', 'collector', 'review'],
+      enum: ['case', 'collector', 'review', 'intake'],
     }).notNull(),
     entityId: text('entity_id').notNull(),
     metadata: text('metadata').notNull(),
@@ -508,6 +508,127 @@ export const reviewItems = sqliteTable(
     check(
       'review_items_resolution_check',
       sql`(${t.status}='pending' AND ${t.resolvedAt} IS NULL AND ${t.resolvedByUserId} IS NULL AND ${t.confirmedData} IS NULL) OR (${t.status}<>'pending' AND ${t.resolvedAt} IS NOT NULL AND ${t.resolvedByUserId} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export const INTAKE_SOURCES = [
+  'manual',
+  'telegram',
+  'line',
+  'poster_builder',
+  'historical_import',
+  'api',
+] as const;
+export const INTAKE_STATUSES = [
+  'received',
+  'processing',
+  'needs_review',
+  'matched',
+  'created',
+  'rejected',
+  'failed',
+] as const;
+export const intakeItems = sqliteTable(
+  'intake_items',
+  {
+    id: text('id').primaryKey(),
+    source: text('source', { enum: INTAKE_SOURCES }).notNull(),
+    externalId: text('external_id'),
+    dedupeKey: text('dedupe_key'),
+    status: text('status', { enum: INTAKE_STATUSES })
+      .notNull()
+      .default('received'),
+    proposedData: text('proposed_data').notNull(),
+    confirmedData: text('confirmed_data'),
+    matchedCaseId: text('matched_case_id').references(() => cases.id, {
+      onDelete: 'restrict',
+    }),
+    reviewItemId: text('review_item_id').references(() => reviewItems.id, {
+      onDelete: 'restrict',
+    }),
+    createdByUserId: text('created_by_user_id').references(() => user.id, {
+      onDelete: 'restrict',
+    }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    processedAt: integer('processed_at', { mode: 'timestamp_ms' }),
+    version: integer('version').notNull().default(0),
+    writeToken: text('write_token').notNull().default(''),
+    caseNoHint: text('case_no_hint'),
+    confidence: real('confidence'),
+  },
+  (t) => [
+    uniqueIndex('intake_source_external_idx').on(t.source, t.externalId),
+    uniqueIndex('intake_source_dedupe_idx').on(t.source, t.dedupeKey),
+    uniqueIndex('intake_review_idx').on(t.reviewItemId),
+    index('intake_status_source_time_idx').on(
+      t.status,
+      t.source,
+      t.createdAt,
+      t.id,
+    ),
+    index('intake_creator_idx').on(t.createdByUserId, t.createdAt),
+    check(
+      'intake_source_check',
+      sql`${t.source} IN ('manual','telegram','line','poster_builder','historical_import','api')`,
+    ),
+    check(
+      'intake_status_check',
+      sql`${t.status} IN ('received','processing','needs_review','matched','created','rejected','failed')`,
+    ),
+    check(
+      'intake_json_check',
+      sql`json_valid(${t.proposedData}) AND (${t.confirmedData} IS NULL OR json_valid(${t.confirmedData}))`,
+    ),
+    check(
+      'intake_confidence_check',
+      sql`${t.confidence} IS NULL OR ${t.confidence} BETWEEN 0 AND 1`,
+    ),
+    check(
+      'intake_terminal_check',
+      sql`${t.status} NOT IN ('matched','created') OR (${t.matchedCaseId} IS NOT NULL AND ${t.confirmedData} IS NOT NULL AND ${t.processedAt} IS NOT NULL)`,
+    ),
+    check('intake_dates_check', sql`${t.updatedAt} >= ${t.createdAt}`),
+  ],
+);
+export const intakeMedia = sqliteTable(
+  'intake_media',
+  {
+    id: text('id').primaryKey(),
+    intakeId: text('intake_id')
+      .notNull()
+      .references(() => intakeItems.id, { onDelete: 'restrict' }),
+    storageKey: text('storage_key').notNull(),
+    originalFilename: text('original_filename').notNull(),
+    mediaType: text('media_type', {
+      enum: ['image/png', 'image/jpeg', 'image/webp'],
+    }).notNull(),
+    sha256: text('sha256').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    isDuplicate: integer('is_duplicate', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    promotedCaseMediaId: text('promoted_case_media_id').references(
+      () => caseMedia.id,
+      { onDelete: 'set null' },
+    ),
+    promotedAt: integer('promoted_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [
+    uniqueIndex('intake_media_storage_idx').on(t.storageKey),
+    uniqueIndex('intake_media_promotion_idx').on(t.promotedCaseMediaId),
+    index('intake_media_sort_idx').on(t.intakeId, t.sortOrder, t.id),
+    index('intake_media_sha_idx').on(t.sha256),
+    check(
+      'intake_media_sha_check',
+      sql`length(${t.sha256})=64 AND ${t.sha256} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+    check('intake_media_sort_check', sql`${t.sortOrder} >= 0`),
+    check(
+      'intake_media_type_check',
+      sql`${t.mediaType} IN ('image/png','image/jpeg','image/webp')`,
     ),
   ],
 );

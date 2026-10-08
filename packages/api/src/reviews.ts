@@ -14,7 +14,7 @@ export function reviewVisibility(context: Context) {
   requirePermission(context, 'review.view');
   requirePermission(context, 'case.view');
   if (permissionPolicy(context).scope === 'all') return undefined;
-  return sql`EXISTS (SELECT 1 FROM assignments a JOIN collectors c ON c.id=a.collector_id WHERE a.unassigned_at IS NULL AND c.is_active=1 AND c.user_id=${context.user?.id} AND (a.case_id=${reviewItems.caseId} OR (${reviewItems.caseId} IS NULL AND a.case_id IN (SELECT value FROM json_each(${reviewItems.proposedData},'$.candidateCaseIds')))))`;
+  return sql`(${reviewItems.entityType}<>'intake' OR ${reviewItems.entityId} IS NULL) AND EXISTS (SELECT 1 FROM assignments a JOIN collectors c ON c.id=a.collector_id WHERE a.unassigned_at IS NULL AND c.is_active=1 AND c.user_id=${context.user?.id} AND (a.case_id=${reviewItems.caseId} OR (${reviewItems.caseId} IS NULL AND a.case_id IN (SELECT value FROM json_each(${reviewItems.proposedData},'$.candidateCaseIds')))))`;
 }
 export const reviewsApi = {
   create: protectedProcedure

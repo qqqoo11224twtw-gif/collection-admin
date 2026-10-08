@@ -55,7 +55,7 @@ export async function sha256(bytes: ArrayBuffer) {
     (byte) => byte.toString(16).padStart(2, '0'),
   ).join('');
 }
-async function limitedFormData(request: Request) {
+export async function limitedFormData(request: Request) {
   if (Number(request.headers.get('Content-Length')) > MAX_BODY_BYTES)
     throw new ORPCError('PAYLOAD_TOO_LARGE', { status: 413 });
   const reader = request.body?.getReader();

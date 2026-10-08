@@ -13,6 +13,10 @@ import {
 import { caseImageResponse } from '@saasflare-dev/api/case-image';
 import { uploadCaseImages } from '@saasflare-dev/api/case-media-management';
 import { createContext } from '@saasflare-dev/api/context';
+import {
+  intakeImageResponse,
+  uploadIntakeImages,
+} from '@saasflare-dev/api/intake-media';
 import { verification } from '@saasflare-dev/db';
 import { desc, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
@@ -190,4 +194,28 @@ app.post('/api/cases/:caseId/media', async (c) => {
   }
 });
 
+app.get('/api/intake/:intakeId/media/:mediaId/image', async (c) =>
+  intakeImageResponse(
+    await createContext(c),
+    c.req.param('intakeId'),
+    c.req.param('mediaId'),
+  ),
+);
+app.post('/api/intake/:intakeId/media', async (c) => {
+  try {
+    return c.json(
+      await uploadIntakeImages(
+        await createContext(c),
+        c.req.param('intakeId'),
+        c.req.raw,
+      ),
+      201,
+    );
+  } catch (error: unknown) {
+    return Response.json(
+      { error: error instanceof ORPCError ? error.code : 'UPLOAD_UNAVAILABLE' },
+      { status: error instanceof ORPCError ? error.status : 503 },
+    );
+  }
+});
 export default app;

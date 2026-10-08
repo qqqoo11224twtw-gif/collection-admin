@@ -23,13 +23,16 @@ import { Route as DesignPatternsRouteImport } from './routes/design/patterns'
 import { Route as DesignOverviewRouteImport } from './routes/design/overview'
 import { Route as DesignComponentsRouteImport } from './routes/design/components'
 import { Route as CasesReviewsRouteImport } from './routes/cases/reviews'
+import { Route as CasesIntakeRouteImport } from './routes/cases/intake'
 import { Route as CasesCollectorsRouteImport } from './routes/cases/collectors'
 import { Route as CasesCaseIdRouteImport } from './routes/cases/$caseId'
 import { Route as CasesReviewsIndexRouteImport } from './routes/cases/reviews/index'
+import { Route as CasesIntakeIndexRouteImport } from './routes/cases/intake/index'
 import { Route as ExamplesComponentsTodosRouteImport } from './routes/examples/components/todos'
 import { Route as ExamplesComponentsR2UploadRouteImport } from './routes/examples/components/r2-upload'
 import { Route as ExamplesComponentsApiKeysRouteImport } from './routes/examples/components/api-keys'
 import { Route as CasesReviewsReviewIdRouteImport } from './routes/cases/reviews/$reviewId'
+import { Route as CasesIntakeIntakeIdRouteImport } from './routes/cases/intake/$intakeId'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -101,6 +104,11 @@ const CasesReviewsRoute = CasesReviewsRouteImport.update({
   path: '/reviews',
   getParentRoute: () => CasesRoute,
 } as any)
+const CasesIntakeRoute = CasesIntakeRouteImport.update({
+  id: '/intake',
+  path: '/intake',
+  getParentRoute: () => CasesRoute,
+} as any)
 const CasesCollectorsRoute = CasesCollectorsRouteImport.update({
   id: '/collectors',
   path: '/collectors',
@@ -115,6 +123,11 @@ const CasesReviewsIndexRoute = CasesReviewsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => CasesReviewsRoute,
+} as any)
+const CasesIntakeIndexRoute = CasesIntakeIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CasesIntakeRoute,
 } as any)
 const ExamplesComponentsTodosRoute = ExamplesComponentsTodosRouteImport.update({
   id: '/components/todos',
@@ -138,6 +151,11 @@ const CasesReviewsReviewIdRoute = CasesReviewsReviewIdRouteImport.update({
   path: '/$reviewId',
   getParentRoute: () => CasesReviewsRoute,
 } as any)
+const CasesIntakeIntakeIdRoute = CasesIntakeIntakeIdRouteImport.update({
+  id: '/$intakeId',
+  path: '/$intakeId',
+  getParentRoute: () => CasesIntakeRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -147,6 +165,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/cases/collectors': typeof CasesCollectorsRoute
+  '/cases/intake': typeof CasesIntakeRouteWithChildren
   '/cases/reviews': typeof CasesReviewsRouteWithChildren
   '/design/components': typeof DesignComponentsRoute
   '/design/overview': typeof DesignOverviewRoute
@@ -156,10 +175,12 @@ export interface FileRoutesByFullPath {
   '/examples/ssr': typeof ExamplesSsrRoute
   '/cases/': typeof CasesIndexRoute
   '/design/': typeof DesignIndexRoute
+  '/cases/intake/$intakeId': typeof CasesIntakeIntakeIdRoute
   '/cases/reviews/$reviewId': typeof CasesReviewsReviewIdRoute
   '/examples/components/api-keys': typeof ExamplesComponentsApiKeysRoute
   '/examples/components/r2-upload': typeof ExamplesComponentsR2UploadRoute
   '/examples/components/todos': typeof ExamplesComponentsTodosRoute
+  '/cases/intake/': typeof CasesIntakeIndexRoute
   '/cases/reviews/': typeof CasesReviewsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -176,10 +197,12 @@ export interface FileRoutesByTo {
   '/examples/ssr': typeof ExamplesSsrRoute
   '/cases': typeof CasesIndexRoute
   '/design': typeof DesignIndexRoute
+  '/cases/intake/$intakeId': typeof CasesIntakeIntakeIdRoute
   '/cases/reviews/$reviewId': typeof CasesReviewsReviewIdRoute
   '/examples/components/api-keys': typeof ExamplesComponentsApiKeysRoute
   '/examples/components/r2-upload': typeof ExamplesComponentsR2UploadRoute
   '/examples/components/todos': typeof ExamplesComponentsTodosRoute
+  '/cases/intake': typeof CasesIntakeIndexRoute
   '/cases/reviews': typeof CasesReviewsIndexRoute
 }
 export interface FileRoutesById {
@@ -191,6 +214,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/cases/collectors': typeof CasesCollectorsRoute
+  '/cases/intake': typeof CasesIntakeRouteWithChildren
   '/cases/reviews': typeof CasesReviewsRouteWithChildren
   '/design/components': typeof DesignComponentsRoute
   '/design/overview': typeof DesignOverviewRoute
@@ -200,10 +224,12 @@ export interface FileRoutesById {
   '/examples/ssr': typeof ExamplesSsrRoute
   '/cases/': typeof CasesIndexRoute
   '/design/': typeof DesignIndexRoute
+  '/cases/intake/$intakeId': typeof CasesIntakeIntakeIdRoute
   '/cases/reviews/$reviewId': typeof CasesReviewsReviewIdRoute
   '/examples/components/api-keys': typeof ExamplesComponentsApiKeysRoute
   '/examples/components/r2-upload': typeof ExamplesComponentsR2UploadRoute
   '/examples/components/todos': typeof ExamplesComponentsTodosRoute
+  '/cases/intake/': typeof CasesIntakeIndexRoute
   '/cases/reviews/': typeof CasesReviewsIndexRoute
 }
 export interface FileRouteTypes {
@@ -216,6 +242,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/cases/$caseId'
     | '/cases/collectors'
+    | '/cases/intake'
     | '/cases/reviews'
     | '/design/components'
     | '/design/overview'
@@ -225,10 +252,12 @@ export interface FileRouteTypes {
     | '/examples/ssr'
     | '/cases/'
     | '/design/'
+    | '/cases/intake/$intakeId'
     | '/cases/reviews/$reviewId'
     | '/examples/components/api-keys'
     | '/examples/components/r2-upload'
     | '/examples/components/todos'
+    | '/cases/intake/'
     | '/cases/reviews/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -245,10 +274,12 @@ export interface FileRouteTypes {
     | '/examples/ssr'
     | '/cases'
     | '/design'
+    | '/cases/intake/$intakeId'
     | '/cases/reviews/$reviewId'
     | '/examples/components/api-keys'
     | '/examples/components/r2-upload'
     | '/examples/components/todos'
+    | '/cases/intake'
     | '/cases/reviews'
   id:
     | '__root__'
@@ -259,6 +290,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/cases/$caseId'
     | '/cases/collectors'
+    | '/cases/intake'
     | '/cases/reviews'
     | '/design/components'
     | '/design/overview'
@@ -268,10 +300,12 @@ export interface FileRouteTypes {
     | '/examples/ssr'
     | '/cases/'
     | '/design/'
+    | '/cases/intake/$intakeId'
     | '/cases/reviews/$reviewId'
     | '/examples/components/api-keys'
     | '/examples/components/r2-upload'
     | '/examples/components/todos'
+    | '/cases/intake/'
     | '/cases/reviews/'
   fileRoutesById: FileRoutesById
 }
@@ -383,6 +417,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CasesReviewsRouteImport
       parentRoute: typeof CasesRoute
     }
+    '/cases/intake': {
+      id: '/cases/intake'
+      path: '/intake'
+      fullPath: '/cases/intake'
+      preLoaderRoute: typeof CasesIntakeRouteImport
+      parentRoute: typeof CasesRoute
+    }
     '/cases/collectors': {
       id: '/cases/collectors'
       path: '/collectors'
@@ -403,6 +444,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/cases/reviews/'
       preLoaderRoute: typeof CasesReviewsIndexRouteImport
       parentRoute: typeof CasesReviewsRoute
+    }
+    '/cases/intake/': {
+      id: '/cases/intake/'
+      path: '/'
+      fullPath: '/cases/intake/'
+      preLoaderRoute: typeof CasesIntakeIndexRouteImport
+      parentRoute: typeof CasesIntakeRoute
     }
     '/examples/components/todos': {
       id: '/examples/components/todos'
@@ -432,8 +480,29 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CasesReviewsReviewIdRouteImport
       parentRoute: typeof CasesReviewsRoute
     }
+    '/cases/intake/$intakeId': {
+      id: '/cases/intake/$intakeId'
+      path: '/$intakeId'
+      fullPath: '/cases/intake/$intakeId'
+      preLoaderRoute: typeof CasesIntakeIntakeIdRouteImport
+      parentRoute: typeof CasesIntakeRoute
+    }
   }
 }
+
+interface CasesIntakeRouteChildren {
+  CasesIntakeIntakeIdRoute: typeof CasesIntakeIntakeIdRoute
+  CasesIntakeIndexRoute: typeof CasesIntakeIndexRoute
+}
+
+const CasesIntakeRouteChildren: CasesIntakeRouteChildren = {
+  CasesIntakeIntakeIdRoute: CasesIntakeIntakeIdRoute,
+  CasesIntakeIndexRoute: CasesIntakeIndexRoute,
+}
+
+const CasesIntakeRouteWithChildren = CasesIntakeRoute._addFileChildren(
+  CasesIntakeRouteChildren,
+)
 
 interface CasesReviewsRouteChildren {
   CasesReviewsReviewIdRoute: typeof CasesReviewsReviewIdRoute
@@ -452,6 +521,7 @@ const CasesReviewsRouteWithChildren = CasesReviewsRoute._addFileChildren(
 interface CasesRouteChildren {
   CasesCaseIdRoute: typeof CasesCaseIdRoute
   CasesCollectorsRoute: typeof CasesCollectorsRoute
+  CasesIntakeRoute: typeof CasesIntakeRouteWithChildren
   CasesReviewsRoute: typeof CasesReviewsRouteWithChildren
   CasesIndexRoute: typeof CasesIndexRoute
 }
@@ -459,6 +529,7 @@ interface CasesRouteChildren {
 const CasesRouteChildren: CasesRouteChildren = {
   CasesCaseIdRoute: CasesCaseIdRoute,
   CasesCollectorsRoute: CasesCollectorsRoute,
+  CasesIntakeRoute: CasesIntakeRouteWithChildren,
   CasesReviewsRoute: CasesReviewsRouteWithChildren,
   CasesIndexRoute: CasesIndexRoute,
 }

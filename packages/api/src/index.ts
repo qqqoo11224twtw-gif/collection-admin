@@ -5,6 +5,7 @@ import { caseMediaManagementApi } from './case-media-management';
 import { casesApi } from './cases';
 import { configApi } from './config';
 import { connection, db, kv, r2 } from './health-check';
+import { intakeApi } from './intake';
 import { planetApi } from './planet';
 import { caseLookupApi, reportsApi } from './reports';
 import { reviewsApi } from './reviews';
@@ -20,6 +21,7 @@ export const appRouter = {
   },
   reports: reportsApi,
   reviews: reviewsApi,
+  intake: intakeApi,
   collectors: collectorsApi,
   healthCheck: {
     connection,

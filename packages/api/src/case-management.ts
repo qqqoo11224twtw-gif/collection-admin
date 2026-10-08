@@ -11,6 +11,7 @@ import {
   collectorCreateSchema,
   collectorEditSchema,
 } from './case-contract';
+import { generateCaseNumber } from './case-number';
 import { protectedProcedure } from './middleware';
 import { requirePermission } from './permissions';
 
@@ -21,7 +22,7 @@ export const caseManagementApi = {
       const actor = requirePermission(context, 'case.create');
       const id = crypto.randomUUID();
       const now = Date.now();
-      const caseNo = `CASE-${new Date(now).toISOString().slice(0, 10).replaceAll('-', '')}-${id.replaceAll('-', '').toUpperCase()}`;
+      const caseNo = generateCaseNumber(id, now);
       await atomicCaseWrite(context, [
         context.env.DB.prepare(
           'INSERT INTO cases (id,case_no,code,customer_name,address,amount_due,status,revisit_status,revisit_reason,source,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',

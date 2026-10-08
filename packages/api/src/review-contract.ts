@@ -1,6 +1,7 @@
 import { REVIEW_STATUSES, REVIEW_TYPES } from '@saasflare-dev/db';
 import { z } from 'zod';
 import { caseLookupSchema } from './case-lookup';
+import { intakeProposalSchema } from './intake-contract';
 import { reportClassificationSchema } from './report-classification';
 
 const id = z.string().min(1).max(128);
@@ -43,7 +44,8 @@ export const reviewProposalSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('image_extraction'),
-      extraction: extractionSchema,
+      extraction: intakeProposalSchema,
+      intakeId: id.optional(),
     })
     .strict(),
   z

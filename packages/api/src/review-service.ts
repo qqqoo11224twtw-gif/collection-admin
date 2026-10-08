@@ -5,9 +5,12 @@ import { atomicCaseWrite } from './audit';
 import { requireCaseAccess } from './case-access';
 import { lookupCase } from './case-lookup';
 import type { Context } from './context';
+import { resolveIntakeReview } from './intake-resolver';
+import { requireIntake } from './intake-service';
 import { permissionPolicy, requirePermission } from './permissions';
 import { type ReportFields, reportCaseStatus } from './report-classification';
 import {
+  extractionSchema,
   type ReviewConfirmed,
   type ReviewProposal,
   reviewConfirmedSchema,
@@ -201,6 +204,10 @@ export async function getReview(context: Context, id: string) {
     .where(eq(reviewItems.id, id))
     .limit(1);
   if (!row) throw new ORPCError('NOT_FOUND');
+  const linkedIntake =
+    row.entityType === 'intake' && row.entityId
+      ? await requireIntake(context, row.entityId)
+      : null;
   if (row.caseId) await requireCaseAccess(context, row.caseId);
   const proposal = reviewProposalSchema.parse(JSON.parse(row.proposedData));
   if (proposal.type !== row.reviewType) throw new ORPCError('BAD_REQUEST');
@@ -214,6 +221,7 @@ export async function getReview(context: Context, id: string) {
     throw new ORPCError('BAD_REQUEST');
   if (
     proposal.type === 'image_extraction' &&
+    !linkedIntake &&
     (row.entityType !== 'case' || row.entityId !== row.caseId || !row.caseId)
   )
     throw new ORPCError('BAD_REQUEST');
@@ -277,7 +285,10 @@ function defaultConfirmation(proposal: ReviewProposal): ReviewConfirmed {
     case 'report_classification':
       return { type: proposal.type, classification: proposal.classification };
     case 'image_extraction':
-      return { type: proposal.type, extraction: proposal.extraction };
+      return {
+        type: proposal.type,
+        extraction: extractionSchema.parse(proposal.extraction),
+      };
     case 'payment_detection':
       return { type: proposal.type, payment: proposal.payment };
     case 'case_match':
@@ -303,6 +314,43 @@ export async function resolveReview(context: Context, raw: unknown) {
     return { id: row.id, status: row.status, alreadyResolved: true };
   }
   const proposal = row.proposedData;
+  if (row.entityType === 'intake' && row.entityId) {
+    let confirmed: ReviewConfirmed | null = null;
+    if (input.decision !== 'rejected') {
+      if (input.decision === 'corrected' && !input.confirmedData)
+        throw new ORPCError('BAD_REQUEST');
+      try {
+        confirmed = reviewConfirmedSchema.parse(
+          input.confirmedData ?? defaultConfirmation(proposal),
+        );
+      } catch {
+        throw new ORPCError('BAD_REQUEST');
+      }
+      if (confirmed.type !== proposal.type) throw new ORPCError('BAD_REQUEST');
+      if (
+        input.decision === 'approved' &&
+        proposal.type !== 'case_match' &&
+        JSON.stringify(confirmed) !==
+          JSON.stringify(defaultConfirmation(proposal))
+      )
+        throw new ORPCError('BAD_REQUEST');
+    }
+    const [rawReview] = await context.DB.select()
+      .from(reviewItems)
+      .where(eq(reviewItems.id, row.id))
+      .limit(1);
+    const processed = await resolveIntakeReview(
+      context,
+      rawReview,
+      input.decision,
+      confirmed,
+    );
+    return {
+      id: row.id,
+      status: input.decision,
+      alreadyResolved: processed.alreadyProcessed,
+    };
+  }
   let confirmed: ReviewConfirmed | null = null;
   let caseId = row.caseId;
   if (input.decision !== 'rejected') {
@@ -489,5 +537,9 @@ export async function resolveReview(context: Context, raw: unknown) {
       return { id: row.id, status: after.status, alreadyResolved: true };
     throw error;
   }
-  return { id: row.id, status: input.decision, alreadyResolved: false };
+  return {
+    id: row.id,
+    status: input.decision,
+    alreadyResolved: false,
+  };
 }
