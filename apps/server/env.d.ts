@@ -7,6 +7,7 @@ export type ServerEnv = typeof server.Env & {
   CASE_BUCKET?: R2Bucket;
   TELEGRAM_MODE?: string;
   TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_TOKEN_ENCRYPTION_KEY?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   BUSINESS_TIMEZONE?: string;
   IMAGE_EXTRACTION_MODE?: string;

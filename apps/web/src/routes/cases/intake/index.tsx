@@ -62,7 +62,7 @@ function NewIntake() {
         <DialogHeader>
           <DialogTitle>建立收件草稿</DialogTitle>
           <DialogDescription>
-            此操作只儲存草稿，確認後才會建立案件。
+            人工收件只儲存草稿，確認後才會建立案件，不會呼叫 AI 辨識。
           </DialogDescription>
         </DialogHeader>
         <form

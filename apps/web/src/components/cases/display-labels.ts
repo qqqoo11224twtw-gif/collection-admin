@@ -1,5 +1,6 @@
 /** Display labels only: API and database values remain unchanged. */
 const labels: Record<string, string> = {
+  BOT_DISABLED: '機器人已停用，委外保留且未傳送',
   pending: '待處理',
   assigned: '已委外',
   unassigned: '未委外',

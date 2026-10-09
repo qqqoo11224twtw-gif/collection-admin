@@ -1,5 +1,15 @@
 import { caseMedia, cases } from '@saasflare-dev/db';
-import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+} from 'drizzle-orm';
 import { caseVisibility, requireCaseAccess } from './case-access';
 import { caseIdSchema, caseListSchema } from './case-contract';
 import { protectedProcedure } from './middleware';
@@ -25,6 +35,9 @@ function searchCondition(query: string) {
 }
 
 export const casesApi = {
+  viewer: protectedProcedure.handler(({ context }) => ({
+    role: context.user?.role ?? 'user',
+  })),
   list: protectedProcedure
     .input(caseListSchema)
     .handler(async ({ context, input }) => {
@@ -33,7 +46,7 @@ export const casesApi = {
       const assigned = sql`EXISTS(SELECT 1 FROM assignments a WHERE a.case_id=cases.id AND a.unassigned_at IS NULL)`;
       const where = and(
         caseVisibility(context),
-        isNull(cases.voidedAt),
+        input.voided ? isNotNull(cases.voidedAt) : isNull(cases.voidedAt),
         searchCondition(input.query),
         input.region ? eq(cases.region, input.region) : undefined,
         input.regionMissing ? isNull(cases.region) : undefined,
@@ -65,6 +78,7 @@ export const casesApi = {
           createdAt: cases.createdAt,
           updatedAt: cases.updatedAt,
           version: cases.version,
+          voidedAt: cases.voidedAt,
           currentCollectorName: sql<
             string | null
           >`(SELECT c.display_name FROM assignments a JOIN collectors c ON c.id=a.collector_id WHERE a.case_id=cases.id AND a.unassigned_at IS NULL LIMIT 1)`,

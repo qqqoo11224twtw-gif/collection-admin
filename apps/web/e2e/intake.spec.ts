@@ -237,8 +237,10 @@ test.describe('Unified intake inbox', () => {
     await page.getByLabel('應收款項', { exact: true }).fill('4200');
     await page.getByRole('button', { name: '修改後核准', exact: true }).click();
     await expect(page.getByText('修改後核准', { exact: true })).toBeVisible();
-    expect((await rpc(page, 'intake.detail', { id: item.id })).status).toBe(
-      'created',
-    );
+    await expect
+      .poll(
+        async () => (await rpc(page, 'intake.detail', { id: item.id })).status,
+      )
+      .toBe('created');
   });
 });

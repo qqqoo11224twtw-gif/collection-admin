@@ -116,9 +116,11 @@ export function AssignmentPanel({
                         note: String(data.get('note') ?? '').trim() || null,
                       });
                       setNotice(
-                        outcome.telegramWarning
-                          ? '委外已建立，但 Telegram 未排入傳送；請檢查有效派件群設定與系統日誌。'
-                          : '',
+                        outcome.telegramWarning === 'BOT_DISABLED'
+                          ? '機器人已停用，委外已保留，未發送 Telegram；請重新啟用或改綁路由。'
+                          : outcome.telegramWarning
+                            ? '委外已建立，但 Telegram 未排入傳送；請檢查有效派件群設定與系統日誌。'
+                            : '',
                       );
                     }
                     await refresh();

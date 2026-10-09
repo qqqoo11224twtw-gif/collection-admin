@@ -1,6 +1,7 @@
 import { renderAssignment } from './bulk-assignment';
 import type { Context } from './context';
 import { systemLog } from './system-log';
+import { botIsDisabled, logDisabledBot } from './telegram-bots';
 import { outboundPayloadSchema } from './telegram-contract';
 export async function queueAssignmentDispatch(
   context: Context,
@@ -23,10 +24,15 @@ export async function queueAssignmentDispatch(
     }>();
   if (!assignment) return;
   const routes = await context.env.DB.prepare(
-    "SELECT id,chat_id,topic_id FROM telegram_routes WHERE collector_id=? AND is_active=1 AND route_type IN ('collector_dispatch','collector') LIMIT 2",
+    "SELECT id,chat_id,topic_id,bot_id FROM telegram_routes WHERE collector_id=? AND is_active=1 AND route_type IN ('collector_dispatch','collector') LIMIT 2",
   )
     .bind(assignment.collector_id)
-    .all<{ id: string; chat_id: string; topic_id: number | null }>();
+    .all<{
+      id: string;
+      chat_id: string;
+      topic_id: number | null;
+      bot_id: string | null;
+    }>();
   if (routes.results.length !== 1) {
     await systemLog(context.env.DB, {
       category: 'outbound',
@@ -42,6 +48,16 @@ export async function queueAssignmentDispatch(
   const route = routes.results[0],
     id = crypto.randomUUID(),
     now = Date.now();
+  if (await botIsDisabled(context, route.bot_id)) {
+    await logDisabledBot(
+      context,
+      route.bot_id as string,
+      route.id,
+      undefined,
+      assignment.case_id,
+    );
+    return { queued: false, warning: 'BOT_DISABLED' as const };
+  }
   const payload = outboundPayloadSchema.parse({
     chatId: route.chat_id,
     topicId: route.topic_id,
@@ -54,9 +70,9 @@ export async function queueAssignmentDispatch(
       region: assignment.region,
     }),
   });
-  await context.env.DB.batch([
+  const results = await context.env.DB.batch([
     context.env.DB.prepare(
-      "INSERT INTO telegram_outbound_jobs(id,dedupe_key,message_type,assignment_id,route_id,payload,status,attempts,next_attempt_at,created_at) SELECT ?,?,'assignment_dispatch',?,?,?,'pending',0,?,? WHERE EXISTS(SELECT 1 FROM assignments a JOIN telegram_routes r ON r.id=? WHERE a.id=? AND a.unassigned_at IS NULL AND r.is_active=1 AND r.collector_id=a.collector_id) ON CONFLICT DO NOTHING",
+      "INSERT INTO telegram_outbound_jobs(id,dedupe_key,message_type,assignment_id,route_id,payload,status,attempts,next_attempt_at,created_at) SELECT ?,?,'assignment_dispatch',?,?,?,'pending',0,?,? WHERE EXISTS(SELECT 1 FROM assignments a JOIN telegram_routes r ON r.id=? WHERE a.id=? AND a.unassigned_at IS NULL AND r.is_active=1 AND r.collector_id=a.collector_id AND (r.bot_id IS NULL OR EXISTS(SELECT 1 FROM telegram_bots b WHERE b.id=r.bot_id AND b.is_active=1))) ON CONFLICT DO NOTHING",
     ).bind(
       id,
       `assignment-dispatch:${assignmentId}`,
@@ -82,5 +98,18 @@ export async function queueAssignmentDispatch(
       now,
     ),
   ]);
+  if (
+    !results[0].meta.changes &&
+    (await botIsDisabled(context, route.bot_id))
+  ) {
+    await logDisabledBot(
+      context,
+      route.bot_id as string,
+      route.id,
+      undefined,
+      assignment.case_id,
+    );
+    return { queued: false, warning: 'BOT_DISABLED' as const };
+  }
   return { queued: true, warning: null };
 }

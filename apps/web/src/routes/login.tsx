@@ -17,11 +17,11 @@ import {
   InputOTPSlot,
 } from '@saasflare-dev/ui/components/input-otp';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { Loader2, Terminal } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { BrandLogo } from '~/components/brand-logo';
 import { useConfigStatus } from '~/components/config-notice';
 import { authClient, useSession } from '~/lib/auth';
-import { APP_DISPLAY_NAME } from '~/lib/brand';
 
 export const Route = createFileRoute('/login')({
   validateSearch: (search: Record<string, unknown>): { redirect?: string } =>
@@ -156,7 +156,7 @@ function LoginPage() {
   if (authMode === 'disabled') {
     return (
       <main className="flex min-h-svh flex-col items-center justify-center gap-3 p-5 text-center">
-        <h1 className="text-xl font-semibold tracking-tight">登入功能已停用</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">登入系統</h1>
         <p className="max-w-sm text-sm text-muted-foreground">
           此環境已停用登入功能，設定方式請參閱 docs/auth.md。
         </p>
@@ -173,16 +173,10 @@ function LoginPage() {
         <div className="w-full max-w-sm">
           {/* Brand */}
           <div className="mb-8 flex flex-col items-center gap-2 text-center">
-            <span className="grid size-12 place-items-center rounded-xl bg-foreground text-background">
-              <Terminal className="size-6" />
-            </span>
-            <h1 className="text-xl font-semibold tracking-tight">
-              {APP_DISPLAY_NAME}
-            </h1>
+            <BrandLogo />
+            <h1 className="text-2xl font-semibold tracking-tight">登入系統</h1>
             <p className="text-sm text-muted-foreground">
-              {authMode === 'admin-only'
-                ? '已授權使用者登入'
-                : '使用一次性驗證碼登入，僅限已授權帳號'}
+              安全、清楚、有效率的案件管理系統
             </p>
           </div>
 
@@ -203,7 +197,7 @@ function LoginPage() {
                         type="email"
                         autoComplete="email"
                         autoFocus
-                        placeholder="you@example.com"
+                        placeholder="請輸入電子郵件"
                         aria-invalid={showEmailError || undefined}
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
@@ -229,9 +223,9 @@ function LoginPage() {
                     type="submit"
                   >
                     {sending && <Loader2 size={16} className="animate-spin" />}
-                    {sending ? '寄送中…' : '寄送驗證碼'}
+                    {sending ? '寄送中…' : '取得驗證碼'}
                   </Button>
-                  <p className="text-center text-xs text-muted-foreground">
+                  <p className="text-center text-sm text-muted-foreground">
                     不需要密碼，系統會寄送 6 位數驗證碼。
                   </p>
                 </CardFooter>
@@ -293,7 +287,7 @@ function LoginPage() {
                     {verifying && (
                       <Loader2 size={16} className="animate-spin" />
                     )}
-                    {verifying ? '驗證中…' : '驗證並登入'}
+                    {verifying ? '驗證中…' : '登入系統'}
                   </Button>
                   <div className="flex w-full items-center justify-between text-xs text-muted-foreground">
                     <button

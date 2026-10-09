@@ -183,7 +183,7 @@ test.describe('Bulk regional assignment', () => {
     await page.getByLabel('地區').selectOption('桃園市');
     await page.getByLabel('委外狀態').selectOption('unassigned');
     await page.getByLabel('搜尋案件').fill(prefix);
-    await expect(page.locator('tbody tr')).toHaveCount(3);
+    await expect(page.getByRole('article')).toHaveCount(3);
     await page
       .getByRole('checkbox', { name: '全選目前頁面', exact: true })
       .check();
@@ -197,7 +197,7 @@ test.describe('Bulk regional assignment', () => {
       .selectOption(collector.id);
     await dialog.getByRole('button', { name: '取消', exact: true }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.locator('tbody tr')).toHaveCount(3);
+    await expect(page.getByRole('article')).toHaveCount(3);
     await page.getByRole('button', { name: '批量委外', exact: true }).click();
     await dialog
       .getByLabel('外收人員', { exact: true })

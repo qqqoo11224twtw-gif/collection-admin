@@ -17,6 +17,7 @@ import { reviewsApi } from './reviews';
 import { storageApi } from './storage';
 import { systemLogsApi } from './system-logs';
 import { telegramApi } from './telegram';
+import { telegramBotsApi } from './telegram-bots';
 import { todosApi } from './todos';
 import { usersApi } from './user-management';
 
@@ -37,7 +38,7 @@ export const appRouter = {
   installments: installmentsApi,
   reviews: reviewsApi,
   intake: intakeApi,
-  telegram: telegramApi,
+  telegram: { ...telegramApi, bots: telegramBotsApi },
   collectors: collectorsApi,
   healthCheck: {
     connection,

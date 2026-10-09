@@ -164,9 +164,7 @@ test.describe('Unified review center', () => {
     await page.goto('/cases');
     await expect(page).toHaveURL(/\/login/);
     await signIn(page, 'phase4-user@example.test');
-    await expect(
-      page.getByRole('link', { name: 'API 金鑰', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByTestId('user-email')).toBeVisible();
     await expect(page.getByRole('link', { name: /待確認/ })).toHaveCount(0);
     await page.goto('/cases/reviews');
     await expect(

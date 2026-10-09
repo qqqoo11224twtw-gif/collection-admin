@@ -28,6 +28,7 @@ export function telegramExceptionKind(error: unknown) {
   return 'other';
 }
 export interface TelegramClient {
+  getMe?(): Promise<{ id: number; username: string; first_name: string }>;
   sendPhoto?(input: TelegramPhotoPayload): Promise<string>;
   sendMediaGroup?(input: TelegramPhotoPayload[]): Promise<string[]>;
   sendMessage(input: TelegramMessagePayload): Promise<string>;
@@ -105,6 +106,26 @@ export class FakeTelegramClient implements TelegramClient {
 }
 export class BotApiTelegramClient implements TelegramClient {
   constructor(private readonly token: string) {}
+  async getMe() {
+    const result = (await this.call('getMe', {})) as {
+      id?: number;
+      username?: string;
+      first_name?: string;
+      is_bot?: boolean;
+    };
+    if (
+      !Number.isSafeInteger(result?.id) ||
+      result.is_bot !== true ||
+      !result.username ||
+      !result.first_name
+    )
+      throw new TelegramFailure('INVALID_BOT', false);
+    return {
+      id: result.id as number,
+      username: result.username,
+      first_name: result.first_name,
+    };
+  }
   private async call(
     method: string,
     input: unknown,

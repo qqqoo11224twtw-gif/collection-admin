@@ -36,7 +36,7 @@ export const MANAGER_SQL =
 export const usersApi = {
   list: protectedProcedure.handler(async ({ context }) => {
     requirePermission(context, 'user_permission.manage');
-    return context.DB.select({
+    const rows = await context.DB.select({
       id: user.id,
       name: user.name,
       email: user.email,
@@ -46,6 +46,12 @@ export const usersApi = {
       deny: user.permissionDeny,
       version: user.permissionVersion,
     }).from(user);
+    return rows.map((row) => ({
+      ...row,
+      effectivePermissions: permissionPolicy({
+        user: { ...row, permissionAllow: row.allow, permissionDeny: row.deny },
+      }).permissions,
+    }));
   }),
   keys: protectedProcedure.handler(({ context }) => {
     requirePermission(context, 'user_permission.manage');

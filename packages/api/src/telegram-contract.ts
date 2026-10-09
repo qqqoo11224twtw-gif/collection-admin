@@ -60,6 +60,7 @@ export const routeSchema = z
   .object({
     id: z.string().optional(),
     name: z.string().trim().max(120).default(''),
+    botId: z.string().nullable().optional(),
     collectorId: z.string().nullable().default(null),
     chatId: z.string().regex(/^-?[1-9]\d{0,15}$/),
     topicId: z.number().int().positive().nullable().default(null),

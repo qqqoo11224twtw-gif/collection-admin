@@ -107,11 +107,11 @@ test.describe('營運設定與 Email 白名單', () => {
     await page.goto('/login');
     await fillUntilEnabled(
       page,
-      'you@example.com',
+      '請輸入電子郵件',
       `not-allowed-${Date.now()}@example.test`,
-      /寄送驗證碼/,
+      /取得驗證碼/,
     );
-    await page.getByRole('button', { name: '寄送驗證碼', exact: true }).click();
+    await page.getByRole('button', { name: '取得驗證碼', exact: true }).click();
     await expect(
       page.getByText('此帳號未被授權使用本系統。', { exact: true }),
     ).toBeVisible();

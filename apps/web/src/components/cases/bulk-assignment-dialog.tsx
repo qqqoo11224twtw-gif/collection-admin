@@ -106,6 +106,11 @@ export function BulkAssignmentDialog({
               <p>Telegram 待傳送： {outcome.summary.telegramQueued}</p>
               <p>Telegram 待重試： {outcome.summary.telegramRetrying}</p>
               <p>Telegram 傳送失敗： {outcome.summary.telegramFailed}</p>
+              {!!outcome.summary.telegramBlocked && (
+                <p className="text-warning">
+                  Telegram 機器人已停用： {outcome.summary.telegramBlocked}
+                </p>
+              )}
               <p>Telegram 已傳送： {outcome.summary.telegramSent}</p>
               {!!outcome.summary.processing && (
                 <p>處理中： {outcome.summary.processing}</p>

@@ -9,8 +9,7 @@ import {
   Scripts,
 } from '@tanstack/react-router';
 import { ThemeProvider } from 'next-themes';
-import { GlobalCaseSearch } from '~/components/cases/global-search';
-import { APP_DISPLAY_NAME, APP_ID } from '~/lib/brand';
+import { APP_ID } from '~/lib/brand';
 import globalsCss from '~/styles/globals.css?url';
 
 export const Route = createRootRouteWithContext<{
@@ -21,7 +20,7 @@ export const Route = createRootRouteWithContext<{
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       // Single-sourced from package.json `saasflare` (docs/ports.md).
-      { title: APP_DISPLAY_NAME },
+      { title: '案件管理後台' },
       {
         name: 'description',
         content:
@@ -50,14 +49,13 @@ function RootComponent() {
         <HeadContent />
       </head>
       <body className="font-sans antialiased" suppressHydrationWarning>
-        {/* Dark mode is wired but not enabled: `forcedTheme` pins the app to
+        {/* Product dark mode: `forcedTheme` pins the app to
             light so nothing follows the OS setting. To turn dark mode on, drop
             `forcedTheme`, add a theme switcher, and tune the `.dark` tokens in
             packages/ui — they are still shadcn factory values. */}
-        <ThemeProvider attribute="class" forcedTheme="light">
+        <ThemeProvider attribute="class" forcedTheme="dark">
           <TooltipProvider>
             <div className="min-h-svh w-full flex flex-col">
-              <GlobalCaseSearch />
               <Outlet />
             </div>
             <Toaster richColors />

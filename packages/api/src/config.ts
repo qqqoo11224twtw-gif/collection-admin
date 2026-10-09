@@ -1,5 +1,6 @@
 import { authMode } from './auth';
-import { publicProcedure } from './middleware';
+import { protectedProcedure, publicProcedure } from './middleware';
+import { requirePermission } from './permissions';
 
 /**
  * Pre-auth configuration probe for the web app. Reports the current
@@ -14,6 +15,16 @@ import { publicProcedure } from './middleware';
  * the server console / /api/dev/otp, so the same gaps are only warnings.
  */
 export const configApi = {
+  integrations: protectedProcedure.handler(({ context }) => {
+    requirePermission(context, 'system_log.view');
+    return {
+      telegram: !!context.env.TELEGRAM_BOT_TOKEN,
+      openai: !!context.env.OPENAI_API_KEY,
+      email: !!context.env.RESEND_API_KEY && !!context.env.EMAIL_FROM,
+      r2: !!context.env.CASE_BUCKET,
+      botEncryption: !!context.env.TELEGRAM_TOKEN_ENCRYPTION_KEY,
+    };
+  }),
   status: publicProcedure.handler(({ context }) => {
     const env = context.env;
     const mode = authMode();

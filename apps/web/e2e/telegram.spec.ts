@@ -27,6 +27,10 @@ test.describe('Local Telegram administration', () => {
       .locator('..');
     await expect(row).toBeVisible();
     await row.getByRole('button', { name: '測試發送' }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: '確認測試發送', exact: true })
+      .click();
     await expect(page.getByText('測試成功', { exact: true })).toBeVisible();
     await row.getByRole('button', { name: '停用', exact: true }).click();
     await expect(row.getByText('停用', { exact: true })).toBeVisible();

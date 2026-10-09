@@ -20,6 +20,7 @@ export const permissionLabels: Record<string, string> = {
   'settlement.mark_returned': '標記已回款',
   'settlement.mark_pending': '標記尚未回款',
   'finance.export': '匯出 Excel',
+  'telegram_bot.manage': '管理 Telegram 機器人憑證',
   'telegram_route.manage': '管理 Telegram 群組',
   'review.view': '查看待確認',
   'review.resolve': '處理待確認',

@@ -21,6 +21,7 @@ import {
   telegramAudit,
   telegramFile,
 } from './telegram-adapter';
+import { botClientForRoute } from './telegram-bots';
 import { type TelegramClient, TelegramFailure } from './telegram-client';
 import {
   albumKey,
@@ -279,6 +280,7 @@ export async function processTelegramUpdates(
         relatedRouteId: route.id,
         relatedCollectorId: route.collectorId,
       });
+      const routeClient = await botClientForRoute(base, route.botId, client);
       actor = await telegramPrincipal(base, route.managedByUserId);
       let intakeId: string | null = row.intakeId;
       let reportId: string | null = row.reportId;
@@ -286,7 +288,7 @@ export async function processTelegramUpdates(
       if (update.callback_query) {
         const result = await (update.callback_query.data?.startsWith('ip:')
           ? processInstallmentUpdate
-          : processReportStatusCallback)(actor, update, route, client);
+          : processReportStatusCallback)(actor, update, route, routeClient);
         reportId = result.reportId;
         resultCode = result.code;
       } else if (m.text?.startsWith('/回報')) {
@@ -342,7 +344,7 @@ export async function processTelegramUpdates(
             },
           ),
         ]);
-        await receiveTelegramMedia(actor, update, intakeId, client, token);
+        await receiveTelegramMedia(actor, update, intakeId, routeClient, token);
       }
       await base.env.DB.prepare(
         "UPDATE telegram_updates SET status='done',report_id=?,result_code=?,processed_at=?,last_error_code=NULL,lease_until=NULL WHERE id=? AND lease_token=? AND status='processing'",
@@ -523,7 +525,7 @@ export async function runTelegramProcessing(
 ) {
   const started = Date.now();
   const missing = await context.env.DB.prepare(
-    "SELECT a.id FROM assignments a JOIN cases c ON c.id=a.case_id WHERE a.unassigned_at IS NULL AND a.record_type='assignment' AND c.voided_at IS NULL AND NOT EXISTS(SELECT 1 FROM telegram_outbound_jobs j WHERE j.assignment_id=a.id) AND EXISTS(SELECT 1 FROM telegram_routes r WHERE r.collector_id=a.collector_id AND r.route_type IN ('collector_dispatch','collector') AND r.is_active=1) LIMIT 20",
+    "SELECT a.id FROM assignments a JOIN cases c ON c.id=a.case_id WHERE a.unassigned_at IS NULL AND a.record_type='assignment' AND c.voided_at IS NULL AND NOT EXISTS(SELECT 1 FROM telegram_outbound_jobs j WHERE j.assignment_id=a.id) AND EXISTS(SELECT 1 FROM telegram_routes r WHERE r.collector_id=a.collector_id AND r.route_type IN ('collector_dispatch','collector') AND r.is_active=1 AND (r.bot_id IS NULL OR EXISTS(SELECT 1 FROM telegram_bots b WHERE b.id=r.bot_id AND b.is_active=1))) LIMIT 20",
   ).all<{ id: string }>();
   for (const row of missing.results)
     await queueAssignmentDispatch(context, row.id);

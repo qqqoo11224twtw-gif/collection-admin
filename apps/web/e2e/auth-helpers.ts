@@ -80,9 +80,10 @@ export async function signIn(page: Page, email = USER_EMAIL): Promise<void> {
     ).toPass({ timeout: 10000, intervals: [250, 500, 1000] });
   }
   // Keep any ?redirect=... the gate put there — only navigate if needed.
-  if (!page.url().includes('/login')) await page.goto('/login');
-  await fillUntilEnabled(page, 'you@example.com', email, /寄送驗證碼/i);
-  await page.getByRole('button', { name: /寄送驗證碼/i }).click();
+  if (!page.url().includes('/login'))
+    await expect(page).toHaveURL(/\/login(?:\?|$)/);
+  await fillUntilEnabled(page, '請輸入電子郵件', email, /取得驗證碼/i);
+  await page.getByRole('button', { name: /取得驗證碼/i }).click();
 
   // The shadcn OTP input appears once the code is "sent".
   const otpInput = page.getByTestId('otp-input');

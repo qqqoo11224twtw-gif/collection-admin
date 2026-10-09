@@ -28,6 +28,21 @@ export default {
           result: media.map((_, i) => ({ message_id: 125 + i })),
         });
     }
+    if (new URL(request.url).pathname.endsWith('/getMe')) {
+      const path = new URL(request.url).pathname;
+      if (path.includes('invalid'))
+        return Response.json({ ok: false, error_code: 401 }, { status: 401 });
+      const id = path.includes('different') ? 888888 : 777777;
+      return Response.json({
+        ok: true,
+        result: {
+          id,
+          is_bot: true,
+          username: 'fictional_test_bot',
+          first_name: '虛構測試機器人',
+        },
+      });
+    }
     const input = await request.json();
     switch (input.text) {
       case 'invalid-json':

@@ -93,7 +93,11 @@ test.describe('Fictional phase eight finance and dispatch', () => {
       path: info.outputPath('finance-mobile.png'),
       fullPage: true,
     });
-    await page.getByRole('link', { name: '地區調度', exact: true }).click();
+    await page.getByRole('button', { name: '更多', exact: true }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('link', { name: '地區調度', exact: true })
+      .click();
     const region = page.locator('article').filter({
       has: page.getByRole('heading', { name: '高雄市', exact: true }),
     });
@@ -101,8 +105,10 @@ test.describe('Fictional phase eight finance and dispatch', () => {
     await expect(page.getByLabel('地區')).toHaveValue('高雄市');
     await expect(page.getByLabel('委外狀態')).toHaveValue('unassigned');
     await page.getByLabel('搜尋案件').fill(code);
-    await expect(page.getByRole('link', { name, exact: true })).toHaveCount(2);
-    await page.getByRole('link', { name, exact: true }).last().click();
+    await expect(page.getByRole('link').filter({ hasText: name })).toHaveCount(
+      2,
+    );
+    await page.getByRole('link').filter({ hasText: name }).last().click();
     await expect(page).toHaveURL(/\/cases\/[a-f0-9-]+$/);
     const old = await page.request.post(`${SERVER_URL}/rpc/cases/detail`, {
       data: { json: { id: first } },

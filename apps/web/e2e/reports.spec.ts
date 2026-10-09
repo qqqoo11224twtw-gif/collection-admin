@@ -106,9 +106,7 @@ test.describe('Local case reports', () => {
     await page.goto('/cases');
     await expect(page).toHaveURL(/\/login/);
     await signIn(page, 'agent@example.test');
-    await expect(
-      page.getByRole('link', { name: 'API 金鑰', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByTestId('user-email')).toBeVisible();
     await page.goto('/cases/demo-case-004');
     await page.getByRole('tab', { name: '回報紀錄', exact: true }).click();
     await page.getByRole('button', { name: '新增回報' }).click();

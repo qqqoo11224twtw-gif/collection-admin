@@ -29,9 +29,13 @@ import {
 } from '~/components/cases/presentation';
 import { useSession } from '~/lib/auth';
 import { orpc } from '~/lib/orpc';
+import { useMobile } from '~/lib/use-mobile';
 
 export const Route = createFileRoute('/cases/')({
   validateSearch: (search: Record<string, unknown>) => ({
+    ...(search.voided === true || search.voided === 'true'
+      ? { voided: true }
+      : {}),
     page: Math.max(1, Math.min(100000, Math.floor(Number(search.page) || 1))),
     query: typeof search.query === 'string' ? search.query.slice(0, 120) : '',
     ...(search.regionMissing === true || search.regionMissing === 'true'
@@ -65,6 +69,7 @@ export const Route = createFileRoute('/cases/')({
   component: CasesPage,
 });
 function CasesPage() {
+  const mobile = useMobile();
   const permissions = useCasePermissions();
   const search = Route.useSearch();
   const { page, query } = search;
@@ -95,6 +100,7 @@ function CasesPage() {
       .filter(
         (record) =>
           canSelect &&
+          !record.voidedAt &&
           (permissions.can('case.edit') ||
             permissions.can('case.delete') ||
             !record.isAssigned),
@@ -109,7 +115,7 @@ function CasesPage() {
     enabled: permissions.can('case.view'),
   });
   return (
-    <div className="space-y-6">
+    <div className={selected.length ? 'space-y-6 pb-24 lg:pb-0' : 'space-y-6'}>
       {/* Page heading and lightweight search, without dashboard statistics. */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
@@ -218,8 +224,53 @@ function CasesPage() {
           </select>
         ))}
       </div>
+      <fieldset
+        aria-label="案件狀態篩選"
+        className="flex min-w-0 gap-2 overflow-x-auto pb-2"
+      >
+        {[
+          { label: '全部' },
+          { label: '未委外', assignmentStatus: 'unassigned' },
+          { label: '已委外', assignmentStatus: 'assigned' },
+          { label: '分期', status: 'installment' },
+          { label: '結清', status: 'settled' },
+          { label: '二訪', status: 'follow_up' },
+          { label: '無解', status: 'unresolved' },
+          { label: '已作廢', voided: true },
+        ].map((tab) => (
+          <Button
+            key={tab.label}
+            variant={
+              !!search.voided === !!tab.voided &&
+              search.status === tab.status &&
+              search.assignmentStatus === tab.assignmentStatus
+                ? 'default'
+                : 'outline'
+            }
+            className="shrink-0"
+            onClick={() =>
+              void navigate({
+                search: {
+                  ...search,
+                  page: 1,
+                  voided: !!tab.voided,
+                  status: tab.status as CaseRecord['status'] | undefined,
+                  assignmentStatus: tab.assignmentStatus as
+                    | 'assigned'
+                    | 'unassigned'
+                    | undefined,
+                },
+              })
+            }
+          >
+            {tab.label}
+          </Button>
+        ))}
+      </fieldset>
       {canSelect && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 ${selected.length ? 'fixed inset-x-4 bottom-24 z-20 shadow-lg lg:static' : ''}`}
+        >
           <output
             aria-label="已選案件"
             className="text-sm text-muted-foreground"
@@ -285,21 +336,15 @@ function CasesPage() {
                 )}
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
+              <>
+                {mobile && (
+                  <div className="space-y-3 p-3">
                     {canSelect && (
-                      <TableHead className="w-12 px-4">
+                      <div className="flex items-center gap-3 p-2 text-sm">
                         <Checkbox
                           aria-label="全選目前頁面"
+                          checked={allSelected}
                           disabled={!selectable.length}
-                          checked={
-                            allSelected
-                              ? true
-                              : selected.length
-                                ? 'indeterminate'
-                                : false
-                          }
                           onCheckedChange={(checked) =>
                             setSelection({
                               key: selectionKey,
@@ -307,77 +352,165 @@ function CasesPage() {
                             })
                           }
                         />
-                      </TableHead>
+                        全選目前頁面
+                      </div>
                     )}
-                    <TableHead className="px-4">客戶</TableHead>
-                    <TableHead>代號</TableHead>
-                    <TableHead>案件編號</TableHead>
-                    <TableHead>案件狀態</TableHead>
-                    <TableHead className="text-right">應收款項</TableHead>
-                    <TableHead>地區／外收人員</TableHead>
-                    <TableHead className="px-4 text-right">更新時間</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.data.items.map((record) => (
-                    <TableRow key={record.id}>
-                      {canSelect && (
-                        <TableCell className="px-4">
-                          <Checkbox
-                            aria-label={`選取 ${record.caseNo}`}
-                            disabled={!selectable.includes(record.id)}
-                            checked={selected.includes(record.id)}
-                            onCheckedChange={(checked) =>
-                              setSelection({
-                                key: selectionKey,
-                                ids: checked
-                                  ? [...selected, record.id]
-                                  : selected.filter((id) => id !== record.id),
-                              })
-                            }
-                          />
-                        </TableCell>
-                      )}
-                      <TableCell className="px-4 py-4 font-medium">
-                        <Link
-                          to="/cases/$caseId"
-                          params={{ caseId: record.id }}
-                          className="hover:underline focus-visible:underline"
-                        >
-                          {record.customerName}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="font-mono text-muted-foreground">
-                        {record.code}
-                      </TableCell>
-                      <TableCell>
-                        <Link
-                          to="/cases/$caseId"
-                          params={{ caseId: record.id }}
-                          className="font-mono hover:underline"
-                        >
-                          {record.caseNo}
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={record.status} />
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {money(record.amountDue)}
-                      </TableCell>
-                      <TableCell>
-                        <p>{record.region ?? '未填寫'}</p>
-                        <p className="mt-1 text-muted-foreground">
-                          {record.currentCollectorName ?? '未委外'}
-                        </p>
-                      </TableCell>
-                      <TableCell className="px-4 text-right text-muted-foreground">
-                        {timestamp(record.updatedAt)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                    {result.data.items.map((record) => (
+                      <article
+                        key={record.id}
+                        className="rounded-xl border bg-background/40 p-4"
+                      >
+                        <div className="flex items-start gap-3">
+                          {canSelect && (
+                            <Checkbox
+                              aria-label={`選取 ${record.caseNo}`}
+                              checked={selected.includes(record.id)}
+                              disabled={!selectable.includes(record.id)}
+                              onCheckedChange={(checked) =>
+                                setSelection({
+                                  key: selectionKey,
+                                  ids: checked
+                                    ? [...selected, record.id]
+                                    : selected.filter((id) => id !== record.id),
+                                })
+                              }
+                            />
+                          )}
+                          <Link
+                            to="/cases/$caseId"
+                            params={{ caseId: record.id }}
+                            className="min-w-0 flex-1"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-medium">{record.code}</span>
+                              {record.voidedAt ? (
+                                <span className="text-sm text-destructive">
+                                  已作廢
+                                </span>
+                              ) : (
+                                <StatusBadge status={record.status} />
+                              )}
+                            </div>
+                            <h2 className="mt-2 text-lg font-medium">
+                              {record.customerName}
+                            </h2>
+                            <p className="mt-3 text-sm text-muted-foreground">
+                              {record.region ?? '未填寫地區'} ·{' '}
+                              {record.currentCollectorName ?? '未委外'}
+                            </p>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              {timestamp(record.createdAt)}
+                            </p>
+                          </Link>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+                {!mobile && (
+                  <div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          {canSelect && (
+                            <TableHead className="w-12 px-4">
+                              <Checkbox
+                                aria-label="全選目前頁面"
+                                disabled={!selectable.length}
+                                checked={
+                                  allSelected
+                                    ? true
+                                    : selected.length
+                                      ? 'indeterminate'
+                                      : false
+                                }
+                                onCheckedChange={(checked) =>
+                                  setSelection({
+                                    key: selectionKey,
+                                    ids: checked ? selectable : [],
+                                  })
+                                }
+                              />
+                            </TableHead>
+                          )}
+                          <TableHead className="px-4">客戶</TableHead>
+                          <TableHead>代號</TableHead>
+                          <TableHead>案件編號</TableHead>
+                          <TableHead>案件狀態</TableHead>
+                          <TableHead className="text-right">應收款項</TableHead>
+                          <TableHead>地區／外收人員</TableHead>
+                          <TableHead className="px-4 text-right">
+                            更新時間
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {result.data.items.map((record) => (
+                          <TableRow key={record.id}>
+                            {canSelect && (
+                              <TableCell className="px-4">
+                                <Checkbox
+                                  aria-label={`選取 ${record.caseNo}`}
+                                  disabled={!selectable.includes(record.id)}
+                                  checked={selected.includes(record.id)}
+                                  onCheckedChange={(checked) =>
+                                    setSelection({
+                                      key: selectionKey,
+                                      ids: checked
+                                        ? [...selected, record.id]
+                                        : selected.filter(
+                                            (id) => id !== record.id,
+                                          ),
+                                    })
+                                  }
+                                />
+                              </TableCell>
+                            )}
+                            <TableCell className="px-4 py-4 font-medium">
+                              <Link
+                                to="/cases/$caseId"
+                                params={{ caseId: record.id }}
+                                className="block max-w-44 truncate hover:underline focus-visible:underline"
+                                title={record.customerName}
+                              >
+                                {record.customerName}
+                              </Link>
+                            </TableCell>
+                            <TableCell className="font-mono text-muted-foreground">
+                              {record.code}
+                            </TableCell>
+                            <TableCell>
+                              <Link
+                                to="/cases/$caseId"
+                                params={{ caseId: record.id }}
+                                className="block max-w-44 truncate font-mono hover:underline"
+                                title={record.caseNo}
+                              >
+                                {record.caseNo}
+                              </Link>
+                            </TableCell>
+                            <TableCell>
+                              <StatusBadge status={record.status} />
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {money(record.amountDue)}
+                            </TableCell>
+                            <TableCell>
+                              <p>{record.region ?? '未填寫'}</p>
+                              <p className="mt-1 text-muted-foreground">
+                                {record.currentCollectorName ?? '未委外'}
+                              </p>
+                            </TableCell>
+                            <TableCell className="px-4 text-right text-muted-foreground">
+                              {timestamp(record.updatedAt)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </>
             )}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">

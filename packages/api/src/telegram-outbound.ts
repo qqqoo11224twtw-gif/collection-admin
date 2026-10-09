@@ -3,6 +3,11 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { Context } from './context';
 import { telegramAudit } from './telegram-adapter';
 import {
+  botClientForRoute,
+  botIsDisabled,
+  logDisabledBot,
+} from './telegram-bots';
+import {
   type TelegramClient,
   TelegramFailure,
   telegramExceptionKind,
@@ -49,6 +54,10 @@ export async function queueTelegramMessage(
   reportId: string | null = null,
   options: { replyMarkup?: InlineKeyboard; commandReply?: boolean } = {},
 ) {
+  if (await botIsDisabled(context, route.botId)) {
+    await logDisabledBot(context, route.botId as string, route.id);
+    return;
+  }
   const id = crypto.randomUUID();
   const now = Date.now();
   const payload = outboundPayloadSchema.parse({
@@ -217,10 +226,21 @@ export async function processOutbound(
           .first();
         if (!valid) throw new TelegramFailure('ASSIGNMENT_CHANGED', false);
       }
+      const deliveryClient = await botClientForRoute(
+        context,
+        route.botId,
+        client,
+      );
       const messageId =
         job.messageType === 'assignment_dispatch'
-          ? await sendAssignmentMedia(context, client, job, payload, token)
-          : await client.sendMessage(payload);
+          ? await sendAssignmentMedia(
+              context,
+              deliveryClient,
+              job,
+              payload,
+              token,
+            )
+          : await deliveryClient.sendMessage(payload);
       await context.env.DB.batch([
         context.env.DB.prepare(
           "UPDATE telegram_outbound_jobs SET status='sent',telegram_message_id=?,sent_at=?,last_error_code=NULL,lease_until=NULL WHERE id=? AND status='sending' AND lease_token=?",
@@ -251,6 +271,25 @@ export async function processOutbound(
         error instanceof TelegramFailure
           ? error
           : new TelegramFailure('DELIVERY_UNKNOWN', false, true);
+      if (failure.code === 'BOT_DISABLED') {
+        const [disabledRoute] = await context.DB.select()
+          .from(telegramRoutes)
+          .where(eq(telegramRoutes.id, job.routeId));
+        const assignment = job.assignmentId
+          ? await context.env.DB.prepare(
+              'SELECT case_id FROM assignments WHERE id=?',
+            )
+              .bind(job.assignmentId)
+              .first<{ case_id: string }>()
+          : null;
+        await logDisabledBot(
+          context,
+          disabledRoute?.botId ?? 'unavailable',
+          job.routeId,
+          job.id,
+          assignment?.case_id,
+        );
+      }
       const retry =
         failure.retryable && !failure.uncertain && job.attempts < MAX_ATTEMPTS;
       const status = retry ? 'pending' : 'failed';

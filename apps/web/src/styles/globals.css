@@ -22,3 +22,34 @@ html body[data-scroll-locked] {
   margin-right: 0 !important;
   overflow: visible !important;
 }
+
+/* Product palette; shared UI remains vendored. */
+:root,
+.dark {
+  --background: #0e1012;
+  --foreground: #f3f2ef;
+  --card: #171a1e;
+  --card-foreground: #f3f2ef;
+  --popover: #1b1e22;
+  --popover-foreground: #f3f2ef;
+  --primary: #739bff;
+  --primary-foreground: #0b1633;
+  --secondary: #24282d;
+  --secondary-foreground: #f3f2ef;
+  --muted: #22262b;
+  --muted-foreground: #a3a9b1;
+  --accent: #242e43;
+  --accent-foreground: #bbceff;
+  --border: #30343a;
+  --input: #373c43;
+  --ring: #739bff;
+  --destructive: #ef7777;
+  --success: #79c89c;
+  --warning: #e4ad69;
+  --info: #88b5db;
+  --radius: 0.75rem;
+}
+body {
+  background: var(--background);
+  color: var(--foreground);
+}

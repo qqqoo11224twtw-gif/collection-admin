@@ -3,6 +3,7 @@ import {
   DialogClose,
   DialogContent as SharedDialogContent,
 } from '@saasflare-dev/ui/components/dialog';
+import { cn } from '@saasflare-dev/ui/lib/utils';
 import { XIcon } from 'lucide-react';
 import type { ComponentProps } from 'react';
 
@@ -10,10 +11,15 @@ import type { ComponentProps } from 'react';
 export function DialogContent({
   children,
   showCloseButton = true,
+  className,
   ...props
 }: ComponentProps<typeof SharedDialogContent>) {
   return (
-    <SharedDialogContent {...props} showCloseButton={false}>
+    <SharedDialogContent
+      {...props}
+      className={cn('max-h-[90svh] overflow-y-auto', className)}
+      showCloseButton={false}
+    >
       {children}
       {showCloseButton && (
         <DialogClose asChild>

@@ -1,6 +1,7 @@
 import { ORPCError } from '@orpc/server';
 import {
   collectors,
+  telegramBots,
   telegramIdentities,
   telegramOutboundJobs,
   telegramRoutes,
@@ -13,6 +14,7 @@ import { protectedProcedure } from './middleware';
 import { requirePermission } from './permissions';
 import { systemLog } from './system-log';
 import { telegramAudit } from './telegram-adapter';
+import { botClientForRoute } from './telegram-bots';
 import { TelegramFailure, telegramClient } from './telegram-client';
 import {
   identitySchema,
@@ -32,6 +34,12 @@ export const telegramApi = {
         displayName: collectors.displayName,
         userId: collectors.userId,
       }).from(collectors),
+      bots: await context.DB.select({
+        id: telegramBots.id,
+        username: telegramBots.username,
+        internalName: telegramBots.internalName,
+        isActive: telegramBots.isActive,
+      }).from(telegramBots),
       users: await context.DB.select({
         id: user.id,
         name: user.name,
@@ -56,6 +64,34 @@ export const telegramApi = {
     .input(routeSchema)
     .handler(async ({ context, input }) => {
       const actor = requirePermission(context, 'telegram_route.manage');
+      if (input.botId) {
+        const [bot] = await context.DB.select()
+          .from(telegramBots)
+          .where(eq(telegramBots.id, input.botId));
+        if (!bot || (input.isActive && !bot.isActive))
+          throw new ORPCError('BAD_REQUEST', {
+            message: '請選擇啟用中的機器人。',
+          });
+      }
+      if (input.id && input.botId !== undefined) {
+        const old = await context.env.DB.prepare(
+          'SELECT bot_id FROM telegram_routes WHERE id=?',
+        )
+          .bind(input.id)
+          .first<{ bot_id: string | null }>();
+        if (
+          old &&
+          old.bot_id !== input.botId &&
+          (await context.env.DB.prepare(
+            "SELECT id FROM telegram_outbound_jobs WHERE route_id=? AND status IN ('pending','sending') AND dispatch_state IS NOT NULL LIMIT 1",
+          )
+            .bind(input.id)
+            .first())
+        )
+          throw new ORPCError('CONFLICT', {
+            message: '此路由仍有圖片派件進行中，請先完成或處理後再更換機器人。',
+          });
+      }
       const typeMap = {
         collector: 'collector_dispatch',
         report_destination: 'business_report',
@@ -125,6 +161,10 @@ export const telegramApi = {
         });
       }
       await telegramAudit(context, 'telegram.route_saved', id).run();
+      if (input.botId !== undefined)
+        await telegramAudit(context, 'BOT_ROUTE_BIND', id, {
+          botId: input.botId,
+        }).run();
       return { id };
     }),
   testRoute: protectedProcedure
@@ -137,7 +177,12 @@ export const telegramApi = {
       if (!route?.isActive)
         throw new ORPCError('BAD_REQUEST', { message: '請先啟用路由。' });
       try {
-        const messageId = await telegramClient(context.env).sendMessage({
+        const client = await botClientForRoute(
+          context,
+          route.botId,
+          telegramClient(context.env),
+        );
+        const messageId = await client.sendMessage({
           chatId: route.chatId,
           topicId: route.topicId,
           text: 'Telegram 群組設定測試：連線正常。',

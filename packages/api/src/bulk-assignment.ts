@@ -14,6 +14,7 @@ import type { Context } from './context';
 import { protectedProcedure } from './middleware';
 import { permissionPolicy, requirePermission } from './permissions';
 import { telegramAudit } from './telegram-adapter';
+import { logDisabledBot } from './telegram-bots';
 import { outboundPayloadSchema } from './telegram-contract';
 
 export const bulkAssignmentSchema = z.strictObject({
@@ -110,6 +111,7 @@ export async function bulkAssignmentResult(context: Context, id: string) {
         (i) => i.telegramStatus === 'pending' && !!i.telegramError,
       ).length,
       telegramFailed: items.filter((i) => i.telegramStatus === 'failed').length,
+      telegramBlocked: items.filter((i) => i.reason === 'BOT_DISABLED').length,
       telegramSent: items.filter((i) => i.telegramStatus === 'sent').length,
     },
   };
@@ -295,7 +297,7 @@ export async function createBulkAssignment(context: Context, raw: BulkInput) {
           token,
         ),
         context.env.DB.prepare(
-          "INSERT INTO telegram_outbound_jobs(id,dedupe_key,message_type,assignment_id,route_id,payload,status,attempts,next_attempt_at,created_at) SELECT ?,?,'assignment_dispatch',?,?,?,'pending',0,?,? WHERE EXISTS(SELECT 1 FROM assignments WHERE id=?)",
+          "INSERT INTO telegram_outbound_jobs(id,dedupe_key,message_type,assignment_id,route_id,payload,status,attempts,next_attempt_at,created_at) SELECT ?,?,'assignment_dispatch',?,?,?,'pending',0,?,? WHERE EXISTS(SELECT 1 FROM assignments WHERE id=?) AND EXISTS(SELECT 1 FROM telegram_routes r WHERE r.id=? AND (r.bot_id IS NULL OR EXISTS(SELECT 1 FROM telegram_bots b WHERE b.id=r.bot_id AND b.is_active=1)))",
         ).bind(
           jobId,
           `assignment:${assignmentId}`,
@@ -305,10 +307,11 @@ export async function createBulkAssignment(context: Context, raw: BulkInput) {
           now,
           now,
           assignmentId,
+          route.id,
         ),
         context.env.DB.prepare(
-          "UPDATE bulk_assignment_items SET status='assigned',assignment_id=?,outbound_job_id=?,updated_at=? WHERE id=? AND status='pending' AND EXISTS(SELECT 1 FROM assignments WHERE id=?)",
-        ).bind(assignmentId, jobId, now, item.id, assignmentId),
+          "UPDATE bulk_assignment_items SET status='assigned',assignment_id=?,outbound_job_id=(SELECT id FROM telegram_outbound_jobs WHERE id=?),reason=CASE WHEN EXISTS(SELECT 1 FROM telegram_outbound_jobs WHERE assignment_id=?) THEN NULL ELSE 'BOT_DISABLED' END,updated_at=? WHERE id=? AND status='pending' AND EXISTS(SELECT 1 FROM assignments WHERE id=?)",
+        ).bind(assignmentId, jobId, assignmentId, now, item.id, assignmentId),
         auditStatement(
           context,
           'assignment.created',
@@ -334,6 +337,18 @@ export async function createBulkAssignment(context: Context, raw: BulkInput) {
           },
         ),
       ]);
+      if (
+        results[0].meta.changes === 1 &&
+        !results[2].meta.changes &&
+        route.botId
+      )
+        await logDisabledBot(
+          context,
+          route.botId,
+          route.id,
+          undefined,
+          record.id,
+        );
       if (results[0].meta.changes !== 1) {
         const current = await context.env.DB.prepare(
           'SELECT id FROM assignments WHERE case_id=? AND unassigned_at IS NULL',

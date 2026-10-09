@@ -1,0 +1,1 @@
+ALTER TABLE `telegram_routes` ADD `bot_id` text REFERENCES telegram_bots(id);

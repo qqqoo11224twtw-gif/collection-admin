@@ -27,6 +27,7 @@ import { Route as CasesTelegramRouteImport } from './routes/cases/telegram'
 import { Route as CasesSystemLogsRouteImport } from './routes/cases/system-logs'
 import { Route as CasesReviewsRouteImport } from './routes/cases/reviews'
 import { Route as CasesRegionsRouteImport } from './routes/cases/regions'
+import { Route as CasesIntegrationsRouteImport } from './routes/cases/integrations'
 import { Route as CasesIntakeRouteImport } from './routes/cases/intake'
 import { Route as CasesFinanceRouteImport } from './routes/cases/finance'
 import { Route as CasesCollectorsRouteImport } from './routes/cases/collectors'
@@ -129,6 +130,11 @@ const CasesRegionsRoute = CasesRegionsRouteImport.update({
   path: '/regions',
   getParentRoute: () => CasesRoute,
 } as any)
+const CasesIntegrationsRoute = CasesIntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
+  getParentRoute: () => CasesRoute,
+} as any)
 const CasesIntakeRoute = CasesIntakeRouteImport.update({
   id: '/intake',
   path: '/intake',
@@ -197,6 +203,7 @@ export interface FileRoutesByFullPath {
   '/cases/collectors': typeof CasesCollectorsRoute
   '/cases/finance': typeof CasesFinanceRoute
   '/cases/intake': typeof CasesIntakeRouteWithChildren
+  '/cases/integrations': typeof CasesIntegrationsRoute
   '/cases/regions': typeof CasesRegionsRoute
   '/cases/reviews': typeof CasesReviewsRouteWithChildren
   '/cases/system-logs': typeof CasesSystemLogsRoute
@@ -225,6 +232,7 @@ export interface FileRoutesByTo {
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/cases/collectors': typeof CasesCollectorsRoute
   '/cases/finance': typeof CasesFinanceRoute
+  '/cases/integrations': typeof CasesIntegrationsRoute
   '/cases/regions': typeof CasesRegionsRoute
   '/cases/system-logs': typeof CasesSystemLogsRoute
   '/cases/telegram': typeof CasesTelegramRoute
@@ -256,6 +264,7 @@ export interface FileRoutesById {
   '/cases/collectors': typeof CasesCollectorsRoute
   '/cases/finance': typeof CasesFinanceRoute
   '/cases/intake': typeof CasesIntakeRouteWithChildren
+  '/cases/integrations': typeof CasesIntegrationsRoute
   '/cases/regions': typeof CasesRegionsRoute
   '/cases/reviews': typeof CasesReviewsRouteWithChildren
   '/cases/system-logs': typeof CasesSystemLogsRoute
@@ -289,6 +298,7 @@ export interface FileRouteTypes {
     | '/cases/collectors'
     | '/cases/finance'
     | '/cases/intake'
+    | '/cases/integrations'
     | '/cases/regions'
     | '/cases/reviews'
     | '/cases/system-logs'
@@ -317,6 +327,7 @@ export interface FileRouteTypes {
     | '/cases/$caseId'
     | '/cases/collectors'
     | '/cases/finance'
+    | '/cases/integrations'
     | '/cases/regions'
     | '/cases/system-logs'
     | '/cases/telegram'
@@ -347,6 +358,7 @@ export interface FileRouteTypes {
     | '/cases/collectors'
     | '/cases/finance'
     | '/cases/intake'
+    | '/cases/integrations'
     | '/cases/regions'
     | '/cases/reviews'
     | '/cases/system-logs'
@@ -505,6 +517,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CasesRegionsRouteImport
       parentRoute: typeof CasesRoute
     }
+    '/cases/integrations': {
+      id: '/cases/integrations'
+      path: '/integrations'
+      fullPath: '/cases/integrations'
+      preLoaderRoute: typeof CasesIntegrationsRouteImport
+      parentRoute: typeof CasesRoute
+    }
     '/cases/intake': {
       id: '/cases/intake'
       path: '/intake'
@@ -618,6 +637,7 @@ interface CasesRouteChildren {
   CasesCollectorsRoute: typeof CasesCollectorsRoute
   CasesFinanceRoute: typeof CasesFinanceRoute
   CasesIntakeRoute: typeof CasesIntakeRouteWithChildren
+  CasesIntegrationsRoute: typeof CasesIntegrationsRoute
   CasesRegionsRoute: typeof CasesRegionsRoute
   CasesReviewsRoute: typeof CasesReviewsRouteWithChildren
   CasesSystemLogsRoute: typeof CasesSystemLogsRoute
@@ -631,6 +651,7 @@ const CasesRouteChildren: CasesRouteChildren = {
   CasesCollectorsRoute: CasesCollectorsRoute,
   CasesFinanceRoute: CasesFinanceRoute,
   CasesIntakeRoute: CasesIntakeRouteWithChildren,
+  CasesIntegrationsRoute: CasesIntegrationsRoute,
   CasesRegionsRoute: CasesRegionsRoute,
   CasesReviewsRoute: CasesReviewsRouteWithChildren,
   CasesSystemLogsRoute: CasesSystemLogsRoute,

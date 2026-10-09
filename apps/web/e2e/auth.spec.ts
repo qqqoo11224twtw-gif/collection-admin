@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { APP_DISPLAY_NAME } from '../src/lib/brand';
 import { isRemote, signIn, USER_EMAIL } from './auth-helpers';
 
 /**
@@ -14,7 +13,7 @@ test.describe('Auth (open mode)', () => {
     page,
   }) => {
     await page.goto('/');
-    await page.getByRole('link', { name: /登入/i }).click();
+    await expect(page).toHaveURL(/\/login/);
     await expect(page).toHaveURL(/\/login/);
 
     await signIn(page);
@@ -34,19 +33,11 @@ test.describe('Auth (open mode)', () => {
     await expect(page.getByText('Private Todos Demo')).toBeVisible();
   });
 
-  test('Back from the login gate returns home — no redirect loop', async ({
-    page,
-  }) => {
-    // Home → gated example card → the gate REPLACES the gated page with
-    // /login. Back must land on home; with a pushed entry it would bounce
-    // straight back to /login and the Back button would appear dead.
-    await page.goto('/');
-    await page.getByRole('link', { name: /個人資料/i }).click();
-    await expect(page).toHaveURL(/\/login\?.*redirect=/);
-
-    await page.goBack();
+  test('login rejects external redirect destinations', async ({ page }) => {
+    await page.goto('/login?redirect=https%3A%2F%2Fexample.invalid');
+    await signIn(page);
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByText(`${APP_DISPLAY_NAME} 後台`)).toBeVisible();
+    await expect(page.getByRole('heading', { name: '儀表總覽' })).toBeVisible();
   });
 
   test('todos are private to the account', async ({ page }) => {
@@ -72,11 +63,12 @@ test.describe('Auth (open mode)', () => {
 
   test('sign out returns to the logged-out header', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('link', { name: /登入/i }).click();
+    await expect(page).toHaveURL(/\/login/);
     await signIn(page);
     await expect(page.getByTestId('user-email')).toBeVisible();
 
     await page.getByRole('button', { name: /登出/i }).click();
-    await expect(page.getByRole('link', { name: /登入/i })).toBeVisible();
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByLabel('電子郵件', { exact: true })).toBeVisible();
   });
 });

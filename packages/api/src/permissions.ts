@@ -33,6 +33,7 @@ export const PERMISSIONS = [
   'intake.resolve',
   'intake.reject',
   'telegram_route.manage',
+  'telegram_bot.manage',
   'installment.view',
   'installment.create',
   'installment.manage',
@@ -57,7 +58,11 @@ export const ROLE_POLICIES: Record<string, Policy> = {
   manager: {
     permissions: PERMISSIONS.filter(
       (permission) =>
-        !['collector.manage', 'user_permission.manage'].includes(permission),
+        ![
+          'collector.manage',
+          'user_permission.manage',
+          'telegram_bot.manage',
+        ].includes(permission),
     ),
     scope: 'all',
   },

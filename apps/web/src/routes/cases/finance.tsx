@@ -77,6 +77,42 @@ function FinancePage() {
           實際收款與尚未回款金額分別記錄。
         </p>
       </div>
+      <section
+        aria-label="財務摘要"
+        className="grid grid-cols-2 gap-4 lg:grid-cols-3"
+      >
+        {[
+          { label: '篩選收款筆數', value: String(result.data?.total ?? '—') },
+          {
+            label: '本頁實收',
+            value: result.data
+              ? money(
+                  result.data.items.reduce(
+                    (sum, row) => sum + row.receivedAmount,
+                    0,
+                  ),
+                )
+              : '—',
+          },
+          {
+            label: '本頁尚未回款',
+            value: result.data
+              ? money(
+                  result.data.items
+                    .filter((row) => row.returnStatus === 'pending')
+                    .reduce((sum, row) => sum + row.returnAmount, 0),
+                )
+              : '—',
+          },
+        ].map((item) => (
+          <article key={item.label} className="rounded-xl border bg-card p-5">
+            <p className="text-sm text-muted-foreground">{item.label}</p>
+            <p className="mt-3 text-2xl font-semibold tabular-nums">
+              {item.value}
+            </p>
+          </article>
+        ))}
+      </section>
       {/* One date range consistently filters both ledgers and the Excel download. */}
       <div className="flex flex-wrap items-end gap-4">
         <div className="space-y-2">
