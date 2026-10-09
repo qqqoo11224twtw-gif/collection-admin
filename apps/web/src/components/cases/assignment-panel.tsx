@@ -28,6 +28,7 @@ export function AssignmentPanel({
   const refresh = useRefreshCases();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [correcting, setCorrecting] = useState(false);
   const options = orpc.cases.assignments.queryOptions({
     input: { id: caseId },
@@ -52,6 +53,7 @@ export function AssignmentPanel({
   );
   return (
     <div className="space-y-5">
+      {notice && <output className="text-sm text-warning">{notice}</output>}
       {canAssign && (
         <Dialog
           open={open}
@@ -106,13 +108,19 @@ export function AssignmentPanel({
                         collectorId: String(data.get('collectorId')),
                         reason: String(data.get('note') ?? ''),
                       });
-                    else
-                      await mutation.mutateAsync({
+                    else {
+                      const outcome = await mutation.mutateAsync({
                         caseId,
                         expectedVersion: version,
                         collectorId: String(data.get('collectorId')) || null,
                         note: String(data.get('note') ?? '').trim() || null,
                       });
+                      setNotice(
+                        outcome.telegramWarning
+                          ? '委外已建立，但 Telegram 未排入傳送；請檢查有效派件群設定與系統日誌。'
+                          : '',
+                      );
+                    }
                     await refresh();
                     setOpen(false);
                   } catch (failure: unknown) {
@@ -214,7 +222,9 @@ export function AssignmentPanel({
               <p className="mt-3 text-sm text-muted-foreground">
                 {item.recordType === 'correction'
                   ? '歷史更正 · 原始派單'
-                  : '已委外'}{' '}
+                  : item.recordType === 'historical'
+                    ? '歷史補登 · 非正式派件'
+                    : '已委外'}{' '}
                 {timestamp(item.assignedAt)} · 指派人 {item.assignedBy}
               </p>
               {item.unassignedAt && (

@@ -127,6 +127,20 @@
       "when": 1791523177858,
       "tag": "0017_normalized_login_email",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1791529892497,
+      "tag": "0018_next_rattler",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1791529966152,
+      "tag": "0019_dispatch_guards",
+      "breakpoints": true
     }
   ]
 }

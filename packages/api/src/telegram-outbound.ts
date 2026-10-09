@@ -14,6 +14,7 @@ import {
   outboundPayloadSchema,
   type TelegramSettings,
 } from './telegram-contract';
+import { sendAssignmentMedia } from './telegram-dispatch-media';
 export function businessDate(time: number, timezone = 'Asia/Taipei') {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: timezone,
@@ -210,13 +211,16 @@ export async function processOutbound(
         throw new TelegramFailure('ROUTE_CHANGED', false);
       if (job.messageType === 'assignment_dispatch') {
         const valid = await context.env.DB.prepare(
-          "SELECT a.id FROM assignments a JOIN collectors c ON c.id=a.collector_id JOIN telegram_routes r ON r.id=? WHERE a.id=? AND a.unassigned_at IS NULL AND c.is_active=1 AND r.collector_id=c.id AND r.route_type IN ('collector','collector_dispatch')",
+          "SELECT a.id FROM assignments a JOIN cases ca ON ca.id=a.case_id JOIN collectors c ON c.id=a.collector_id JOIN telegram_routes r ON r.id=? WHERE a.id=? AND a.unassigned_at IS NULL AND a.record_type='assignment' AND ca.voided_at IS NULL AND c.is_active=1 AND r.collector_id=c.id AND r.route_type IN ('collector','collector_dispatch')",
         )
           .bind(job.routeId, job.assignmentId)
           .first();
         if (!valid) throw new TelegramFailure('ASSIGNMENT_CHANGED', false);
       }
-      const messageId = await client.sendMessage(payload);
+      const messageId =
+        job.messageType === 'assignment_dispatch'
+          ? await sendAssignmentMedia(context, client, job, payload, token)
+          : await client.sendMessage(payload);
       await context.env.DB.batch([
         context.env.DB.prepare(
           "UPDATE telegram_outbound_jobs SET status='sent',telegram_message_id=?,sent_at=?,last_error_code=NULL,lease_until=NULL WHERE id=? AND status='sending' AND lease_token=?",

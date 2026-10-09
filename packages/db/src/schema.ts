@@ -220,6 +220,11 @@ export const cases = sqliteTable(
     code: text('code').notNull(),
     region: text('region', { enum: REGIONS }),
     manualEntryKey: text('manual_entry_key').unique(),
+    voidedAt: integer('voided_at', { mode: 'timestamp_ms' }),
+    voidedBy: text('voided_by').references(() => user.id, {
+      onDelete: 'restrict',
+    }),
+    voidNote: text('void_note'),
     customerName: text('customer_name').notNull(),
     address: text('address').notNull(),
     // Phase one stores whole TWD dollars, never floating-point money.
@@ -345,7 +350,9 @@ export const assignments = sqliteTable(
     assignedAt: integer('assigned_at', { mode: 'timestamp_ms' }).notNull(),
     unassignedAt: integer('unassigned_at', { mode: 'timestamp_ms' }),
     note: text('note'),
-    recordType: text('record_type', { enum: ['assignment', 'correction'] })
+    recordType: text('record_type', {
+      enum: ['assignment', 'correction', 'historical'],
+    })
       .notNull()
       .default('assignment'),
     correctedFromId: text('corrected_from_id'),
@@ -863,6 +870,7 @@ export const telegramOutboundJobs = sqliteTable(
     leaseUntil: integer('lease_until', { mode: 'timestamp_ms' }),
     leaseToken: text('lease_token'),
     telegramMessageId: text('telegram_message_id'),
+    dispatchState: text('dispatch_state'),
     lastErrorCode: text('last_error_code'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     sentAt: integer('sent_at', { mode: 'timestamp_ms' }),

@@ -1,5 +1,5 @@
 import { cases } from '@saasflare-dev/db';
-import { and, asc, sql } from 'drizzle-orm';
+import { and, asc, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { caseVisibility } from './case-access';
 import type { Context } from './context';
@@ -33,6 +33,7 @@ export async function lookupCase(
     .where(
       and(
         caseVisibility(context),
+        isNull(cases.voidedAt),
         sql`${column} = ${input.value} COLLATE NOCASE`,
       ),
     )

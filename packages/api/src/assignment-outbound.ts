@@ -7,7 +7,7 @@ export async function queueAssignmentDispatch(
   assignmentId: string,
 ) {
   const assignment = await context.env.DB.prepare(
-    'SELECT a.id,a.collector_id,a.case_id,c.case_no,c.code,c.customer_name,c.address,c.amount_due FROM assignments a JOIN cases c ON c.id=a.case_id JOIN collectors co ON co.id=a.collector_id WHERE a.id=? AND a.unassigned_at IS NULL AND co.is_active=1',
+    "SELECT a.id,a.collector_id,a.case_id,c.case_no,c.code,c.customer_name,c.address,c.amount_due,c.region FROM assignments a JOIN cases c ON c.id=a.case_id JOIN collectors co ON co.id=a.collector_id WHERE a.id=? AND a.unassigned_at IS NULL AND a.record_type='assignment' AND c.voided_at IS NULL AND co.is_active=1",
   )
     .bind(assignmentId)
     .first<{
@@ -19,6 +19,7 @@ export async function queueAssignmentDispatch(
       customer_name: string;
       address: string;
       amount_due: number;
+      region: string | null;
     }>();
   if (!assignment) return;
   const routes = await context.env.DB.prepare(
@@ -36,7 +37,7 @@ export async function queueAssignmentDispatch(
       relatedCaseId: assignment.case_id,
       relatedCollectorId: assignment.collector_id,
     });
-    return;
+    return { queued: false, warning: 'ROUTE_NOT_FOUND' as const };
   }
   const route = routes.results[0],
     id = crypto.randomUUID(),
@@ -50,6 +51,7 @@ export async function queueAssignmentDispatch(
       customerName: assignment.customer_name,
       address: assignment.address,
       amountDue: assignment.amount_due,
+      region: assignment.region,
     }),
   });
   await context.env.DB.batch([
@@ -80,4 +82,5 @@ export async function queueAssignmentDispatch(
       now,
     ),
   ]);
+  return { queued: true, warning: null };
 }

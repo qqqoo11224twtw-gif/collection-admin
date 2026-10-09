@@ -83,11 +83,11 @@ export function BulkAssignmentDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button disabled={!caseIds.length}>批量派單</Button>
+        <Button disabled={!caseIds.length}>批量委外</Button>
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{outcome ? '批量派單完成' : '批量派單'}</DialogTitle>
+          <DialogTitle>{outcome ? '批量委外完成' : '批量委外'}</DialogTitle>
           <DialogDescription>
             {outcome
               ? '各案件已分別儲存派單紀錄，Telegram 訊息將由傳送佇列繼續處理。'
@@ -180,7 +180,7 @@ export function BulkAssignmentDialog({
                 setError(
                   displayError(
                     failure,
-                    '無法儲存批量派單，重試時會使用相同批次編號。',
+                    '無法儲存批量委外，重試時會使用相同批次編號。',
                   ),
                 );
               }

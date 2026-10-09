@@ -17,6 +17,22 @@ describe('Telegram Bot API in the Workers runtime', () => {
   it('manual redirect mode sends successfully and validates the message ID', async () => {
     expect(await send('fictional-success')).toBe('123');
   });
+  it('uploads photo bytes and every album attachment using private multipart transport', async () => {
+    const photo = {
+      chatId: '-1001234567890',
+      topicId: 2,
+      caption: '虛構派件',
+      bytes: new Uint8Array([1, 2, 3]).buffer,
+      mediaType: 'image/png',
+      filename: 'fictional.png',
+    };
+    expect(await client.sendPhoto(photo)).toBe('124');
+    expect(await client.sendMediaGroup([photo, photo, photo])).toEqual([
+      '125',
+      '126',
+      '127',
+    ]);
+  });
   it.each([
     'invalid-json',
     'null-json',

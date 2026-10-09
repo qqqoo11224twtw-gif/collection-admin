@@ -28,13 +28,45 @@ export function telegramExceptionKind(error: unknown) {
   return 'other';
 }
 export interface TelegramClient {
+  sendPhoto?(input: TelegramPhotoPayload): Promise<string>;
+  sendMediaGroup?(input: TelegramPhotoPayload[]): Promise<string[]>;
   sendMessage(input: TelegramMessagePayload): Promise<string>;
   answerCallbackQuery(id: string, text: string): Promise<void>;
   downloadFile(
     fileId: string,
   ): Promise<{ bytes: ArrayBuffer; mediaType: string }>;
 }
+export interface TelegramPhotoPayload {
+  chatId: string;
+  topicId: number | null;
+  caption: string;
+  bytes: ArrayBuffer;
+  mediaType: string;
+  filename: string;
+}
 export class FakeTelegramClient implements TelegramClient {
+  readonly photos: TelegramPhotoPayload[] = [];
+  readonly albums: TelegramPhotoPayload[][] = [];
+  async sendPhoto(input: TelegramPhotoPayload) {
+    const id = await this.sendMessage({
+      chatId: input.chatId,
+      topicId: input.topicId,
+      text: input.caption || '案件圖片',
+    });
+    this.photos.push(input);
+    return id;
+  }
+  async sendMediaGroup(input: TelegramPhotoPayload[]) {
+    if (input.length < 2 || input.length > 10)
+      throw new TelegramFailure('INVALID_MEDIA_GROUP', false);
+    const id = await this.sendMessage({
+      chatId: input[0].chatId,
+      topicId: input[0].topicId,
+      text: input[0].caption,
+    });
+    this.albums.push(input);
+    return input.map((_, i) => `${id}:${i}`);
+  }
   readonly answered: { id: string; text: string }[] = [];
   async answerCallbackQuery(id: string, text: string) {
     this.answered.push({ id, text });
@@ -85,8 +117,11 @@ export class BotApiTelegramClient implements TelegramClient {
         `https://api.telegram.org/bot${this.token}/${method}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(input),
+          headers:
+            input instanceof FormData
+              ? undefined
+              : { 'Content-Type': 'application/json' },
+          body: input instanceof FormData ? input : JSON.stringify(input),
           signal: AbortSignal.timeout(10000),
           // Manual mode works in this Workers runtime and prevents token forwarding.
           redirect: 'manual',
@@ -164,6 +199,54 @@ export class BotApiTelegramClient implements TelegramClient {
   }
   async answerCallbackQuery(id: string, text: string) {
     await this.call('answerCallbackQuery', { callback_query_id: id, text });
+  }
+  async sendPhoto(input: TelegramPhotoPayload) {
+    const form = new FormData();
+    form.set('chat_id', input.chatId);
+    if (input.topicId) form.set('message_thread_id', String(input.topicId));
+    form.set('caption', input.caption);
+    form.set(
+      'photo',
+      new Blob([input.bytes], { type: input.mediaType }),
+      input.filename,
+    );
+    const result = (await this.call('sendPhoto', form, true)) as {
+      message_id?: number;
+    };
+    if (!Number.isSafeInteger(result?.message_id))
+      throw new TelegramFailure('DELIVERY_UNKNOWN', false, true);
+    return String(result.message_id);
+  }
+  async sendMediaGroup(input: TelegramPhotoPayload[]) {
+    if (input.length < 2 || input.length > 10)
+      throw new TelegramFailure('INVALID_MEDIA_GROUP', false);
+    const form = new FormData();
+    form.set('chat_id', input[0].chatId);
+    if (input[0].topicId)
+      form.set('message_thread_id', String(input[0].topicId));
+    const media = input.map((item, i) => {
+      form.set(
+        `photo${i}`,
+        new Blob([item.bytes], { type: item.mediaType }),
+        item.filename,
+      );
+      return {
+        type: 'photo',
+        media: `attach://photo${i}`,
+        caption: item.caption || undefined,
+      };
+    });
+    form.set('media', JSON.stringify(media));
+    const result = (await this.call('sendMediaGroup', form, true)) as {
+      message_id?: number;
+    }[];
+    if (
+      !Array.isArray(result) ||
+      result.length !== input.length ||
+      result.some((v) => !Number.isSafeInteger(v?.message_id))
+    )
+      throw new TelegramFailure('DELIVERY_UNKNOWN', false, true);
+    return result.map((v) => String(v.message_id));
   }
   async sendMessage(raw: TelegramMessagePayload) {
     const input = outboundPayloadSchema.parse(raw);

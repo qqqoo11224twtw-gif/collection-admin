@@ -1,6 +1,7 @@
 import type { RouterClient } from '@orpc/server';
 import { apiKeysApi } from './api-keys';
 import { bulkAssignmentApi } from './bulk-assignment';
+import { bulkCaseEditApi } from './bulk-case-edit';
 import { caseManagementApi, collectorsApi } from './case-management';
 import { caseMediaManagementApi } from './case-media-management';
 import { casesApi } from './cases';
@@ -26,6 +27,7 @@ export const appRouter = {
     ...casesApi,
     ...caseManagementApi,
     ...bulkAssignmentApi,
+    ...bulkCaseEditApi,
     ...caseMediaManagementApi,
     ...manualCaseApi,
     lookup: caseLookupApi,

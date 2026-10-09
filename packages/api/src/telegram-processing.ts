@@ -523,7 +523,7 @@ export async function runTelegramProcessing(
 ) {
   const started = Date.now();
   const missing = await context.env.DB.prepare(
-    "SELECT a.id FROM assignments a WHERE a.unassigned_at IS NULL AND NOT EXISTS(SELECT 1 FROM telegram_outbound_jobs j WHERE j.assignment_id=a.id) AND EXISTS(SELECT 1 FROM telegram_routes r WHERE r.collector_id=a.collector_id AND r.route_type IN ('collector_dispatch','collector') AND r.is_active=1) LIMIT 20",
+    "SELECT a.id FROM assignments a JOIN cases c ON c.id=a.case_id WHERE a.unassigned_at IS NULL AND a.record_type='assignment' AND c.voided_at IS NULL AND NOT EXISTS(SELECT 1 FROM telegram_outbound_jobs j WHERE j.assignment_id=a.id) AND EXISTS(SELECT 1 FROM telegram_routes r WHERE r.collector_id=a.collector_id AND r.route_type IN ('collector_dispatch','collector') AND r.is_active=1) LIMIT 20",
   ).all<{ id: string }>();
   for (const row of missing.results)
     await queueAssignmentDispatch(context, row.id);

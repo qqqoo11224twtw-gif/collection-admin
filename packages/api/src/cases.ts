@@ -33,6 +33,7 @@ export const casesApi = {
       const assigned = sql`EXISTS(SELECT 1 FROM assignments a WHERE a.case_id=cases.id AND a.unassigned_at IS NULL)`;
       const where = and(
         caseVisibility(context),
+        isNull(cases.voidedAt),
         searchCondition(input.query),
         input.region ? eq(cases.region, input.region) : undefined,
         input.regionMissing ? isNull(cases.region) : undefined,
@@ -100,7 +101,7 @@ export const casesApi = {
       unassigned: sql<number>`sum(CASE WHEN EXISTS(SELECT 1 FROM assignments a WHERE a.case_id=cases.id AND a.unassigned_at IS NULL) THEN 0 ELSE 1 END)`,
     })
       .from(cases)
-      .where(caseVisibility(context))
+      .where(and(caseVisibility(context), isNull(cases.voidedAt)))
       .groupBy(cases.region)
       .orderBy(asc(cases.region));
   }),

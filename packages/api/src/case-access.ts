@@ -31,5 +31,23 @@ export async function requireCaseAccess(
     .limit(1);
   // Identical response for unknown and inaccessible cases.
   if (!record) throw new ORPCError('NOT_FOUND');
+  if (
+    record.voidedAt &&
+    [
+      'case.edit',
+      'assignment.create',
+      'assignment.reassign',
+      'assignment.correct',
+      'media.upload',
+      'media.delete',
+      'report.create',
+      'report.edit',
+      'payment.create',
+      'installment.create',
+      'intake.resolve',
+      'review.resolve',
+    ].includes(permission)
+  )
+    throw new ORPCError('CONFLICT', { message: '已作廢案件不可執行此操作。' });
   return record;
 }

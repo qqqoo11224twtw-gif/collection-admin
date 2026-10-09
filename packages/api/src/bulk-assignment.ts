@@ -36,6 +36,7 @@ export function renderAssignment(input: {
   customerName: string;
   address: string;
   amountDue: number;
+  region?: string | null;
 }) {
   const line = (text: string) =>
     text
@@ -46,7 +47,7 @@ export function renderAssignment(input: {
           : character,
       )
       .join('');
-  return `案件編號：${line(input.caseNo)}\n代號：${line(input.code)}\n客戶姓名：${line(input.customerName)}\n地址：${line(input.address)}\n應收款項：${input.amountDue}`;
+  return `案件編號：${line(input.caseNo)}\n代號：${line(input.code)}\n客戶姓名：${line(input.customerName)}\n地區：${line(input.region ?? '未填寫')}`;
 }
 async function batchRecord(context: Context, id: string) {
   const actor = requirePermission(context, 'assignment.create');

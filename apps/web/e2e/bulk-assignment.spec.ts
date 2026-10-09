@@ -82,13 +82,13 @@ test.describe('Bulk regional assignment', () => {
     await rows.nth(0).getByRole('checkbox').check();
     await rows.nth(1).getByRole('checkbox').check();
     await expect(page.getByRole('status', { name: '已選案件' })).toContainText(
-      '已選擇： 2 筆案件',
+      '已選取 2 筆案件',
     );
     await page
       .getByRole('checkbox', { name: '全選目前頁面', exact: true })
       .check();
     await expect(page.getByRole('status', { name: '已選案件' })).toContainText(
-      '已選擇： 10 筆案件',
+      '已選取 10 筆案件',
     );
     const pageIds = await rows
       .locator('a')
@@ -102,7 +102,7 @@ test.describe('Bulk regional assignment', () => {
     expect(pageIds).toHaveLength(10);
     await page.getByRole('button', { name: '下一頁' }).click();
     await expect(page.getByRole('status', { name: '已選案件' })).toContainText(
-      '已選擇： 0 筆案件',
+      '已選取 0 筆案件',
     );
     await expect(page.locator('tbody tr')).toHaveCount(2);
     await page.getByRole('button', { name: '上一頁' }).click();
@@ -110,7 +110,7 @@ test.describe('Bulk regional assignment', () => {
     await page
       .getByRole('checkbox', { name: '全選目前頁面', exact: true })
       .check();
-    await page.getByRole('button', { name: '批量派單', exact: true }).click();
+    await page.getByRole('button', { name: '批量委外', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('已選擇： 10 筆案件');
     await dialog
@@ -143,7 +143,7 @@ test.describe('Bulk regional assignment', () => {
       }
     ).json;
     await expect(
-      dialog.getByRole('heading', { name: '批量派單完成' }),
+      dialog.getByRole('heading', { name: '批量委外完成' }),
     ).toBeVisible();
     await expect(dialog.getByText('成功： 9', { exact: true })).toBeVisible();
     await expect(dialog.getByText('略過： 1', { exact: true })).toBeVisible();
@@ -188,9 +188,9 @@ test.describe('Bulk regional assignment', () => {
       .getByRole('checkbox', { name: '全選目前頁面', exact: true })
       .check();
     await expect(page.getByRole('status', { name: '已選案件' })).toContainText(
-      '已選擇： 3 筆案件',
+      '已選取 3 筆案件',
     );
-    await page.getByRole('button', { name: '批量派單', exact: true }).click();
+    await page.getByRole('button', { name: '批量委外', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog
       .getByLabel('外收人員', { exact: true })
@@ -198,7 +198,7 @@ test.describe('Bulk regional assignment', () => {
     await dialog.getByRole('button', { name: '取消', exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(page.locator('tbody tr')).toHaveCount(3);
-    await page.getByRole('button', { name: '批量派單', exact: true }).click();
+    await page.getByRole('button', { name: '批量委外', exact: true }).click();
     await dialog
       .getByLabel('外收人員', { exact: true })
       .selectOption(collector.id);
@@ -232,7 +232,7 @@ test.describe('Bulk regional assignment', () => {
       page.getByRole('heading', { name: '案件管理', exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: '批量派單', exact: true }),
+      page.getByRole('button', { name: '批量委外', exact: true }),
     ).toHaveCount(0);
     await expect(
       page.getByRole('checkbox', { name: '全選目前頁面', exact: true }),

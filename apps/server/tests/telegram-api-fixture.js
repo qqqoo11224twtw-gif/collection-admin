@@ -3,6 +3,31 @@ export default {
   async fetch(request) {
     if (new URL(request.url).hostname !== 'api.telegram.org')
       return new Response('Unexpected test origin', { status: 500 });
+    if (
+      request.headers.get('content-type')?.startsWith('multipart/form-data')
+    ) {
+      const form = await request.formData();
+      if (
+        form.get('chat_id') !== '-1001234567890' ||
+        form.get('message_thread_id') !== '2'
+      )
+        return Response.json({ ok: false, error_code: 400 }, { status: 400 });
+      if (new URL(request.url).pathname.endsWith('/sendPhoto'))
+        return Response.json({ ok: true, result: { message_id: 124 } });
+      const media = JSON.parse(String(form.get('media')));
+      if (
+        media.some(
+          (item) =>
+            !(form.get(item.media.replace('attach://', '')) instanceof File),
+        )
+      )
+        return Response.json({ ok: false, error_code: 400 }, { status: 400 });
+      if (form.get('chat_id') && form.get('message_thread_id'))
+        return Response.json({
+          ok: true,
+          result: media.map((_, i) => ({ message_id: 125 + i })),
+        });
+    }
     const input = await request.json();
     switch (input.text) {
       case 'invalid-json':

@@ -79,6 +79,11 @@ function CaseDetail() {
       >
         ← 案件列表
       </Link>
+      {record.voidedAt && (
+        <output className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">
+          已作廢 · {record.voidNote} · 歷史資料保留，無法執行正常派件。
+        </output>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="mb-2 break-all text-sm font-mono text-muted-foreground">
@@ -90,7 +95,9 @@ function CaseDetail() {
         </div>
         <div className="flex items-center gap-3">
           <StatusBadge status={record.status} />
-          {permissions.can('case.edit') && <CaseEditor record={record} />}
+          {!record.voidedAt && permissions.can('case.edit') && (
+            <CaseEditor record={record} />
+          )}
         </div>
       </div>
       <Tabs defaultValue="overview" key={caseId} className="space-y-6">

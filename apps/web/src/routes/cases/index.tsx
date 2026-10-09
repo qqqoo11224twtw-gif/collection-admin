@@ -15,6 +15,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { ChevronLeft, ChevronRight, FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 import { BulkAssignmentDialog } from '~/components/cases/bulk-assignment-dialog';
+import { BulkEditDialog } from '~/components/cases/bulk-edit-dialog';
 import { CaseEditor } from '~/components/cases/case-editor';
 import { displayLabel } from '~/components/cases/display-labels';
 import { useCasePermissions } from '~/components/cases/management-hooks';
@@ -77,6 +78,8 @@ function CasesPage() {
   const selected = selection.key === selectionKey ? selection.ids : [];
   const canAssign =
     permissions.can('assignment.create') && permissions.can('assignment.bulk');
+  const canSelect =
+    canAssign || permissions.can('case.edit') || permissions.can('case.delete');
   const options = orpc.cases.list.queryOptions({
     input: { ...search, pageSize: 10 },
   });
@@ -89,7 +92,13 @@ function CasesPage() {
   const pages = Math.max(1, Math.ceil((result.data?.total ?? 0) / 10));
   const selectable =
     result.data?.items
-      .filter((record) => !record.isAssigned)
+      .filter(
+        (record) =>
+          canSelect &&
+          (permissions.can('case.edit') ||
+            permissions.can('case.delete') ||
+            !record.isAssigned),
+      )
       .map((record) => record.id) ?? [];
   const allSelected =
     selectable.length > 0 && selectable.every((id) => selected.includes(id));
@@ -209,18 +218,35 @@ function CasesPage() {
           </select>
         ))}
       </div>
-      {canAssign && (
+      {canSelect && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <output
             aria-label="已選案件"
             className="text-sm text-muted-foreground"
           >
-            已選擇： {selected.length} 筆案件 · 選取範圍限目前頁面與篩選條件。
+            已選取 {selected.length} 筆案件 · 選取範圍限目前頁面與篩選條件。
           </output>
-          <BulkAssignmentDialog
-            caseIds={selected}
-            onAssigned={() => setSelection({ key: selectionKey, ids: [] })}
-          />
+          <div className="flex flex-wrap gap-2">
+            {permissions.can('case.edit') && (
+              <BulkEditDialog
+                caseIds={selected}
+                onDone={() => setSelection({ key: selectionKey, ids: [] })}
+              />
+            )}
+            {canAssign && (
+              <BulkAssignmentDialog
+                caseIds={selected}
+                onAssigned={() => setSelection({ key: selectionKey, ids: [] })}
+              />
+            )}
+            {permissions.can('case.delete') && (
+              <BulkEditDialog
+                voidMode
+                caseIds={selected}
+                onDone={() => setSelection({ key: selectionKey, ids: [] })}
+              />
+            )}
+          </div>
         </div>
       )}
       {result.isPending ? (
@@ -262,7 +288,7 @@ function CasesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {canAssign && (
+                    {canSelect && (
                       <TableHead className="w-12 px-4">
                         <Checkbox
                           aria-label="全選目前頁面"
@@ -295,11 +321,11 @@ function CasesPage() {
                 <TableBody>
                   {result.data.items.map((record) => (
                     <TableRow key={record.id}>
-                      {canAssign && (
+                      {canSelect && (
                         <TableCell className="px-4">
                           <Checkbox
                             aria-label={`選取 ${record.caseNo}`}
-                            disabled={!!record.isAssigned}
+                            disabled={!selectable.includes(record.id)}
                             checked={selected.includes(record.id)}
                             onCheckedChange={(checked) =>
                               setSelection({

@@ -4,6 +4,8 @@ import { useCasePermissions } from './management-hooks';
 import { CaseError, LoadingCases, timestamp } from './presentation';
 
 const actionLabels: Record<string, string> = {
+  'case.bulk_edited': '已批量編輯／歷史補登',
+  'case.voided': '已作廢案件（歷史保留）',
   bulk_assignment_created: '已建立批量派單',
   'manual.case_created': '已建立案件',
   'manual.image_uploaded': '已上傳委外圖片',

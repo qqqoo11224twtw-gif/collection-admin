@@ -251,10 +251,13 @@ export const caseManagementApi = {
           token,
         ),
       ]);
+      let telegramWarning: string | null = null;
       if (input.collectorId)
         try {
-          await queueAssignmentDispatch(context, assignmentId);
+          const delivery = await queueAssignmentDispatch(context, assignmentId);
+          telegramWarning = delivery?.warning ?? null;
         } catch {
+          telegramWarning = 'DISPATCH_QUEUE_FAILED';
           await systemLog(context.env.DB, {
             category: 'outbound',
             event: 'DISPATCH_QUEUE_FAILED',
@@ -265,7 +268,11 @@ export const caseManagementApi = {
             errorCode: 'DISPATCH_QUEUE_FAILED',
           });
         }
-      return { id: input.caseId, version: input.expectedVersion + 1 };
+      return {
+        id: input.caseId,
+        version: input.expectedVersion + 1,
+        telegramWarning,
+      };
     }),
   assignments: protectedProcedure
     .input(caseIdSchema)
