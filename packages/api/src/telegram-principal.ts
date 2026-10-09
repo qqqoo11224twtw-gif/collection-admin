@@ -14,6 +14,7 @@ export async function telegramPrincipal(
     .limit(1);
   if (
     !record ||
+    !record.active ||
     (record.banned &&
       (!record.banExpires || record.banExpires.getTime() > Date.now()))
   )
@@ -24,6 +25,8 @@ export async function telegramPrincipal(
     user: {
       ...record,
       role: collectorScope ? 'user' : (record.role ?? 'user'),
+      permissionAllow: record.permissionAllow,
+      permissionDeny: record.permissionDeny,
     },
     session: {
       id: 'telegram-service',

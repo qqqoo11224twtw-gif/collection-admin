@@ -13,6 +13,9 @@ export function useCasePermissions() {
     ...options,
     queryKey: [session?.user.id, ...options.queryKey],
     enabled: !!session,
+    staleTime: 0,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: 'always',
   });
   return {
     can: (permission: Permission) => result.data?.includes(permission) ?? false,

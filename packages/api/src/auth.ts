@@ -14,6 +14,7 @@ import { admin, emailOTP } from 'better-auth/plugins';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { sendEmail } from './email';
+import { systemLog } from './system-log';
 
 /**
  * Passwordless better-auth on D1 + Drizzle (official core, no
@@ -22,9 +23,7 @@ import { sendEmail } from './email';
  *
  * AUTH_MODE decides who may sign in (see docs/auth.md):
  *   - `disabled`   — no auth at all: routes unmounted, protected procedures 401.
- *   - `open`       — anyone may sign up/in via OTP (the to-C default).
- *   - `admin-only` — only ADMIN_EMAILS may sign in (Hono-layer gate, see
- *                    apps/server/src/index.ts).
+ *   - `open` / `admin-only` — provisioned active users only; no signup.
  * The three modes are configurations of THIS one instance, not parallel
  * systems — the instance itself is mode-independent.
  *
@@ -91,20 +90,40 @@ function buildAuth() {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.SERVER_URL,
     basePath: '/api/auth',
+    databaseHooks: {
+      user: { create: { before: async () => false } },
+      session: {
+        create: {
+          before: async (data) => {
+            const record = await drizzle(env.DB)
+              .select()
+              .from(user)
+              .where(eq(user.id, data.userId))
+              .limit(1);
+            return record[0]?.active &&
+              !(
+                record[0].banned &&
+                (!record[0].banExpires ||
+                  record[0].banExpires.getTime() > Date.now())
+              )
+              ? { data }
+              : false;
+          },
+        },
+      },
+    },
     session: {
-      // Serve get-session from a short-lived signed cookie instead of a D1
-      // query per call. Trade-off: revoking a session (sign-out elsewhere,
-      // admin ban) can take up to maxAge to propagate to other devices.
+      // Cache identity only; getSession reloads persisted user/session state
+      // before applying authorization, activation and current permissions.
       cookieCache: {
         enabled: true,
         maxAge: 300,
       },
     },
     plugins: [
-      // Email OTP sign-in (passwordless). The first code for an unknown email
-      // auto-registers the user — in admin-only mode the Hono gate has
-      // already restricted who gets here.
+      // OTP is available only to pre-provisioned active accounts.
       emailOTP({
+        disableSignUp: true,
         async sendVerificationOTP({ email, otp }) {
           await sendEmail({
             to: email,
@@ -158,20 +177,6 @@ function buildAuth() {
         ipAddressHeaders: ['cf-connecting-ip', 'x-forwarded-for'],
       },
     },
-    databaseHooks: {
-      user: {
-        create: {
-          // Bootstrap: an ADMIN_EMAILS-listed address is admin from the
-          // first row. Never "first user becomes admin".
-          before: async (u) => {
-            if (isAdminEmail(u.email)) {
-              return { data: { ...u, role: 'admin' } };
-            }
-            return { data: u };
-          },
-        },
-      },
-    },
     trustedOrigins: env.CORS_ORIGIN
       ? env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
       : [],
@@ -195,6 +200,10 @@ export interface SessionUser {
   email: string;
   name: string;
   role?: string | null;
+  active?: boolean;
+  permissionAllow?: string;
+  permissionDeny?: string;
+  permissionVersion?: number;
 }
 export interface SessionInfo {
   user: SessionUser;
@@ -202,8 +211,95 @@ export interface SessionInfo {
 }
 
 /** Mounted at /api/auth/* (email-otp, session, sign-out, ...). */
-export function authHandler(request: Request): Promise<Response> {
-  return getAuth().handler(request);
+export async function authHandler(request: Request): Promise<Response> {
+  const path = new URL(request.url).pathname;
+  let relatedUserId: string | undefined;
+  if (path.endsWith('/sign-out'))
+    relatedUserId = (await getSession(request.headers))?.user.id;
+  if (path.endsWith('/get-session'))
+    return Response.json(await getSession(request.headers));
+  if (request.method === 'GET')
+    return Response.json(
+      { code: 'FORBIDDEN', message: '此操作未開放。' },
+      { status: 403 },
+    );
+  if (
+    request.method === 'POST' &&
+    path !== '/api/auth/sign-out' &&
+    ![
+      '/api/auth/email-otp/send-verification-otp',
+      '/api/auth/sign-in/email-otp',
+    ].includes(path)
+  )
+    return Response.json(
+      { code: 'FORBIDDEN', message: '此操作未開放。' },
+      { status: 403 },
+    );
+  if (request.method === 'POST' && path !== '/api/auth/sign-out') {
+    const body: unknown = await request
+      .clone()
+      .json()
+      .catch(() => null);
+    const email =
+      body &&
+      typeof body === 'object' &&
+      'email' in body &&
+      typeof body.email === 'string'
+        ? body.email.trim().toLowerCase()
+        : '';
+    const row = await env.DB.prepare(
+      'SELECT id,active FROM user WHERE lower(email)=?',
+    )
+      .bind(email)
+      .first<{ id: string; active: number }>();
+    if (!row || !row.active) {
+      const code = row ? 'USER_INACTIVE' : 'EMAIL_NOT_ALLOWED';
+      await systemLog(env.DB, {
+        category: 'auth',
+        event: code,
+        status: 'denied',
+        level: 'warning',
+        errorCode: code,
+        relatedUserId: row?.id,
+      });
+      return Response.json(
+        { code, message: '此帳號未被授權使用本系統。' },
+        { status: 403 },
+      );
+    }
+    const normalized = { ...(body as Record<string, unknown>), email };
+    relatedUserId = row.id;
+    request = new Request(request, { body: JSON.stringify(normalized) });
+    await systemLog(env.DB, {
+      category: 'otp',
+      event: path.includes('send-verification')
+        ? 'OTP_REQUESTED'
+        : 'OTP_VERIFY_REQUESTED',
+      relatedUserId: row.id,
+    });
+  }
+  const response = await getAuth().handler(request);
+  if (response.ok && path.includes('/sign-in/'))
+    await systemLog(env.DB, {
+      category: 'auth',
+      event: 'LOGIN_SUCCESS',
+      relatedUserId,
+    });
+  if (request.method === 'POST')
+    await systemLog(env.DB, {
+      category: 'auth',
+      event: path.endsWith('sign-out')
+        ? 'LOGOUT'
+        : path.includes('sign-in/')
+          ? response.ok
+            ? 'OTP_VERIFY_SUCCESS'
+            : 'OTP_VERIFY_FAILED'
+          : 'OTP_REQUEST_FINISHED',
+      status: response.ok ? 'success' : 'failed',
+      level: response.ok ? 'info' : 'warning',
+      relatedUserId,
+    });
+  return response;
 }
 
 /** Safe key metadata: everything a management UI may see. Never the secret. */
@@ -289,6 +385,21 @@ export async function verifyApiKey(
     body: { key, permissions: API_KEY_PERMISSIONS },
   });
   if (result.valid && result.key) {
+    const owner = await drizzle(env.DB)
+      .select({
+        active: user.active,
+        banned: user.banned,
+        banExpires: user.banExpires,
+      })
+      .from(user)
+      .where(eq(user.id, result.key.referenceId))
+      .limit(1);
+    if (
+      !owner[0]?.active ||
+      (owner[0].banned &&
+        (!owner[0].banExpires || owner[0].banExpires.getTime() > Date.now()))
+    )
+      return { valid: false };
     return {
       valid: true,
       keyId: result.key.id,
@@ -301,10 +412,8 @@ export async function verifyApiKey(
 
 /**
  * Resolve the session from request headers (cookie). Returns null outright in
- * `disabled` mode. Applies promotion-only ADMIN_EMAILS sync: if the email is
- * now admin-listed but the row isn't admin yet, promote it (covers emails
- * added to ADMIN_EMAILS after signup). Never auto-demotes — removing an
- * admin is a manual operation.
+ * `disabled` mode. Reloads the persisted account and session on every request
+ * so activation, revocation and individual grants take effect immediately.
  */
 export async function getSession(
   headers: Headers,
@@ -312,12 +421,32 @@ export async function getSession(
   if (authMode() === 'disabled') return null;
   const s = (await getAuth().api.getSession({ headers })) as SessionInfo | null;
   if (!s) return null;
-  if (s.user.role !== 'admin' && isAdminEmail(s.user.email)) {
-    await drizzle(env.DB)
-      .update(user)
-      .set({ role: 'admin' })
-      .where(eq(user.id, s.user.id));
-    s.user.role = 'admin';
+  const [record] = await drizzle(env.DB)
+    .select()
+    .from(user)
+    .where(eq(user.id, s.user.id))
+    .limit(1);
+  const stored = await drizzle(env.DB)
+    .select({ id: session.id })
+    .from(session)
+    .where(eq(session.id, s.session.id))
+    .limit(1);
+  if (
+    !record?.active ||
+    !stored.length ||
+    (record.banned &&
+      (!record.banExpires || record.banExpires.getTime() > Date.now()))
+  ) {
+    await systemLog(env.DB, {
+      category: 'auth',
+      event: 'USER_INACTIVE',
+      status: 'denied',
+      level: 'warning',
+      relatedUserId: s.user.id,
+      errorCode: 'USER_INACTIVE',
+    });
+    return null;
   }
+  s.user = record;
   return s;
 }

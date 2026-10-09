@@ -60,6 +60,22 @@ function CaseWorkspace() {
               </Link>
             )}
             <UserMenu />
+            {permissions.can('user_permission.manage') && (
+              <Link
+                to="/cases/users"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                使用者與權限
+              </Link>
+            )}
+            {permissions.can('system_log.view') && (
+              <Link
+                to="/cases/system-logs"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                系統管理日誌
+              </Link>
+            )}
           </div>
         </div>
         <div className="rounded-lg bg-info/5 px-4 py-3 text-sm text-muted-foreground">

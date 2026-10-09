@@ -75,7 +75,8 @@ function CasesPage() {
     ids: [],
   });
   const selected = selection.key === selectionKey ? selection.ids : [];
-  const canAssign = permissions.can('assignment.create');
+  const canAssign =
+    permissions.can('assignment.create') && permissions.can('assignment.bulk');
   const options = orpc.cases.list.queryOptions({
     input: { ...search, pageSize: 10 },
   });
@@ -109,19 +110,21 @@ function CasesPage() {
           </p>
         </div>
         {permissions.can('case.create') && <CaseEditor />}
-        <Input
-          aria-label="搜尋案件"
-          placeholder="搜尋姓名、代號、案件編號或地址"
-          className="md:max-w-sm"
-          maxLength={120}
-          value={query}
-          onChange={(event) =>
-            void navigate({
-              search: { ...search, query: event.target.value, page: 1 },
-              replace: true,
-            })
-          }
-        />
+        {permissions.can('case.search') && (
+          <Input
+            aria-label="搜尋案件"
+            placeholder="搜尋姓名、代號、案件編號或地址"
+            className="md:max-w-sm"
+            maxLength={120}
+            value={query}
+            onChange={(event) =>
+              void navigate({
+                search: { ...search, query: event.target.value, page: 1 },
+                replace: true,
+              })
+            }
+          />
+        )}
       </div>
       {/* Filters compose against current assignments rather than a textual case status. */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

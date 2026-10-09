@@ -37,18 +37,24 @@ test('Telegram report remains pending in case history before manual status selec
       userId,
       isActive: true,
     }));
+  const routes = await call('telegram.routes', {});
+  const existingReportRoute = routes.find(
+    (route: {
+      id: string;
+      collectorId: string;
+      routeType: string;
+      isActive: boolean;
+    }) =>
+      route.collectorId === collector.id &&
+      route.routeType === 'collector_report' &&
+      route.isActive,
+  );
   await call('telegram.saveRoute', {
+    id: existingReportRoute?.id,
     chatId,
-    routeType: 'collector',
+    routeType: 'collector_report',
     collectorId: collector.id,
     topicId: null,
-    isActive: true,
-  });
-  await call('telegram.saveIdentity', {
-    telegramUserId: telegramId,
-    collectorId: collector.id,
-    userId,
-    displayName: 'Fictional test sender',
     isActive: true,
   });
   const row = await call('cases.create', {
@@ -112,7 +118,7 @@ test('fake extraction preserves original draft, requires human review and render
   const receive = await page.request.post(`${SERVER_URL}/rpc/intake/receive`, {
     data: {
       json: {
-        source: 'manual',
+        source: 'telegram',
         proposedData: {
           code: `FAKE-${Date.now()}`,
           customer_name: 'Fictional extraction browser',

@@ -35,9 +35,18 @@ function scheduleRefresh(context: Context, paymentId: string, token: string) {
     ).bind(now, paymentId, token),
   ];
 }
-export async function createPayment(context: Context, raw: unknown) {
+export async function createPayment(
+  context: Context,
+  raw: unknown,
+  workflow?: { reportId: string; assignmentId: string; routeId: string },
+) {
   const actor = requirePermission(context, 'payment.create'),
     input = paymentCreateSchema.parse(raw);
+  if (
+    workflow &&
+    (!context.telegramCollectorId || input.idempotencyKey !== workflow.reportId)
+  )
+    throw new ORPCError('FORBIDDEN');
   const record = await requireCaseAccess(
     context,
     input.caseId,
@@ -69,7 +78,7 @@ export async function createPayment(context: Context, raw: unknown) {
       prior.received_amount !== input.receivedAmount ||
       prior.received_date !== input.receivedDate ||
       prior.installment_schedule_id !== input.installmentScheduleId ||
-      prior.created_by_user_id !== actor.id
+      (prior.created_by_user_id !== actor.id && !workflow)
     )
       throw new ORPCError('CONFLICT');
     return { id: prior.id, duplicate: true };
@@ -104,10 +113,13 @@ export async function createPayment(context: Context, raw: unknown) {
   const scheduleGuard = input.installmentScheduleId
     ? " AND EXISTS(SELECT 1 FROM installment_schedules s JOIN installment_plans p ON p.id=s.plan_id WHERE s.id=? AND s.case_id=cases.id AND p.status='active' AND s.status<>'cancelled' AND s.expected_amount-coalesce((SELECT sum(received_amount) FROM payments WHERE installment_schedule_id=s.id AND status='received'),0)>=?)"
     : '';
+  const workflowGuard = workflow
+    ? " AND EXISTS(SELECT 1 FROM reports r JOIN assignments a ON a.id=r.assignment_id JOIN collectors c ON c.id=a.collector_id JOIN telegram_routes tr ON tr.id=r.callback_route_id WHERE r.id=? AND r.case_id=cases.id AND r.workflow_status='awaiting_status' AND r.selected_status='settled' AND a.id=? AND a.unassigned_at IS NULL AND c.is_active=1 AND c.id=? AND tr.id=? AND tr.route_type='collector_report' AND tr.is_active=1 AND tr.collector_id=c.id)"
+    : '';
   try {
     await atomicCaseWrite(context, [
       context.env.DB.prepare(
-        `UPDATE cases SET updated_at=?,version=version+1,write_token=? WHERE id=? AND version=? AND NOT EXISTS(SELECT 1 FROM payments WHERE idempotency_key=?)${scheduleGuard}`,
+        `UPDATE cases SET updated_at=?,version=version+1,write_token=? WHERE id=? AND version=? AND NOT EXISTS(SELECT 1 FROM payments WHERE idempotency_key=?)${scheduleGuard}${workflowGuard}`,
       ).bind(
         now,
         token,
@@ -116,6 +128,14 @@ export async function createPayment(context: Context, raw: unknown) {
         input.idempotencyKey,
         ...(input.installmentScheduleId
           ? [input.installmentScheduleId, input.receivedAmount]
+          : []),
+        ...(workflow
+          ? [
+              workflow.reportId,
+              workflow.assignmentId,
+              context.telegramCollectorId ?? '',
+              workflow.routeId,
+            ]
           : []),
       ),
       context.env.DB.prepare(

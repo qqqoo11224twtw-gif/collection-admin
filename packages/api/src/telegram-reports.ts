@@ -1,7 +1,5 @@
 import { ORPCError } from '@orpc/server';
 import type { telegramRoutes } from '@saasflare-dev/db';
-import { collectors, telegramIdentities } from '@saasflare-dev/db';
-import { and, eq } from 'drizzle-orm';
 import { requireCaseAccess } from './case-access';
 import { lookupCase } from './case-lookup';
 import type { Context } from './context';
@@ -10,7 +8,7 @@ import { telegramAudit } from './telegram-adapter';
 import type { TelegramUpdate } from './telegram-contract';
 import { reportStatusKeyboard } from './telegram-contract';
 import { queueTelegramMessage } from './telegram-outbound';
-import { telegramPrincipal } from './telegram-principal';
+import { reportRoutePrincipal } from './telegram-report-principal';
 
 async function queueStatusPrompt(
   context: Context,
@@ -52,11 +50,28 @@ export async function processReportCommand(
   const reply = (text: string) =>
     queueTelegramMessage(base, route, `command-reply:${updateId}`, text);
   const committed = await base.env.DB.prepare(
-    'SELECT r.id,c.code,c.customer_name FROM telegram_updates t JOIN reports r ON r.id=t.report_id JOIN cases c ON c.id=r.case_id WHERE t.id=? AND r.origin_key=?',
+    'SELECT r.id,r.case_id,r.workflow_status,c.code,c.customer_name FROM telegram_updates t JOIN reports r ON r.id=t.report_id JOIN cases c ON c.id=r.case_id WHERE t.id=? AND r.origin_key=?',
   )
     .bind(updateId, `telegram-update:${updateId}`)
-    .first<{ id: string; code: string; customer_name: string }>();
+    .first<{
+      id: string;
+      case_id: string;
+      workflow_status: string;
+      code: string;
+      customer_name: string;
+    }>();
   if (committed) {
+    if (committed.workflow_status === 'completed')
+      return { code: 'REPORT_ALREADY_COMPLETED', reportId: committed.id };
+    try {
+      await requireCaseAccess(
+        await reportRoutePrincipal(base, route, update),
+        committed.case_id,
+        'report.create',
+      );
+    } catch {
+      return { code: 'CASE_DENIED', reportId: null };
+    }
     await queueStatusPrompt(base, route, committed.id);
     return { code: 'REPORT_PENDING', reportId: committed.id };
   }
@@ -65,47 +80,15 @@ export async function processReportCommand(
     await reply('請使用 /回報 代號或案件編號 回報內容（最多 3500 字）。');
     return { code: 'INVALID_COMMAND', reportId: null };
   }
-  const [identity] = await base.DB.select()
-    .from(telegramIdentities)
-    .where(
-      and(
-        eq(telegramIdentities.telegramUserId, String(m?.from?.id ?? '')),
-        eq(telegramIdentities.isActive, true),
-      ),
-    )
-    .limit(1);
-  const [collector] = identity?.collectorId
-    ? await base.DB.select()
-        .from(collectors)
-        .where(
-          and(
-            eq(collectors.id, identity.collectorId),
-            eq(collectors.isActive, true),
-          ),
-        )
-        .limit(1)
-    : [];
-  if (
-    !collector?.userId ||
-    !identity ||
-    (identity.userId && identity.userId !== collector.userId) ||
-    route.collectorId !== collector.id ||
-    m?.sender_chat ||
-    m?.from?.is_bot
-  ) {
-    await telegramAudit(base, 'telegram.identity_denied', updateId, {
-      routeId: route.id,
-    }).run();
-    await reply('無法接受回報，請聯絡管理員確認身份與授權。');
-    return { code: 'IDENTITY_DENIED', reportId: null };
-  }
   let context: Context;
   try {
-    context = await telegramPrincipal(base, collector.userId, true);
+    context = await reportRoutePrincipal(base, route, update);
   } catch {
-    await telegramAudit(base, 'telegram.identity_denied', updateId).run();
-    await reply('無法接受回報，請聯絡管理員確認身份與授權。');
-    return { code: 'IDENTITY_DENIED', reportId: null };
+    await telegramAudit(base, 'telegram.report_rejected', updateId, {
+      routeId: route.id,
+    }).run();
+    await reply('無法接受回報，請聯絡管理員確認群組與案件授權。');
+    return { code: 'ROUTE_DENIED', reportId: null };
   }
   let lookup = await lookupCase(context, {
     field: 'case_no',
@@ -122,6 +105,10 @@ export async function processReportCommand(
       value: command.identifier,
     });
   if (lookup.kind === 'not_found') {
+    await telegramAudit(context, 'telegram.report_rejected', updateId, {
+      code: 'CASE_DENIED',
+      routeId: route.id,
+    }).run();
     await reply('找不到目前指派給您的案件，請使用代號或案件編號。');
     return { code: 'CASE_DENIED', reportId: null };
   }
@@ -155,7 +142,7 @@ export async function processReportCommand(
       },
       'telegram',
       `telegram-update:${updateId}`,
-      { telegramUserId: String(m?.from?.id), routeId: route.id },
+      { telegramUserId: `route:${route.id}`, routeId: route.id },
     );
   } catch (error: unknown) {
     if (error instanceof ORPCError && error.code === 'NOT_FOUND') {

@@ -50,7 +50,7 @@ function caseWrite(
   const scope =
     permissionPolicy(context).scope === 'all'
       ? ''
-      : ' AND EXISTS (SELECT 1 FROM assignments a JOIN collectors c ON c.id=a.collector_id WHERE a.case_id=cases.id AND a.unassigned_at IS NULL AND c.is_active=1 AND c.user_id=?)';
+      : ` AND EXISTS (SELECT 1 FROM assignments a JOIN collectors c ON c.id=a.collector_id WHERE a.case_id=cases.id AND a.unassigned_at IS NULL AND c.is_active=1 AND c.${context.telegramCollectorId ? 'id' : 'user_id'}=?)`;
   const reportGuard = report
     ? ' AND EXISTS (SELECT 1 FROM reports WHERE id=? AND version=?)'
     : '';
@@ -65,7 +65,7 @@ function caseWrite(
     token,
     id,
     version,
-    ...(scope ? [context.user?.id ?? ''] : []),
+    ...(scope ? [context.telegramCollectorId ?? context.user?.id ?? ''] : []),
     ...(report ? [report.id, report.version] : []),
   );
 }
@@ -228,8 +228,8 @@ export const reportsApi = {
         completedAt: reports.completedAt,
         completedBy: sql<
           string | null
-        >`(SELECT coalesce(nullif(u.name,''),u.email) FROM user u WHERE u.id=${reports.completedByUserId})`,
-        author: sql<string>`coalesce(nullif(${user.name}, ''), ${user.email})`,
+        >`CASE WHEN ${reports.source}='telegram' THEN (SELECT display_name FROM collectors WHERE id=${reports.collectorId}) ELSE (SELECT coalesce(nullif(u.name,''),u.email) FROM user u WHERE u.id=${reports.completedByUserId}) END`,
+        author: sql<string>`CASE WHEN ${reports.source}='telegram' THEN coalesce((SELECT display_name FROM collectors WHERE id=${reports.collectorId}),coalesce(nullif(${user.name}, ''), ${user.email})) ELSE coalesce(nullif(${user.name}, ''), ${user.email}) END`,
       })
         .from(reports)
         .innerJoin(user, eq(user.id, reports.createdByUserId))
@@ -332,4 +332,7 @@ export const reportsApi = {
 };
 export const caseLookupApi = protectedProcedure
   .input(caseLookupSchema)
-  .handler(({ context, input }) => lookupCase(context, input));
+  .handler(({ context, input }) => {
+    requirePermission(context, 'case.search');
+    return lookupCase(context, input);
+  });

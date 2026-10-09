@@ -6,7 +6,14 @@ import { getSession } from './auth';
 export async function createContext(c: HonoContext) {
   // getSession returns null in `disabled` mode without touching better-auth.
   const info = await getSession(c.req.raw.headers);
-  return {
+  let defer: ((task: Promise<unknown>) => void) | undefined;
+  try {
+    const execution = c.executionCtx;
+    defer = (task) => execution.waitUntil(task);
+  } catch {
+    /* Direct integration requests have no execution context. */
+  }
+  const context = {
     env: env,
     DB: drizzle(env.DB),
     // Raw request headers, for handlers that call back into better-auth
@@ -16,6 +23,16 @@ export async function createContext(c: HonoContext) {
     user: info?.user ?? null,
     isAdmin: info?.user.role === 'admin',
   };
+  return {
+    ...context,
+    correlationId: crypto.randomUUID(),
+    defer,
+  } as typeof context & {
+    correlationId?: string;
+    defer?: (task: Promise<unknown>) => void;
+  };
 }
 
-export type Context = Awaited<ReturnType<typeof createContext>>;
+export type Context = Awaited<ReturnType<typeof createContext>> & {
+  telegramCollectorId?: string;
+};

@@ -73,6 +73,7 @@ export default defineConfig(async () => {
             R2_BUCKET_NAME: 'test-bucket',
           },
           d1Databases: {
+            MIGRATION_DB: { id: 'migration-compatibility-db' },
             DB: {
               id: 'test-db',
             },

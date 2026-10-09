@@ -22,6 +22,7 @@ import {
   usageSchema,
 } from './openai-image-extraction';
 import { requirePermission } from './permissions';
+import { systemLog } from './system-log';
 import { backoff } from './telegram-contract';
 import { telegramPrincipal } from './telegram-principal';
 
@@ -48,6 +49,10 @@ export async function enqueueImageExtraction(
   requirePermission(context, 'intake.resolve');
   requirePermission(context, 'media.view');
   const row = await requireIntake(context, id);
+  if (row.source !== 'telegram')
+    throw new ORPCError('FORBIDDEN', {
+      message: '圖片辨識僅限 Telegram 新案件收件。',
+    });
   if (
     !['received', 'processing'].includes(row.status) ||
     (await intakeCollecting(context, id))
@@ -140,6 +145,7 @@ export async function processImageExtractionJobs(
         eq(aiImageJobs.model, provider.model),
         eq(aiImageJobs.providerVersion, provider.version),
         sql`${aiImageJobs.nextAttemptAt}<=${now}`,
+        sql`EXISTS(SELECT 1 FROM intake_items i WHERE i.id=${aiImageJobs.intakeId} AND i.source='telegram')`,
       ),
     )
     .limit(10);
@@ -212,6 +218,15 @@ export async function processImageExtractionJobs(
           null,
         ),
       ]);
+      await systemLog(base.env.DB, {
+        category: 'openai',
+        event: 'IMAGE_EXTRACTION_SUCCEEDED',
+        safeMessage: 'Telegram 新案件圖片辨識完成。',
+        relatedJobId: job.id,
+        relatedUserId: job.createdByUserId,
+        durationMs: cached.durationMs,
+        retryCount: job.attempts,
+      });
     } catch (error: unknown) {
       const failure =
         error instanceof ImageExtractionFailure
@@ -225,6 +240,19 @@ export async function processImageExtractionJobs(
             );
       const retry = failure.retryable && job.attempts < maxAttempts;
       const duration = Math.max(0, Date.now() - start);
+      await systemLog(base.env.DB, {
+        category: 'openai',
+        event: retry ? 'IMAGE_EXTRACTION_RETRY' : 'IMAGE_EXTRACTION_FAILED',
+        safeMessage:
+          'Telegram 新案件圖片辨識失敗，請確認辨識設定或進入待確認中心。',
+        level: retry ? 'warning' : 'error',
+        status: retry ? 'retry' : 'failed',
+        errorCode: failure.code,
+        relatedJobId: job.id,
+        relatedUserId: job.createdByUserId,
+        durationMs: duration,
+        retryCount: job.attempts,
+      });
       await base.env.DB.batch([
         base.env.DB.prepare(
           "UPDATE ai_image_jobs SET status=?,error_code=?,next_attempt_at=?,lease_until=NULL,updated_at=? WHERE id=? AND lease_token=? AND status='processing'",
@@ -282,7 +310,7 @@ export async function processImageExtractionJobs(
     }
   }
   const ready = await base.env.DB.prepare(
-    "SELECT DISTINCT j.intake_id,j.created_by_user_id FROM ai_image_jobs j JOIN intake_items i ON i.id=j.intake_id WHERE j.provider=? AND j.model=? AND j.provider_version=? AND i.status IN ('received','processing') LIMIT 20",
+    "SELECT DISTINCT j.intake_id,j.created_by_user_id FROM ai_image_jobs j JOIN intake_items i ON i.id=j.intake_id WHERE j.provider=? AND j.model=? AND j.provider_version=? AND i.source='telegram' AND i.status IN ('received','processing') LIMIT 20",
   )
     .bind(provider.provider, provider.model, provider.version)
     .all<{ intake_id: string; created_by_user_id: string }>();

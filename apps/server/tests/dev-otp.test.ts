@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, describe, expect, it } from 'vitest';
 import app from '../src/index';
-import { sendOtp, testEnv } from './helpers';
+import { provisionUser, sendOtp, testEnv } from './helpers';
 
 /**
  * The dev-only OTP readback endpoint powering local E2E sign-in. It must not
@@ -25,6 +25,7 @@ function readOtp(email: string) {
 describe('/api/dev/otp', () => {
   it('returns the latest code for an email (local dev, no mail key)', async () => {
     const email = 'otp-readback@example.com';
+    await provisionUser(email);
     expect((await sendOtp(email)).status).toBe(200);
     const res = await readOtp(email);
     expect(res.status).toBe(200);

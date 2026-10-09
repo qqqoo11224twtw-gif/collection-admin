@@ -4,12 +4,7 @@ import { ORPCError, onError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 // api routes
 import { appRouter } from '@saasflare-dev/api';
-import {
-  authHandler,
-  authMode,
-  isAdminEmail,
-  verifyApiKey,
-} from '@saasflare-dev/api/auth';
+import { authHandler, authMode, verifyApiKey } from '@saasflare-dev/api/auth';
 import { caseImageResponse } from '@saasflare-dev/api/case-image';
 import { uploadCaseImages } from '@saasflare-dev/api/case-media-management';
 import { createContext } from '@saasflare-dev/api/context';
@@ -19,6 +14,7 @@ import {
   uploadIntakeImages,
 } from '@saasflare-dev/api/intake-media';
 import { createManualCase } from '@saasflare-dev/api/manual-cases';
+import { systemLog } from '@saasflare-dev/api/system-log';
 import { telegramClient } from '@saasflare-dev/api/telegram-client';
 import {
   runTelegramProcessing,
@@ -70,6 +66,16 @@ app.post('/api/cases/manual', async (c) => {
     const result = await createManualCase(await createContext(c), c.req.raw);
     return c.json(result, result.kind === 'created' ? 201 : 200);
   } catch (error: unknown) {
+    await systemLog(env.DB, {
+      category: 'storage',
+      event: 'MEDIA_UPLOAD_REJECTED',
+      status: 'failed',
+      level: 'warning',
+      errorCode:
+        error instanceof ORPCError && error.status === 413
+          ? 'FILE_TOO_LARGE'
+          : 'INVALID_FILE',
+    });
     if (error instanceof ORPCError)
       return c.json(
         { error: error.code, message: error.message },
@@ -104,33 +110,7 @@ app.get('/api/finance/settlements.xlsx', async (c) => {
 
 // ── Auth (better-auth), gated by AUTH_MODE — see docs/auth.md ─────────────
 
-// admin-only mode: whitelist gate for OTP requests. Runs BEFORE better-auth
-// because it stores the verification value before invoking the send callback
-// — a denied email must leave no rows and no mail. Product call: an
-// admin-only deployment is a private console with a fixed ADMIN_EMAILS
-// whitelist, so a clear error beats anti-enumeration — non-admins get an
-// explicit 403 and no code is sent. (In `open` mode this gate is a no-op:
-// anyone may sign up.)
-app.post('/api/auth/email-otp/send-verification-otp', async (c, next) => {
-  if (authMode() !== 'admin-only') return next();
-  const body = await c.req.raw
-    .clone()
-    .json()
-    .catch(() => null);
-  const email = (body as { email?: unknown } | null)?.email;
-  if (typeof email === 'string' && !isAdminEmail(email)) {
-    return c.json(
-      {
-        code: 'EMAIL_NOT_ADMIN',
-        message: 'This email is not an administrator account.',
-      },
-      403,
-    );
-  }
-  // Whitelisted (or malformed → let better-auth reject it): pass through.
-  await next();
-});
-
+// authHandler checks the active user allowlist before better-auth creates an OTP.
 // better-auth: /api/auth/* (email-otp send/verify, session, sign-out, ...).
 // In `disabled` mode the surface simply doesn't exist (404).
 app.on(['GET', 'POST'], '/api/auth/*', (c) => {
@@ -142,7 +122,10 @@ app.on(['GET', 'POST'], '/api/auth/*', (c) => {
 export const rpcHandler = new RPCHandler(appRouter, {
   interceptors: [
     onError((error: unknown) => {
-      console.error(error);
+      console.error(
+        'rpc_error',
+        error instanceof ORPCError ? error.code : 'INTERNAL_SERVER_ERROR',
+      );
     }),
   ],
 });
@@ -242,6 +225,16 @@ app.post('/api/cases/:caseId/media', async (c) => {
     );
     return c.json(result, 201);
   } catch (error: unknown) {
+    await systemLog(env.DB, {
+      category: 'storage',
+      event: 'MEDIA_UPLOAD_REJECTED',
+      status: 'failed',
+      level: 'warning',
+      errorCode:
+        error instanceof ORPCError && error.status === 413
+          ? 'FILE_TOO_LARGE'
+          : 'INVALID_FILE',
+    });
     if (error instanceof ORPCError)
       return Response.json(
         { error: error.code, message: error.message },
@@ -291,6 +284,7 @@ export default Object.assign(app, {
           session: null,
           user: null,
           isAdmin: false,
+          defer: (task) => execution.waitUntil(task),
         },
         telegramClient(env),
       ),

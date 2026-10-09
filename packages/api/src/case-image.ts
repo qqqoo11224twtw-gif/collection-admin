@@ -5,6 +5,7 @@ import { authMode } from './auth';
 import { requireCaseAccess } from './case-access';
 import { privateCaseStorage } from './case-storage';
 import type { Context } from './context';
+import { systemLog } from './system-log';
 
 export async function caseImageResponse(
   context: Context,
@@ -31,12 +32,25 @@ export async function caseImageResponse(
       new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
       (byte) => byte.toString(16).padStart(2, '0'),
     ).join('');
-    if (digest !== media.sha256)
-      throw new Error('Image integrity check failed.');
+    if (digest !== media.sha256) throw new Error('SHA_MISMATCH');
     return new Response(bytes, {
       headers: { ...headers, 'Content-Type': media.mediaType },
     });
   } catch (error: unknown) {
+    await systemLog(context.env.DB, {
+      category: 'storage',
+      event:
+        error instanceof ORPCError ? 'MEDIA_READ_DENIED' : 'MEDIA_READ_FAILED',
+      level: 'warning',
+      status: 'failed',
+      relatedUserId: context.user?.id,
+      errorCode:
+        error instanceof ORPCError
+          ? 'PERMISSION_DENIED'
+          : error instanceof Error && error.message === 'SHA_MISMATCH'
+            ? 'SHA_MISMATCH'
+            : 'R2_READ_FAILED',
+    });
     if (error instanceof ORPCError) {
       return Response.json(
         { error: error.code },

@@ -1,5 +1,48 @@
 # Auth — AUTH_MODE, sessions, admin, API keys
 
+## Operations integration override (2026-10-09)
+
+The operational product now uses **provisioned active users only** in both
+`open` and `admin-only` modes. The historical starter behavior described below
+(public OTP registration and runtime ADMIN_EMAILS promotion) is superseded.
+`disabled` still unmounts authentication and fails protected APIs closed.
+
+- `/api/auth` checks a trimmed, lowercased email against `user.email` and
+  `user.active` **before** better-auth runs. Gmail `+alias` values remain distinct.
+- Unknown/inactive addresses receive a generic Chinese 403; they generate no
+  OTP, no email, no user and no session. `emailOTP.disableSignUp` and a user
+  creation database hook also prohibit auto-registration.
+- Session creation checks active/banned state. Every session resolution reloads
+  the user and persisted session, bypassing stale cookie permissions. Disabled
+  users have sessions deleted and subsequent requests are rejected immediately.
+- Roles are default permission templates, with explicit allow and explicit
+  deny (deny wins). `user_permission.manage` governs `/cases/users`, including
+  the login allowlist. Permission changes are read from D1 on each request.
+- ADMIN_EMAILS no longer promotes accounts during normal login. Existing
+  provisioned admins remain admins; future accounts are managed in the UI.
+- The first account is initialized offline, never through public login. Local
+  demo admins are seeded by `scripts/seed-cases.ts`. A clean local installation
+  can use `node scripts/bootstrap-admin.ts admin@example.test --local` after
+  migrations. The script inserts an admin only if no active permission manager
+  exists. It cannot target a remote database.
+- Before a staging/production release, initialize/review the approved admin
+  directly through that environment's controlled seed process. Do not run the
+  local bootstrap against production, reuse demo emails there, or enable public
+  bootstrap endpoints. See `docs/operations-integration.md`.
+- The last active permission manager cannot lose management rights, be
+  disabled or change email without another active manager. The conditional D1
+  write enforces this under concurrent changes. All permission changes audit
+  previous and resulting grants; rejected writes do not revoke sessions.
+- Auth plugin administration endpoints are not publicly exposed. Operational
+  account management uses permission-checked application APIs instead.
+- OTP messages, cookies and provider bodies are never written to system or
+  console logs. The dev OTP readback remains local only when no Resend key is
+  configured. UI text no longer offers signup.
+
+The remaining sections document the underlying starter and API-key machinery;
+any statement allowing public registration or runtime admin promotion must not
+be used for this operational product.
+
 > **Read this before touching anything auth-related** — routes, login UI,
 > env files, or any table named `user`/`session`/`account`/`verification`/
 > `apikey`/`rate_limit`. It is written for the agent working on a fresh

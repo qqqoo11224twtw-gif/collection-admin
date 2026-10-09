@@ -29,6 +29,7 @@ export const casesApi = {
     .input(caseListSchema)
     .handler(async ({ context, input }) => {
       requirePermission(context, 'case.view');
+      if (input.query) requirePermission(context, 'case.search');
       const assigned = sql`EXISTS(SELECT 1 FROM assignments a WHERE a.case_id=cases.id AND a.unassigned_at IS NULL)`;
       const where = and(
         caseVisibility(context),

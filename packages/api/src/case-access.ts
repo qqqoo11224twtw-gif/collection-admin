@@ -9,9 +9,11 @@ import {
 } from './permissions';
 
 export function caseVisibility(
-  context: Pick<Context, 'user' | 'isAdmin'>,
+  context: Pick<Context, 'user' | 'isAdmin' | 'telegramCollectorId'>,
 ): SQL | undefined {
   if (!context.user) throw new ORPCError('UNAUTHORIZED');
+  if (context.telegramCollectorId)
+    return sql`EXISTS(SELECT 1 FROM assignments a JOIN collectors c ON c.id=a.collector_id WHERE a.case_id=${cases.id} AND a.unassigned_at IS NULL AND c.is_active=1 AND c.id=${context.telegramCollectorId})`;
   return permissionPolicy(context).scope === 'all'
     ? undefined
     : sql`EXISTS (SELECT 1 FROM assignments a JOIN collectors c ON c.id = a.collector_id WHERE a.case_id = ${cases.id} AND a.unassigned_at IS NULL AND c.is_active = 1 AND c.user_id = ${context.user.id})`;

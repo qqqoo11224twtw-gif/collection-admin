@@ -4,7 +4,8 @@ import {
   telegramRoutes,
   telegramUpdates,
 } from '@saasflare-dev/db';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { queueAssignmentDispatch } from './assignment-outbound';
 import type { Context } from './context';
 import {
   enqueueImageExtraction,
@@ -14,6 +15,7 @@ import { receiveFromAdapter } from './intake-contract';
 import { processIntake } from './intake-resolver';
 import { receiveIntake } from './intake-service';
 import { imageExtractionProvider } from './openai-image-extraction';
+import { cleanupSystemLogs, systemLog } from './system-log';
 import {
   TelegramIntakeAdapter,
   telegramAudit,
@@ -30,6 +32,7 @@ import {
 import { processInstallmentUpdate } from './telegram-installments';
 import { receiveTelegramMedia } from './telegram-media';
 import { processOutbound, queueReportDestination } from './telegram-outbound';
+import { processTelegramPayment } from './telegram-payments';
 import { telegramPrincipal } from './telegram-principal';
 import { processReportStatusCallback } from './telegram-report-status';
 import { processReportCommand } from './telegram-reports';
@@ -84,6 +87,40 @@ export async function receiveTelegramUpdate(
     return { id, duplicate: true };
   }
   const m = update.message ?? update.callback_query?.message;
+  const reportRoutes = m
+    ? await context.env.DB.prepare(
+        "SELECT id,is_active FROM telegram_routes WHERE chat_id=? AND coalesce(topic_id,0)=? AND route_type='collector_report'",
+      )
+        .bind(String(m.chat.id), m.message_thread_id ?? 0)
+        .all<{ id: string; is_active: number }>()
+    : null;
+  const replacementIntake =
+    m &&
+    reportRoutes?.results.length &&
+    !reportRoutes.results.some((route) => route.is_active === 1)
+      ? await context.env.DB.prepare(
+          "SELECT id FROM telegram_routes WHERE chat_id=? AND coalesce(topic_id,0)=? AND route_type IN ('intake','intake_source') AND is_active=1",
+        )
+          .bind(String(m.chat.id), m.message_thread_id ?? 0)
+          .first()
+      : null;
+  if (
+    update.message &&
+    (update.message.photo || update.message.document) &&
+    reportRoutes?.results.length &&
+    !replacementIntake
+  ) {
+    await context.env.DB.prepare(
+      "INSERT INTO telegram_updates(id,payload,status,attempts,next_attempt_at,created_at,processed_at,result_code) VALUES(?,'{}','done',0,?,?,?,'REPORT_MEDIA_IGNORED') ON CONFLICT(id) DO NOTHING",
+    )
+      .bind(id, now, now, now)
+      .run();
+    await systemLog(context.env.DB, {
+      category: 'telegram',
+      event: 'REPORT_MEDIA_IGNORED',
+    });
+    return { id, duplicate: false };
+  }
   const [route] = m
     ? await context.DB.select()
         .from(telegramRoutes)
@@ -92,17 +129,22 @@ export async function receiveTelegramUpdate(
             eq(telegramRoutes.chatId, String(m.chat.id)),
             sql`coalesce(${telegramRoutes.topicId},0)=${m.message_thread_id ?? 0}`,
             eq(telegramRoutes.isActive, true),
-            eq(
+            inArray(
               telegramRoutes.routeType,
               update.callback_query || m.text?.startsWith('/回報')
-                ? 'collector'
-                : 'intake_source',
+                ? ['collector_report']
+                : ['intake', 'intake_source'],
             ),
           ),
         )
         .limit(1)
     : [];
-  const grouping = telegramFile(update) && route ? albumKey(update) : null;
+  const grouping =
+    telegramFile(update) &&
+    route &&
+    ['intake', 'intake_source'].includes(route.routeType)
+      ? albumKey(update)
+      : null;
   const statements: D1PreparedStatement[] = [];
   if (grouping && route)
     statements.push(
@@ -214,14 +256,29 @@ export async function processTelegramUpdates(
             eq(telegramRoutes.chatId, String(m.chat.id)),
             sql`coalesce(${telegramRoutes.topicId},0)=${m.message_thread_id ?? 0}`,
             eq(telegramRoutes.isActive, true),
-            eq(
+            inArray(
               telegramRoutes.routeType,
-              isReport ? 'collector' : 'intake_source',
+              isReport ? ['collector_report'] : ['intake', 'intake_source'],
             ),
           ),
         )
         .limit(1);
-      if (!route) throw new TelegramFailure('SOURCE_DENIED', false);
+      if (!route) {
+        await systemLog(base.env.DB, {
+          category: 'telegram',
+          event: 'ROUTE_NOT_FOUND',
+          status: 'failed',
+          level: 'warning',
+          errorCode: 'ROUTE_NOT_FOUND',
+        });
+        throw new TelegramFailure('SOURCE_DENIED', false);
+      }
+      await systemLog(base.env.DB, {
+        category: 'telegram',
+        event: 'ROUTE_MATCHED',
+        relatedRouteId: route.id,
+        relatedCollectorId: route.collectorId,
+      });
       actor = await telegramPrincipal(base, route.managedByUserId);
       let intakeId: string | null = row.intakeId;
       let reportId: string | null = row.reportId;
@@ -237,12 +294,9 @@ export async function processTelegramUpdates(
         reportId = result.reportId;
         resultCode = result.code;
       } else if (m.text) {
-        const result = await processInstallmentUpdate(
-          actor,
-          update,
-          route,
-          client,
-        );
+        const result =
+          (await processTelegramPayment(actor, update, route, client)) ??
+          (await processInstallmentUpdate(actor, update, route, client));
         reportId = result.reportId;
         resultCode = result.code;
       } else {
@@ -348,7 +402,7 @@ export async function processTelegramUpdates(
   await finalizeAlbums(base, now);
   // Repair only already committed manual confirmations, without re-applying status.
   const completed = await base.env.DB.prepare(
-    "SELECT r.id FROM reports r WHERE r.source='telegram' AND r.workflow_status='completed' AND r.callback_token IS NOT NULL AND EXISTS(SELECT 1 FROM telegram_routes tr WHERE tr.route_type='report_destination' AND tr.is_active=1 AND (tr.collector_id IS NULL OR tr.collector_id=r.collector_id) AND NOT EXISTS(SELECT 1 FROM telegram_outbound_jobs j WHERE j.dedupe_key='report-destination:'||r.id||':'||tr.id)) LIMIT 20",
+    "SELECT r.id FROM reports r WHERE r.source='telegram' AND r.workflow_status='completed' AND r.callback_token IS NOT NULL AND EXISTS(SELECT 1 FROM telegram_routes tr WHERE tr.route_type IN ('business_report','report_destination') AND tr.is_active=1 AND (tr.collector_id IS NULL OR tr.collector_id=r.collector_id) AND NOT EXISTS(SELECT 1 FROM telegram_outbound_jobs j WHERE j.dedupe_key='report-destination:'||r.id||':'||tr.id)) LIMIT 20",
   ).all<{ id: string }>();
   for (const report of completed.results) {
     try {
@@ -359,7 +413,7 @@ export async function processTelegramUpdates(
   }
   // Repair the crash boundary between media/album completion and review creation.
   const drafts = await base.env.DB.prepare(
-    "SELECT i.id,i.version,r.managed_by_user_id,MIN(t.id) AS update_id,MAX(t.attempts) AS attempts FROM intake_items i JOIN telegram_updates t ON t.intake_id=i.id LEFT JOIN telegram_albums a ON a.id=t.album_id JOIN telegram_routes r ON r.chat_id=CAST(json_extract(t.payload,'$.message.chat.id') AS TEXT) AND coalesce(r.topic_id,0)=coalesce(json_extract(t.payload,'$.message.message_thread_id'),0) AND r.route_type='intake_source' AND r.is_active=1 WHERE i.status IN ('received','processing') AND t.status='done' AND (a.id IS NULL OR a.finalized_at IS NOT NULL) AND NOT EXISTS(SELECT 1 FROM telegram_updates pending WHERE pending.intake_id=i.id AND pending.status<>'done') AND NOT EXISTS(SELECT 1 FROM telegram_albums collecting WHERE collecting.intake_id=i.id AND collecting.finalized_at IS NULL) GROUP BY i.id LIMIT 20",
+    "SELECT i.id,i.version,r.managed_by_user_id,MIN(t.id) AS update_id,MAX(t.attempts) AS attempts FROM intake_items i JOIN telegram_updates t ON t.intake_id=i.id LEFT JOIN telegram_albums a ON a.id=t.album_id JOIN telegram_routes r ON r.chat_id=CAST(json_extract(t.payload,'$.message.chat.id') AS TEXT) AND coalesce(r.topic_id,0)=coalesce(json_extract(t.payload,'$.message.message_thread_id'),0) AND r.route_type IN ('intake','intake_source') AND r.is_active=1 WHERE i.status IN ('received','processing') AND t.status='done' AND (a.id IS NULL OR a.finalized_at IS NOT NULL) AND NOT EXISTS(SELECT 1 FROM telegram_updates pending WHERE pending.intake_id=i.id AND pending.status<>'done') AND NOT EXISTS(SELECT 1 FROM telegram_albums collecting WHERE collecting.intake_id=i.id AND collecting.finalized_at IS NULL) GROUP BY i.id LIMIT 20",
   ).all<{
     id: string;
     version: number;
@@ -467,9 +521,21 @@ export async function runTelegramProcessing(
   client: TelegramClient,
   now = Date.now(),
 ) {
+  const started = Date.now();
+  const missing = await context.env.DB.prepare(
+    "SELECT a.id FROM assignments a WHERE a.unassigned_at IS NULL AND NOT EXISTS(SELECT 1 FROM telegram_outbound_jobs j WHERE j.assignment_id=a.id) AND EXISTS(SELECT 1 FROM telegram_routes r WHERE r.collector_id=a.collector_id AND r.route_type IN ('collector_dispatch','collector') AND r.is_active=1) LIMIT 20",
+  ).all<{ id: string }>();
+  for (const row of missing.results)
+    await queueAssignmentDispatch(context, row.id);
   await processTelegramUpdates(context, client, now);
   await processOutbound(context, client, now);
   const provider = imageExtractionProvider(context.env);
   if (provider) await processImageExtractionJobs(context, provider, now);
+  await cleanupSystemLogs(context.env.DB, now);
+  await systemLog(context.env.DB, {
+    category: 'scheduler',
+    event: 'SCHEDULER_COMPLETED',
+    durationMs: Date.now() - started,
+  });
   return { processed: true };
 }

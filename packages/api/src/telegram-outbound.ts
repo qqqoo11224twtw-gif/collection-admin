@@ -106,7 +106,7 @@ export async function queueReportDestination(
     .from(telegramRoutes)
     .where(
       and(
-        eq(telegramRoutes.routeType, 'report_destination'),
+        sql`${telegramRoutes.routeType} IN ('business_report','report_destination')`,
         eq(telegramRoutes.isActive, true),
         sql`(${telegramRoutes.collectorId} IS NULL OR ${telegramRoutes.collectorId}=${report.collector_id})`,
       ),
@@ -194,15 +194,23 @@ export async function processOutbound(
         .from(telegramRoutes)
         .where(eq(telegramRoutes.id, job.routeId));
       const payload = outboundPayloadSchema.parse(JSON.parse(job.payload));
+      if (!route?.isActive) throw new TelegramFailure('ROUTE_CHANGED', false);
+      payload.chatId = route.chatId;
+      payload.topicId = route.topicId;
       if (
-        !route?.isActive ||
-        route.chatId !== payload.chatId ||
-        route.topicId !== payload.topicId
+        job.messageType === 'report_destination' &&
+        !['business_report', 'report_destination'].includes(route.routeType)
+      )
+        throw new TelegramFailure('ROUTE_CHANGED', false);
+      if (
+        job.messageType === 'command_reply' &&
+        job.reportId &&
+        route.routeType !== 'collector_report'
       )
         throw new TelegramFailure('ROUTE_CHANGED', false);
       if (job.messageType === 'assignment_dispatch') {
         const valid = await context.env.DB.prepare(
-          "SELECT a.id FROM assignments a JOIN collectors c ON c.id=a.collector_id JOIN telegram_routes r ON r.id=? WHERE a.id=? AND a.unassigned_at IS NULL AND c.is_active=1 AND r.collector_id=c.id AND r.route_type='collector'",
+          "SELECT a.id FROM assignments a JOIN collectors c ON c.id=a.collector_id JOIN telegram_routes r ON r.id=? WHERE a.id=? AND a.unassigned_at IS NULL AND c.is_active=1 AND r.collector_id=c.id AND r.route_type IN ('collector','collector_dispatch')",
         )
           .bind(job.routeId, job.assignmentId)
           .first();

@@ -47,7 +47,7 @@ async function draft() {
   const received = await rpc(
     'intake.receive',
     {
-      source: 'manual',
+      source: 'telegram',
       externalId: crypto.randomUUID(),
       proposedData: {
         code: null,

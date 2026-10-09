@@ -107,11 +107,12 @@ function LoginPage() {
           type: 'sign-in',
         });
       if (sendError) {
-        // admin-only deployments reject non-whitelisted emails with
-        // EMAIL_NOT_ADMIN before any code is sent.
+        // The server checks the active allowlist before any code is generated.
         setError(
-          sendError.code === 'EMAIL_NOT_ADMIN'
-            ? '此電子郵件不是管理員帳號。'
+          ['EMAIL_NOT_ALLOWED', 'USER_INACTIVE', 'EMAIL_NOT_ADMIN'].includes(
+            sendError.code ?? '',
+          )
+            ? '此帳號未被授權使用本系統。'
             : '無法寄送驗證碼，請稍後重試。',
         );
         return;
@@ -180,8 +181,8 @@ function LoginPage() {
             </h1>
             <p className="text-sm text-muted-foreground">
               {authMode === 'admin-only'
-                ? '管理員登入'
-                : '使用一次性驗證碼登入或建立帳號'}
+                ? '已授權使用者登入'
+                : '使用一次性驗證碼登入，僅限已授權帳號'}
             </p>
           </div>
 
@@ -277,7 +278,7 @@ function LoginPage() {
                       )}
                       {localMailMode && (
                         <FieldDescription className="text-center">
-                          本機開發：驗證碼會顯示於伺服器主控台及 /api/dev/otp。
+                          本機測試：驗證碼僅可從 /api/dev/otp 取得，不寫入日誌。
                         </FieldDescription>
                       )}
                     </Field>

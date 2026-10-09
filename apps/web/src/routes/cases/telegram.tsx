@@ -1,384 +1,218 @@
-import type { AppRouterClient } from '@saasflare-dev/api';
-import { Badge } from '@saasflare-dev/ui/components/badge';
 import { Button } from '@saasflare-dev/ui/components/button';
 import { Input } from '@saasflare-dev/ui/components/input';
 import { Label } from '@saasflare-dev/ui/components/label';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { displayError, displayLabel } from '~/components/cases/display-labels';
 import { useCasePermissions } from '~/components/cases/management-hooks';
-import { CaseError, LoadingCases } from '~/components/cases/presentation';
 import { orpc } from '~/lib/orpc';
 export const Route = createFileRoute('/cases/telegram')({
-  component: TelegramSettings,
+  component: TelegramPage,
 });
-type RouteRecord = Awaited<
-  ReturnType<AppRouterClient['telegram']['routes']>
->[number];
-type Identity = Awaited<
-  ReturnType<AppRouterClient['telegram']['identities']>
->[number];
-function TelegramSettings() {
-  const permissions = useCasePermissions();
-  const allowed = permissions.can('telegram_route.manage');
-  const cache = useQueryClient();
-  const scoped = <T,>(options: T & { queryKey: readonly unknown[] }) => ({
-    ...options,
-    queryKey: [permissions.userId, ...options.queryKey],
-    enabled: allowed,
-  });
-  const routes = useQuery(scoped(orpc.telegram.routes.queryOptions()));
-  const identities = useQuery(scoped(orpc.telegram.identities.queryOptions()));
-  const options = useQuery(scoped(orpc.telegram.options.queryOptions()));
-  const jobs = useQuery(scoped(orpc.telegram.jobs.queryOptions()));
-  const saveRoute = useMutation(orpc.telegram.saveRoute.mutationOptions());
-  const saveIdentity = useMutation(
-    orpc.telegram.saveIdentity.mutationOptions(),
+const types = {
+  intake: '小幫手收件',
+  collector_dispatch: '外收收單群',
+  collector_report: '外收回報群',
+  business_report: '業務回報群',
+} as const;
+function canonical(type: string) {
+  return (
+    (
+      {
+        collector: 'collector_dispatch',
+        intake_source: 'intake',
+        report_destination: 'business_report',
+      } as Record<string, string>
+    )[type] ?? type
   );
-  const process = useMutation(orpc.telegram.process.mutationOptions());
-  const [editingRoute, setEditingRoute] = useState<RouteRecord | null>(null);
-  const [editingIdentity, setEditingIdentity] = useState<Identity | null>(null);
-  const [error, setError] = useState('');
-  const refresh = () =>
-    cache.invalidateQueries({
-      predicate: (query) => query.queryKey[0] === permissions.userId,
-    });
-  const fail = (e: unknown) => setError(displayError(e, '無法儲存設定。'));
-  const busy =
-    saveRoute.isPending || saveIdentity.isPending || process.isPending;
-  if (permissions.isPending) return <LoadingCases />;
-  if (!allowed)
-    return (
-      <div className="rounded-xl border p-5">
-        <h1 className="font-semibold">無操作權限</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          需要 Telegram 管理權限。
-        </p>
-      </div>
-    );
-  if (routes.isPending || identities.isPending || options.isPending)
-    return <LoadingCases />;
-  if (routes.isError || identities.isError || options.isError)
-    return (
-      <CaseError
-        retry={() => {
-          void refresh();
-        }}
-      />
-    );
+}
+function TelegramPage() {
+  const permissions = useCasePermissions(),
+    qc = useQueryClient();
+  const enabled = permissions.can('telegram_route.manage');
+  const routes = useQuery({ ...orpc.telegram.routes.queryOptions(), enabled }),
+    options = useQuery({ ...orpc.telegram.options.queryOptions(), enabled });
+  const [editing, setEditing] = useState<string | null>(null),
+    [group, setGroup] = useState<keyof typeof types>('intake'),
+    [message, setMessage] = useState('');
+  const save = useMutation(
+    orpc.telegram.saveRoute.mutationOptions({
+      onSuccess: () => {
+        setEditing(null);
+        setMessage('儲存成功，下一個請求立即生效。');
+        void qc.invalidateQueries();
+      },
+      onError: (e) => setMessage(e.message),
+    }),
+  );
+  const test = useMutation(
+    orpc.telegram.testRoute.mutationOptions({
+      onSuccess: (r) => setMessage(r.message),
+      onError: () => setMessage('測試失敗，請查看系統管理日誌。'),
+    }),
+  );
+  if (permissions.isPending) return <p>載入中…</p>;
+  if (!enabled) return <p>無操作權限</p>;
+  const row = routes.data?.find((r) => r.id === editing);
   return (
     <div className="space-y-6">
-      {/* Administrative integration context. */}
-      <div>
-        <h1 className="text-xl font-semibold">Telegram 設定</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          管理授權路由與外收人員身分。模式： {displayLabel(options.data.mode)}
-          。憑證只保存在伺服器。
-        </p>
+      <h1 className="text-2xl font-semibold">Telegram 群組設定</h1>
+      <p className="text-sm text-muted-foreground">
+        回報群直接代表外收人員，不需設定 Telegram 使用者身分。Bot
+        憑證由伺服器管理。
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {Object.entries(types).map(([key, label]) => (
+          <Button
+            key={key}
+            variant={group === key ? 'default' : 'outline'}
+            onClick={() => {
+              setGroup(key as keyof typeof types);
+              setEditing(null);
+            }}
+          >
+            {label}
+          </Button>
+        ))}
       </div>
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
+      {message && <output className="text-sm">{message}</output>}
+      {routes.isPending ? (
+        <p>載入中…</p>
+      ) : routes.isError ? (
+        <p>載入失敗</p>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {routes.data
+            ?.filter((r) => canonical(r.routeType) === group)
+            .map((r) => (
+              <div
+                key={r.id}
+                className="space-y-3 rounded-xl border bg-card p-4"
+              >
+                <div className="font-medium">{r.name || types[group]}</div>
+                <div className="space-y-1 break-all text-sm text-muted-foreground">
+                  <p>
+                    群組 ID：{r.chatId} · Topic：{r.topicId ?? '無'}
+                  </p>
+                  <p>
+                    外收人員：
+                    {options.data?.collectors.find(
+                      (c) => c.id === r.collectorId,
+                    )?.displayName ?? '未綁定'}
+                  </p>
+                  <p>{r.isActive ? '啟用' : '停用'}</p>
+                  <p>建立：{new Date(r.createdAt).toLocaleString('zh-TW')}</p>
+                  <p>更新：{new Date(r.updatedAt).toLocaleString('zh-TW')}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => setEditing(r.id)}>
+                    編輯
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={save.isPending}
+                    onClick={() =>
+                      save.mutate({
+                        id: r.id,
+                        name: r.name,
+                        chatId: r.chatId,
+                        topicId: r.topicId,
+                        collectorId: r.collectorId,
+                        routeType: canonical(r.routeType) as keyof typeof types,
+                        isActive: !r.isActive,
+                      })
+                    }
+                  >
+                    {r.isActive ? '停用' : '啟用'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!r.isActive || test.isPending}
+                    onClick={() => test.mutate({ id: r.id })}
+                  >
+                    測試發送
+                  </Button>
+                </div>
+              </div>
+            ))}
+        </div>
       )}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Route and identity editors. */}
-        <section className="space-y-4 rounded-xl border bg-card p-5">
-          <h2 className="font-semibold">
-            {editingRoute ? '編輯路由' : '新增路由'}
-          </h2>
-          <form
-            key={editingRoute?.id ?? 'new-route'}
-            className="space-y-4"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setError('');
-              const f = new FormData(e.currentTarget);
-              try {
-                await saveRoute.mutateAsync({
-                  id: editingRoute?.id,
-                  chatId: String(f.get('chatId')),
-                  topicId: f.get('topicId') ? Number(f.get('topicId')) : null,
-                  routeType: String(
-                    f.get('routeType'),
-                  ) as RouteRecord['routeType'],
-                  collectorId: String(f.get('collectorId')) || null,
-                  isActive: f.get('active') === 'on',
-                });
-                setEditingRoute(null);
-                await refresh();
-              } catch (e: unknown) {
-                fail(e);
-              }
-            }}
-          >
-            <Field
-              label="Telegram 群組 ID"
-              name="chatId"
-              required
-              defaultValue={editingRoute?.chatId}
-            />
-            <Field
-              label="Telegram 話題 ID（選填）"
-              name="topicId"
-              type="number"
-              defaultValue={editingRoute?.topicId ?? ''}
-            />
-            <Label className="block space-y-2">
-              路由用途
-              <select
-                name="routeType"
-                defaultValue={editingRoute?.routeType ?? 'intake_source'}
-                className="h-9 w-full rounded-lg border bg-background px-3"
-              >
-                <option value="intake_source">收件來源</option>
-                <option value="collector">外收人員</option>
-                <option value="report_destination">業務回報</option>
-              </select>
+      <Button onClick={() => setEditing('new')}>新增路由</Button>
+      {editing && (
+        <form
+          key={editing}
+          className="space-y-4 rounded-xl border bg-card p-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const f = new FormData(e.currentTarget);
+            save.mutate({
+              id: row?.id,
+              name: String(f.get('name')),
+              chatId: String(f.get('chatId')),
+              topicId: f.get('topicId') ? Number(f.get('topicId')) : null,
+              collectorId: String(f.get('collectorId') || '') || null,
+              routeType: group,
+              isActive: f.has('active'),
+            });
+          }}
+        >
+          <h2 className="text-lg font-medium">{types[group]}</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Label>
+              名稱
+              <Input name="name" required defaultValue={row?.name} />
             </Label>
-            <Label className="block space-y-2">
-              外收人員
-              <select
-                name="collectorId"
-                defaultValue={editingRoute?.collectorId ?? ''}
-                className="h-9 w-full rounded-lg border bg-background px-3"
-              >
-                <option value="">未指定外收人員</option>
-                {options.data.collectors.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.displayName}
-                  </option>
-                ))}
-              </select>
+            <Label>
+              群組 ID
+              <Input name="chatId" required defaultValue={row?.chatId} />
             </Label>
-            <Label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                name="active"
-                defaultChecked={editingRoute?.isActive ?? true}
+            <Label>
+              Topic ID（選填）
+              <Input
+                name="topicId"
+                type="number"
+                min={1}
+                defaultValue={row?.topicId ?? ''}
               />
-              路由啟用中
             </Label>
-            <div className="flex gap-2">
-              <Button disabled={busy}>儲存路由</Button>
-              {editingRoute && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setEditingRoute(null)}
-                >
-                  取消
-                </Button>
-              )}
-            </div>
-          </form>
-        </section>
-        <section className="space-y-4 rounded-xl border bg-card p-5">
-          <h2 className="font-semibold">
-            {editingIdentity ? '編輯身分' : '綁定身分'}
-          </h2>
-          <form
-            key={editingIdentity?.id ?? 'new-identity'}
-            className="space-y-4"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setError('');
-              const f = new FormData(e.currentTarget);
-              try {
-                await saveIdentity.mutateAsync({
-                  id: editingIdentity?.id,
-                  telegramUserId: String(f.get('telegramUserId')),
-                  displayName: String(f.get('displayName')) || null,
-                  collectorId: String(f.get('collectorId')) || null,
-                  userId: String(f.get('userId')) || null,
-                  isActive: f.get('active') === 'on',
-                });
-                setEditingIdentity(null);
-                await refresh();
-              } catch (e: unknown) {
-                fail(e);
-              }
-            }}
-          >
-            <Field
-              label="Telegram 使用者 ID"
-              name="telegramUserId"
-              required
-              defaultValue={editingIdentity?.telegramUserId}
-            />
-            <Field
-              label="顯示名稱（選填）"
-              name="displayName"
-              defaultValue={editingIdentity?.displayName ?? ''}
-            />
-            <Label className="block space-y-2">
+            <Label>
               綁定外收人員
               <select
                 name="collectorId"
-                defaultValue={editingIdentity?.collectorId ?? ''}
+                aria-label="綁定外收人員"
+                required={group.startsWith('collector_')}
+                defaultValue={row?.collectorId ?? ''}
                 className="h-9 w-full rounded-lg border bg-background px-3"
               >
                 <option value="">未綁定</option>
-                {options.data.collectors.map((c) => (
+                {options.data?.collectors.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.displayName}
                   </option>
                 ))}
               </select>
             </Label>
-            <Label className="block space-y-2">
-              登入帳號（選填）
-              <select
-                name="userId"
-                defaultValue={editingIdentity?.userId ?? ''}
-                className="h-9 w-full rounded-lg border bg-background px-3"
-              >
-                <option value="">使用外收人員登入帳號</option>
-                {options.data.users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name || u.email}
-                  </option>
-                ))}
-              </select>
-            </Label>
             <Label className="flex items-center gap-2">
               <input
-                type="checkbox"
                 name="active"
-                defaultChecked={editingIdentity?.isActive ?? true}
+                type="checkbox"
+                defaultChecked={row?.isActive ?? true}
               />
-              身分啟用中
+              啟用
             </Label>
-            <div className="flex gap-2">
-              <Button disabled={busy}>儲存身分</Button>
-              {editingIdentity && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setEditingIdentity(null)}
-                >
-                  取消
-                </Button>
-              )}
-            </div>
-          </form>
-        </section>
-      </div>
-      <section className="space-y-3">
-        <h2 className="font-semibold">路由設定</h2>
-        {!routes.data.length && (
-          <p className="text-sm text-muted-foreground">尚未設定路由。</p>
-        )}
-        {routes.data.map((r) => (
-          <div
-            key={r.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4"
-          >
-            <div className="min-w-0 break-all text-sm">
-              {displayLabel(r.routeType)} · {r.chatId}
-              {r.topicId ? ` / Topic ${r.topicId}` : ''}{' '}
-              <Badge variant="secondary">
-                {r.isActive ? '啟用中' : '已停用'}
-              </Badge>
-            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button disabled={save.isPending}>儲存路由</Button>
             <Button
+              type="button"
               variant="outline"
-              size="sm"
-              onClick={() => setEditingRoute(r)}
+              onClick={() => setEditing(null)}
             >
-              編輯路由
+              取消
             </Button>
           </div>
-        ))}
-      </section>
-      <section className="space-y-3">
-        <h2 className="font-semibold">身分綁定</h2>
-        {!identities.data.length && (
-          <p className="text-sm text-muted-foreground">尚未綁定身分。</p>
-        )}
-        {identities.data.map((i) => (
-          <div
-            key={i.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4"
-          >
-            <div className="text-sm">
-              {i.displayName ?? '外收人員'} · {i.telegramUserId}{' '}
-              <Badge variant="secondary">
-                {i.isActive ? '啟用中' : '已停用'}
-              </Badge>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEditingIdentity(i)}
-            >
-              編輯身分
-            </Button>
-          </div>
-        ))}
-      </section>
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-semibold">傳送工作</h2>
-          {options.data.mode === 'fake' && (
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={async () => {
-                try {
-                  await process.mutateAsync({});
-                  await refresh();
-                } catch (e: unknown) {
-                  fail(e);
-                }
-              }}
-            >
-              處理本機工作
-            </Button>
-          )}
-        </div>
-        <p className="text-sm text-muted-foreground">
-          傳送結果不明時需人工核對，系統不會自動重送。
-        </p>
-        {jobs.isError ? (
-          <p role="alert">無法載入工作。</p>
-        ) : (
-          jobs.data?.map((j) => (
-            <div
-              key={j.id}
-              className="flex flex-wrap gap-3 rounded-xl border p-4 text-sm"
-            >
-              <span>{displayLabel(j.messageType)}</span>
-              <Badge variant="secondary">{displayLabel(j.status)}</Badge>
-              <span>{j.attempts} 次嘗試</span>
-              {j.lastErrorCode && <span>{j.lastErrorCode}</span>}
-            </div>
-          ))
-        )}
-        {jobs.data?.length === 0 && (
-          <p className="text-sm text-muted-foreground">暫無傳送工作。</p>
-        )}
-      </section>
+        </form>
+      )}
     </div>
-  );
-}
-function Field(props: {
-  label: string;
-  name: string;
-  required?: boolean;
-  type?: string;
-  defaultValue?: string | number;
-}) {
-  return (
-    <Label className="block space-y-2">
-      {props.label}
-      <Input
-        name={props.name}
-        required={props.required}
-        type={props.type ?? 'text'}
-        defaultValue={props.defaultValue}
-      />
-    </Label>
   );
 }

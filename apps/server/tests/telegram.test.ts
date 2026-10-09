@@ -104,7 +104,7 @@ async function run(client = new FakeTelegramClient(), now = tick()) {
   await processTelegramUpdates(base, client, now);
   // Phase-six transport fixtures now explicitly simulate the phase-seven human button.
   const waiting = await env.DB.prepare(
-    "SELECT r.callback_token FROM reports r JOIN assignments a ON a.id=r.assignment_id JOIN telegram_identities ti ON ti.collector_id=r.collector_id WHERE r.workflow_status='awaiting_status' AND a.unassigned_at IS NULL AND ti.is_active=1",
+    "SELECT r.callback_token FROM reports r JOIN assignments a ON a.id=r.assignment_id WHERE r.workflow_status='awaiting_status' AND r.selected_status IS NULL AND a.unassigned_at IS NULL",
   ).all<{ callback_token: string }>();
   for (const row of waiting.results)
     await receive(
@@ -113,7 +113,7 @@ async function run(client = new FakeTelegramClient(), now = tick()) {
         collectorChat,
         900001,
         row.callback_token,
-        'settled',
+        'unresolved',
       ),
     );
   if (waiting.results.length) await processTelegramUpdates(base, client, now);
@@ -165,7 +165,7 @@ beforeAll(async () => {
   intakeChat = -100900001;
   collectorChat = -100900002;
   await route(intakeChat, 'intake_source');
-  await route(collectorChat, 'collector', collectorId);
+  await route(collectorChat, 'collector_report', collectorId);
   destinationId = await route(-100900003, 'report_destination', null, 77);
   const i = await rpc(
     'telegram.saveIdentity',
@@ -262,6 +262,12 @@ describe('Telegram manual report confirmation', () => {
       ),
     );
     await processTelegramUpdates(base, client, tick());
+    if (status === 'settled') {
+      const payment = reportFixture(++sequence, collectorChat, 900002, c.code);
+      if (payment.message) payment.message.text = '15000';
+      await receive(payment);
+      await processTelegramUpdates(base, client, tick());
+    }
     await receive(
       callbackFixture(
         ++sequence,
@@ -315,7 +321,13 @@ describe('Telegram manual report confirmation', () => {
     const { c, row, client } = await pending();
     const id = ++sequence;
     await receive(
-      callbackFixture(id, collectorChat, 900001, row.callback_token, 'settled'),
+      callbackFixture(
+        id,
+        collectorChat,
+        900001,
+        row.callback_token,
+        'unresolved',
+      ),
     );
     await env.DB.exec(
       "CREATE TRIGGER fail_manual_completion BEFORE UPDATE OF workflow_status ON reports WHEN NEW.workflow_status='completed' BEGIN SELECT RAISE(ABORT,'synthetic completion rollback'); END",
@@ -346,7 +358,7 @@ describe('Telegram manual report confirmation', () => {
           .bind(c.id)
           .first()
       )?.status,
-    ).toBe('settled');
+    ).toBe('unresolved');
     expect(
       (
         await env.DB.prepare(
@@ -363,7 +375,7 @@ describe('Telegram manual report confirmation', () => {
     'monthly',
   ] as const)('persists %s installment setup and creates schedules only after an idempotent confirmation', async (type) => {
     await env.DB.prepare(
-      "UPDATE installment_workflows SET status='cancelled' WHERE telegram_user_id='900001' AND status='active'",
+      "UPDATE installment_workflows SET status='cancelled' WHERE status='active'",
     ).run();
     const { c, row, client } = await pending();
     await receive(
@@ -410,8 +422,6 @@ describe('Telegram manual report confirmation', () => {
       await receive(update);
       await processTelegramUpdates(base, client, tick());
     }
-    expect((await workflow())?.step).toBe('type');
-    await button(type, true);
     expect((await workflow())?.step).toBe('type');
     await button(type);
     if (type === 'deadline') {
@@ -477,7 +487,7 @@ describe('Telegram manual report confirmation', () => {
       )?.n,
     ).toBe(1);
   });
-  it('rejects another sender, malformed token, wrong source topic and an ended assignment', async () => {
+  it('rejects malformed token, wrong source topic and an ended assignment', async () => {
     const { row, client } = await pending();
     const bad = [
       callbackFixture(
@@ -485,13 +495,6 @@ describe('Telegram manual report confirmation', () => {
         collectorChat,
         900002,
         row.callback_token,
-        'settled',
-      ),
-      callbackFixture(
-        ++sequence,
-        collectorChat,
-        900001,
-        '0'.repeat(32),
         'settled',
       ),
       callbackFixture(
@@ -755,7 +758,7 @@ describe('Telegram local integration', () => {
       .all<{ id: string; status: string; source: string }>();
     expect(reports.results).toHaveLength(1);
     expect(reports.results[0]).toMatchObject({
-      status: 'settled',
+      status: 'unresolved',
       source: 'telegram',
     });
     const jobs = await env.DB.prepare(
@@ -778,9 +781,9 @@ describe('Telegram local integration', () => {
           .bind(c.id)
           .first<{ status: string }>()
       )?.status,
-    ).toBe('settled');
+    ).toBe('unresolved');
   });
-  it('cannot report another collector case and denies unbound Telegram user', async () => {
+  it('cannot report another collector case regardless of sender identity', async () => {
     const c = await createCase(
       `他人-${crypto.randomUUID()}`,
       crypto.randomUUID(),
@@ -789,7 +792,7 @@ describe('Telegram local integration', () => {
     await receive(reportFixture(600011, collectorChat, 999999, c.caseNo));
     await run();
     expect((await updateRow(600010))?.result_code).toBe('CASE_DENIED');
-    expect((await updateRow(600011))?.result_code).toBe('IDENTITY_DENIED');
+    expect((await updateRow(600011))?.result_code).toBe('CASE_DENIED');
     expect((await updateRow(600010))?.report_id).toBeNull();
   });
   it('two same-name assigned cases return ambiguity, with no sensitive fields or report', async () => {
@@ -1019,7 +1022,7 @@ describe('Telegram local integration', () => {
       .run();
     await run(new FakeTelegramClient(), tick() + 10000);
     const row = await updateRow(600018);
-    expect(row?.result_code).toBe('REPORT_PENDING');
+    expect(row?.result_code).toBe('REPORT_ALREADY_COMPLETED');
     expect(
       (
         await env.DB.prepare(
@@ -1110,7 +1113,7 @@ describe('Telegram local integration', () => {
         .first(),
     ).toMatchObject({ status: 'failed', last_error_code: 'DELIVERY_UNKNOWN' });
   });
-  it('inactive identity and forged sender chat cannot create reports', async () => {
+  it('legacy identity is ignored and sender-chat members use the configured route', async () => {
     const c = await assignedCase();
     await env.DB.prepare(
       'UPDATE telegram_identities SET is_active=0 WHERE telegram_user_id=?',
@@ -1120,7 +1123,7 @@ describe('Telegram local integration', () => {
     try {
       await receive(reportFixture(600022, collectorChat, 900001, c.code));
       await run();
-      expect((await updateRow(600022))?.result_code).toBe('IDENTITY_DENIED');
+      expect((await updateRow(600022))?.result_code).toBe('REPORT_PENDING');
     } finally {
       await env.DB.prepare(
         'UPDATE telegram_identities SET is_active=1 WHERE telegram_user_id=?',
@@ -1132,7 +1135,7 @@ describe('Telegram local integration', () => {
     if (update.message) update.message.sender_chat = { id: collectorChat };
     await receive(update);
     await run();
-    expect((await updateRow(600023))?.result_code).toBe('IDENTITY_DENIED');
+    expect((await updateRow(600023))?.result_code).toBe('REPORT_PENDING');
   });
   it('records audit events without credentials or private bytes', async () => {
     const audits = await env.DB.prepare(
@@ -1146,7 +1149,6 @@ describe('Telegram local integration', () => {
       'telegram.album_finalized',
       'telegram.report_created',
       'telegram.report_lookup_ambiguous',
-      'telegram.identity_denied',
       'report.outbound_queued',
       'report.outbound_sent',
       'report.outbound_failed',

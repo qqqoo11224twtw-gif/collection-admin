@@ -22,7 +22,7 @@ import {
   type TelegramUpdate,
 } from './telegram-contract';
 import { queueTelegramMessage } from './telegram-outbound';
-import { telegramPrincipal } from './telegram-principal';
+import { reportRoutePrincipal } from './telegram-report-principal';
 
 const dataSchema = z
   .object({
@@ -43,13 +43,8 @@ async function authorized(
   update: TelegramUpdate,
   route: Route,
 ) {
-  const from = update.callback_query?.from ?? update.message?.from,
-    message = update.callback_query?.message ?? update.message;
+  const message = update.callback_query?.message ?? update.message;
   if (
-    !from ||
-    from.is_bot ||
-    message?.sender_chat ||
-    row.telegramUserId !== String(from.id) ||
     row.routeId !== route.id ||
     route.chatId !== String(message?.chat.id) ||
     route.topicId !== (message?.message_thread_id ?? null) ||
@@ -62,7 +57,7 @@ async function authorized(
     .bind(row.id)
     .first();
   if (!valid) throw new ORPCError('FORBIDDEN');
-  const context = await telegramPrincipal(base, row.userId, true);
+  const context = await reportRoutePrincipal(base, route, update);
   await requireCaseAccess(context, row.caseId, 'installment.create');
   return context;
 }
@@ -205,7 +200,7 @@ export async function ensureInstallmentWorkflow(
   const id = crypto.randomUUID();
   await context.env.DB.batch([
     context.env.DB.prepare(
-      "INSERT INTO installment_workflows(id,token,case_id,report_id,assignment_id,collector_id,user_id,telegram_user_id,route_id,step,data,status,expires_at,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,'type','{}','active',?,?,? WHERE EXISTS(SELECT 1 FROM assignments WHERE id=? AND unassigned_at IS NULL) ON CONFLICT DO NOTHING",
+      "INSERT INTO installment_workflows(id,token,case_id,report_id,assignment_id,collector_id,user_id,telegram_user_id,route_id,step,data,status,expires_at,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,'type','{}','active',?,?,? WHERE EXISTS(SELECT 1 FROM assignments WHERE id=? AND unassigned_at IS NULL) AND NOT EXISTS(SELECT 1 FROM reports WHERE callback_route_id=? AND workflow_status='awaiting_status' AND selected_status='settled') ON CONFLICT DO NOTHING",
     ).bind(
       id,
       crypto.randomUUID().replaceAll('-', ''),
@@ -220,6 +215,7 @@ export async function ensureInstallmentWorkflow(
       now,
       now,
       report.assignment_id,
+      route.id,
     ),
     financeAudit(context, report.case_id, 'installment.workflow_started', id, {
       sql: 'EXISTS(SELECT 1 FROM installment_workflows WHERE id=?)',
@@ -235,7 +231,7 @@ export async function ensureInstallmentWorkflow(
       context,
       route,
       `installment-busy:${reportId}`,
-      '您有未完成的分期設定，請先完成或取消，再點選此回報的分期按鈕。',
+      '此群組有未完成的收款或分期設定，請先完成，再點選此回報的分期按鈕。',
       reportId,
       { commandReply: true },
     );
@@ -246,8 +242,7 @@ export async function processInstallmentUpdate(
   route: Route,
   client: TelegramClient,
 ) {
-  const callback = update.callback_query,
-    from = callback?.from ?? update.message?.from;
+  const callback = update.callback_query;
   const match =
     /^ip:([a-f0-9]{32}):(\d{1,8}):(deadline|weekly|monthly|week[1-7]|day(?:5|10|15|20|25)|custom|confirm|cancel)$/.exec(
       callback?.data ?? '',
@@ -258,7 +253,7 @@ export async function processInstallmentUpdate(
         .where(eq(installmentWorkflows.token, match[1]))
     : await base.DB.select()
         .from(installmentWorkflows)
-        .where(eq(installmentWorkflows.telegramUserId, String(from?.id)))
+        .where(eq(installmentWorkflows.routeId, route.id))
         .then((rows) =>
           rows.filter((r) => r.routeId === route.id && r.status === 'active'),
         );

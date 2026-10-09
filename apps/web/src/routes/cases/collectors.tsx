@@ -11,7 +11,7 @@ import {
 import { Input } from '@saasflare-dev/ui/components/input';
 import { Label } from '@saasflare-dev/ui/components/label';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { displayError } from '~/components/cases/display-labels';
 import { DialogContent } from '~/components/cases/localized-dialog';
@@ -64,7 +64,7 @@ function CollectorEditor({ record }: { record?: Collector }) {
         <DialogHeader>
           <DialogTitle>{record ? '編輯外收人員' : '新增外收人員'}</DialogTitle>
           <DialogDescription>
-            綁定登入帳號後可查看指派案件，通訊身分另行管理。
+            綁定登入帳號後可查看指派案件。Telegram 回報身份由回報群決定。
           </DialogDescription>
         </DialogHeader>
         {open && (
@@ -167,6 +167,10 @@ function CollectorsPage() {
     enabled: permissions.can('collector.manage'),
   });
   const toggle = useMutation(orpc.collectors.edit.mutationOptions());
+  const routes = useQuery({
+    ...orpc.telegram.routes.queryOptions(),
+    enabled: permissions.can('telegram_route.manage'),
+  });
   if (permissions.isPending) return <LoadingCases />;
   if (!permissions.can('collector.manage'))
     return (
@@ -219,6 +223,37 @@ function CollectorsPage() {
               <p className="mt-4 text-sm text-muted-foreground">
                 {record.userId ? '已綁定登入帳號' : '未綁定登入帳號'}
               </p>
+              {permissions.can('telegram_route.manage') && (
+                <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                  {[
+                    ['collector_dispatch', '收單群'],
+                    ['collector_report', '回報群'],
+                  ].map(([type, label]) => {
+                    const route = routes.data?.find(
+                      (r) =>
+                        r.collectorId === record.id &&
+                        r.isActive &&
+                        (r.routeType === type ||
+                          (type === 'collector_dispatch' &&
+                            r.routeType === 'collector')),
+                    );
+                    return (
+                      <p key={type}>
+                        {label}：
+                        {route
+                          ? `${route.name || label} · ${route.chatId} / Topic ${route.topicId ?? '無'}`
+                          : '尚未設定'}
+                      </p>
+                    );
+                  })}
+                  <Link
+                    to="/cases/telegram"
+                    className="text-foreground underline"
+                  >
+                    管理 Telegram 群組
+                  </Link>
+                </div>
+              )}
               <div className="mt-4 flex gap-2">
                 <CollectorEditor record={record} />
                 <Button

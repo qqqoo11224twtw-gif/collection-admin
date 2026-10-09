@@ -30,6 +30,10 @@ coverage/
 # cloudflare
 .wrangler/
 .dev.vars
+.dev.vars.*
+!.dev.vars.*.example
+apps/server/wrangler.staging.jsonc
+apps/web/wrangler.staging.jsonc
 
 coverage/
 

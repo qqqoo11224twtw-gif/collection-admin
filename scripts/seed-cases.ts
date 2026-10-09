@@ -13,6 +13,19 @@ function literal(value: string | number | null) {
       : `'${value.replaceAll("'", "''")}'`;
 }
 const statements = [
+  ...[
+    'admin@example.test',
+    'phase2-admin@example.test',
+    'phase3-admin@example.test',
+    'phase4-admin@example.test',
+    'phase5-admin@example.test',
+    'phase6-admin@example.test',
+    'phase7-admin@example.test',
+    'phase8-admin@example.test',
+  ].map(
+    (email) =>
+      `INSERT INTO user(id,name,email,email_verified,role,created_at,updated_at) VALUES (${literal(`local-${email}`)},'虛構測試管理員',${literal(email)},0,'admin',1790841600000,1790841600000) ON CONFLICT(email) DO NOTHING;`,
+  ),
   `INSERT INTO user (id, name, email, email_verified, role, created_at, updated_at) VALUES ('${DEMO_AGENT_ID}', 'Demo Agent', 'agent@example.test', 0, 'user', 1790841600000, 1790841600000) ON CONFLICT DO NOTHING;`,
   ...DEMO_CASES.map(
     (record) =>

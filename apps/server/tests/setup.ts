@@ -5,6 +5,7 @@ declare module 'cloudflare:workers' {
   namespace Cloudflare {
     interface Env {
       TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1];
+      MIGRATION_DB: D1Database;
     }
   }
 }

@@ -284,8 +284,9 @@ describe('Bulk assignment transactions and individual Telegram delivery', () => 
       { cookie: admin },
     );
     expect((await bulk([c.id], crypto.randomUUID(), missing)).status).toBe(400);
-    for (const chat of ['-1008888112', '-1008888113'])
-      await rpc(
+    let activeId = '';
+    for (const chat of ['-1008888112', '-1008888113']) {
+      const result = await rpc(
         'telegram.saveRoute',
         {
           collectorId: missing,
@@ -295,6 +296,12 @@ describe('Bulk assignment transactions and individual Telegram delivery', () => 
         },
         { cookie: admin },
       );
+      expect(result.status).toBe(activeId ? 409 : 200);
+      if (result.status === 200) activeId = (result.body as { id: string }).id;
+    }
+    await env.DB.prepare('UPDATE telegram_routes SET is_active=0 WHERE id=?')
+      .bind(activeId)
+      .run();
     expect((await bulk([c.id], crypto.randomUUID(), missing)).status).toBe(400);
     expect(await count('assignments', c.id)).toBe(0);
   });

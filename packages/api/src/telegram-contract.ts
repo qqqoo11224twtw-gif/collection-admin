@@ -59,10 +59,19 @@ export function albumKey(update: TelegramUpdate) {
 export const routeSchema = z
   .object({
     id: z.string().optional(),
+    name: z.string().trim().max(120).default(''),
     collectorId: z.string().nullable().default(null),
     chatId: z.string().regex(/^-?[1-9]\d{0,15}$/),
     topicId: z.number().int().positive().nullable().default(null),
-    routeType: z.enum(['collector', 'report_destination', 'intake_source']),
+    routeType: z.enum([
+      'intake',
+      'collector_dispatch',
+      'collector_report',
+      'business_report',
+      'collector',
+      'report_destination',
+      'intake_source',
+    ]),
     isActive: z.boolean().default(true),
   })
   .strict();

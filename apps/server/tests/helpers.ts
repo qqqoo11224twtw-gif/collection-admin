@@ -38,6 +38,7 @@ export function sendOtp(email: string) {
  * value `<otp>:<attempts>`).
  */
 export async function signIn(email: string): Promise<string> {
+  await provisionUser(email);
   const send = await sendOtp(email);
   if (send.status !== 200) throw new Error(`send otp failed ${send.status}`);
 
@@ -59,6 +60,25 @@ export async function signIn(email: string): Promise<string> {
   const cookies = res.headers.getSetCookie();
   if (cookies.length === 0) throw new Error('no session cookie set');
   return cookies.map((c) => c.split(';')[0]).join('; ');
+}
+export async function provisionUser(email: string) {
+  email = email.trim().toLowerCase();
+  const now = Date.now();
+  const admin = (env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .some((value) => value.trim().toLowerCase() === email);
+  await env.DB.prepare(
+    'INSERT INTO user(id,name,email,email_verified,role,created_at,updated_at) VALUES(?,?,?,0,?,?,?) ON CONFLICT(email) DO NOTHING',
+  )
+    .bind(
+      crypto.randomUUID(),
+      'Fictional test user',
+      email,
+      admin ? 'admin' : 'user',
+      now,
+      now,
+    )
+    .run();
 }
 
 let cachedUserCookie: Promise<string> | null = null;

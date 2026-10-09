@@ -55,7 +55,7 @@ export function ConfigNotice({ status }: { status: ConfigStatus | undefined }) {
             {emailVars.length > 0 && status.mode === 'local' && (
               <span>
                 未設定寄信服務（{emailVars.join(' / ')}
-                ）：登入驗證碼會顯示於伺服器主控台及 /api/dev/otp。
+                ）：本機測試驗證碼可從 /api/dev/otp 取得，不寫入日誌。
               </span>
             )}
             <span>

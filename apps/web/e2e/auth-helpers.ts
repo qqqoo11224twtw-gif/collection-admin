@@ -1,3 +1,6 @@
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { expect, type Page } from '@playwright/test';
 
 /**
@@ -39,6 +42,43 @@ export async function fillUntilEnabled(
 
 /** Complete the two-step email OTP login through the real UI. */
 export async function signIn(page: Page, email = USER_EMAIL): Promise<void> {
+  if (!isRemote) {
+    const dir = new URL('../../server/.wrangler/', import.meta.url);
+    mkdirSync(dir, { recursive: true });
+    const safe = email.replaceAll("'", "''");
+    const now = Date.now();
+    const admin = /^(admin|phase[2-8]-admin)@example\.test$/.test(email);
+    writeFileSync(
+      new URL('e2e-user.sql', dir),
+      `INSERT INTO user(id,name,email,email_verified,role,created_at,updated_at) VALUES ('${crypto.randomUUID()}','虛構測試帳號','${safe}',0,'${admin ? 'admin' : 'user'}',${now},${now}) ON CONFLICT(email) DO NOTHING;`,
+    );
+    await expect(async () =>
+      execFileSync(
+        process.execPath,
+        [
+          fileURLToPath(
+            new URL(
+              '../../../node_modules/wrangler/bin/wrangler.js',
+              import.meta.url,
+            ),
+          ),
+          'd1',
+          'execute',
+          'starter-local-db',
+          '--local',
+          '--config',
+          'wrangler.local.jsonc',
+          '--file',
+          '.wrangler/e2e-user.sql',
+        ],
+        {
+          cwd: fileURLToPath(new URL('../../server/', import.meta.url)),
+          stdio: 'pipe',
+          windowsHide: true,
+        },
+      ),
+    ).toPass({ timeout: 10000, intervals: [250, 500, 1000] });
+  }
   // Keep any ?redirect=... the gate put there — only navigate if needed.
   if (!page.url().includes('/login')) await page.goto('/login');
   await fillUntilEnabled(page, 'you@example.com', email, /寄送驗證碼/i);
@@ -61,4 +101,5 @@ export async function signIn(page: Page, email = USER_EMAIL): Promise<void> {
 
   // Typing the 6th digit auto-submits — no button click needed.
   await otpInput.fill(otp);
+  await expect(page).not.toHaveURL(/\/login(?:\?|$)/);
 }

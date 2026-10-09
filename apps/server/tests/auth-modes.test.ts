@@ -26,7 +26,7 @@ async function userRole(email: string): Promise<string | null> {
 }
 
 describe('open mode (the default)', () => {
-  it('lets any email sign up via OTP, as a plain user', async () => {
+  it('allows pre-provisioned active users to sign in', async () => {
     const email = 'stranger@example.com';
     const cookie = await signIn(email);
     expect(cookie).toContain('better-auth');
@@ -45,7 +45,7 @@ describe('open mode (the default)', () => {
     expect(await userRole('boss@test.dev')).toBe('admin');
   });
 
-  it('promotes an existing user when their email is added to ADMIN_EMAILS later, and never auto-demotes', async () => {
+  it('does not change provisioned roles when ADMIN_EMAILS changes', async () => {
     const email = 'late-admin@test.dev';
     const cookie = await signIn(email);
     expect(await userRole(email)).toBe('user');
@@ -55,12 +55,12 @@ describe('open mode (the default)', () => {
       testEnv.ADMIN_EMAILS = `${original},${email}`;
       // Any session resolution applies the promotion-only sync.
       await rpc('config.status', undefined, { cookie });
-      expect(await userRole(email)).toBe('admin');
+      expect(await userRole(email)).toBe('user');
 
       // Removing the email from the whitelist must NOT demote.
       testEnv.ADMIN_EMAILS = original;
       await rpc('config.status', undefined, { cookie });
-      expect(await userRole(email)).toBe('admin');
+      expect(await userRole(email)).toBe('user');
     } finally {
       testEnv.ADMIN_EMAILS = original;
     }
@@ -90,7 +90,7 @@ describe('admin-only mode', () => {
     const res = await sendOtp(email);
     expect(res.status).toBe(403);
     const body = (await res.json()) as { code?: string };
-    expect(body.code).toBe('EMAIL_NOT_ADMIN');
+    expect(body.code).toBe('EMAIL_NOT_ALLOWED');
 
     // The gate runs BEFORE better-auth: a denied email must leave no rows.
     const { results } = await env.DB.prepare(

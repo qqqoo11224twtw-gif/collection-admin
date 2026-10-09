@@ -1,6 +1,7 @@
 import { ORPCError } from '@orpc/server';
 import { assignments, auditLogs, collectors, user } from '@saasflare-dev/db';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { queueAssignmentDispatch } from './assignment-outbound';
 import { atomicCaseWrite, auditStatement } from './audit';
 import { requireCaseAccess } from './case-access';
 import {
@@ -14,6 +15,7 @@ import {
 import { generateCaseNumber } from './case-number';
 import { protectedProcedure } from './middleware';
 import { requirePermission } from './permissions';
+import { systemLog } from './system-log';
 
 export const caseManagementApi = {
   create: protectedProcedure
@@ -210,12 +212,13 @@ export const caseManagementApi = {
       const close = context.env.DB.prepare(
         'UPDATE assignments SET unassigned_at=? WHERE case_id=? AND unassigned_at IS NULL AND EXISTS (SELECT 1 FROM cases WHERE id=? AND write_token=?)',
       ).bind(now, input.caseId, input.caseId, token);
+      const assignmentId = crypto.randomUUID();
       const next = input.collectorId
         ? [
             context.env.DB.prepare(
               'INSERT INTO assignments (id,case_id,collector_id,assigned_by_user_id,assigned_at,note) SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM cases WHERE id=? AND write_token=?)',
             ).bind(
-              crypto.randomUUID(),
+              assignmentId,
               input.caseId,
               input.collectorId,
               actor.id,
@@ -248,6 +251,20 @@ export const caseManagementApi = {
           token,
         ),
       ]);
+      if (input.collectorId)
+        try {
+          await queueAssignmentDispatch(context, assignmentId);
+        } catch {
+          await systemLog(context.env.DB, {
+            category: 'outbound',
+            event: 'DISPATCH_QUEUE_FAILED',
+            level: 'error',
+            status: 'failed',
+            relatedCaseId: input.caseId,
+            relatedCollectorId: input.collectorId,
+            errorCode: 'DISPATCH_QUEUE_FAILED',
+          });
+        }
       return { id: input.caseId, version: input.expectedVersion + 1 };
     }),
   assignments: protectedProcedure

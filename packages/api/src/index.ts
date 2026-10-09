@@ -14,10 +14,14 @@ import { planetApi } from './planet';
 import { caseLookupApi, reportsApi } from './reports';
 import { reviewsApi } from './reviews';
 import { storageApi } from './storage';
+import { systemLogsApi } from './system-logs';
 import { telegramApi } from './telegram';
 import { todosApi } from './todos';
+import { usersApi } from './user-management';
 
 export const appRouter = {
+  users: usersApi,
+  systemLogs: systemLogsApi,
   cases: {
     ...casesApi,
     ...caseManagementApi,

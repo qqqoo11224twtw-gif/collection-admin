@@ -179,6 +179,7 @@ function IntakeDetail() {
           </p>
         ))}
         {!terminal &&
+          row.source === 'telegram' &&
           row.status !== 'needs_review' &&
           row.media.length > 0 &&
           permissions.can('intake.resolve') && (

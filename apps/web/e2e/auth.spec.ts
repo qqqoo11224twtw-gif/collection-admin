@@ -3,14 +3,16 @@ import { APP_DISPLAY_NAME } from '../src/lib/brand';
 import { isRemote, signIn, USER_EMAIL } from './auth-helpers';
 
 /**
- * The open-mode sign-up/sign-in story through the real UI. Local-only: the
+ * The provisioned-account sign-in story through the real UI. Local-only: the
  * flows read the OTP back from the dev-only endpoint.
  */
 
 test.describe('Auth (open mode)', () => {
   test.skip(isRemote, 'sign-in E2E needs the local dev OTP endpoint');
 
-  test('any email signs up via OTP and lands back home', async ({ page }) => {
+  test('allowlisted email signs in via OTP and lands back home', async ({
+    page,
+  }) => {
     await page.goto('/');
     await page.getByRole('link', { name: /登入/i }).click();
     await expect(page).toHaveURL(/\/login/);

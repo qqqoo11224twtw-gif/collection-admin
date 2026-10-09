@@ -50,6 +50,7 @@ export function renderAssignment(input: {
 }
 async function batchRecord(context: Context, id: string) {
   const actor = requirePermission(context, 'assignment.create');
+  requirePermission(context, 'assignment.bulk');
   const [batch] = await context.DB.select()
     .from(bulkAssignments)
     .where(
@@ -128,6 +129,7 @@ export async function createBulkAssignment(context: Context, raw: BulkInput) {
   const input = bulkAssignmentSchema.parse(raw);
   input.caseIds.sort();
   const actor = requirePermission(context, 'assignment.create');
+  requirePermission(context, 'assignment.bulk');
   const request = JSON.stringify({
     collectorId: input.collectorId,
     caseIds: [...input.caseIds].sort(),
@@ -155,7 +157,7 @@ export async function createBulkAssignment(context: Context, raw: BulkInput) {
       .where(
         and(
           eq(telegramRoutes.collectorId, input.collectorId),
-          eq(telegramRoutes.routeType, 'collector'),
+          sql`${telegramRoutes.routeType} IN ('collector','collector_dispatch')`,
           eq(telegramRoutes.isActive, true),
         ),
       );
@@ -169,7 +171,7 @@ export async function createBulkAssignment(context: Context, raw: BulkInput) {
     // The insertion guard also checks mutable collector/route state inside the transaction.
     await context.env.DB.batch([
       context.env.DB.prepare(
-        "INSERT INTO bulk_assignments(id,created_by_user_id,collector_id,route_id,request,created_at) SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM collectors c JOIN telegram_routes r ON r.collector_id=c.id WHERE c.id=? AND c.is_active=1 AND r.id=? AND r.is_active=1 AND r.route_type='collector') ON CONFLICT(id) DO NOTHING",
+        "INSERT INTO bulk_assignments(id,created_by_user_id,collector_id,route_id,request,created_at) SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM collectors c JOIN telegram_routes r ON r.collector_id=c.id WHERE c.id=? AND c.is_active=1 AND r.id=? AND r.is_active=1 AND r.route_type IN ('collector','collector_dispatch')) ON CONFLICT(id) DO NOTHING",
       ).bind(
         input.batchId,
         actor.id,
@@ -237,7 +239,7 @@ export async function createBulkAssignment(context: Context, raw: BulkInput) {
     if (
       !route?.isActive ||
       route.collectorId !== input.collectorId ||
-      route.routeType !== 'collector'
+      !['collector', 'collector_dispatch'].includes(route.routeType)
     ) {
       await finishItem(context, item.id, 'skipped', 'ROUTE_UNAVAILABLE');
       continue;
@@ -263,7 +265,7 @@ export async function createBulkAssignment(context: Context, raw: BulkInput) {
     try {
       const results = await context.env.DB.batch([
         context.env.DB.prepare(
-          `UPDATE cases SET assigned_agent_id=(SELECT user_id FROM collectors WHERE id=?),updated_at=?,version=version+1,write_token=? WHERE id=? AND version=? AND NOT EXISTS(SELECT 1 FROM assignments WHERE case_id=cases.id AND unassigned_at IS NULL) AND EXISTS(SELECT 1 FROM bulk_assignment_items WHERE id=? AND status='pending') AND EXISTS(SELECT 1 FROM collectors c JOIN telegram_routes r ON r.collector_id=c.id WHERE c.id=? AND c.is_active=1 AND r.id=? AND r.is_active=1 AND r.route_type='collector' AND r.chat_id=? AND coalesce(r.topic_id,0)=? AND (SELECT count(*) FROM telegram_routes WHERE collector_id=c.id AND route_type='collector' AND is_active=1)=1) AND EXISTS(SELECT 1 FROM user WHERE id=? AND role=? AND (banned IS NULL OR banned=0 OR ban_expires<=?))${scope}`,
+          `UPDATE cases SET assigned_agent_id=(SELECT user_id FROM collectors WHERE id=?),updated_at=?,version=version+1,write_token=? WHERE id=? AND version=? AND NOT EXISTS(SELECT 1 FROM assignments WHERE case_id=cases.id AND unassigned_at IS NULL) AND EXISTS(SELECT 1 FROM bulk_assignment_items WHERE id=? AND status='pending') AND EXISTS(SELECT 1 FROM collectors c JOIN telegram_routes r ON r.collector_id=c.id WHERE c.id=? AND c.is_active=1 AND r.id=? AND r.is_active=1 AND r.route_type IN ('collector','collector_dispatch') AND r.chat_id=? AND coalesce(r.topic_id,0)=? AND (SELECT count(*) FROM telegram_routes WHERE collector_id=c.id AND route_type IN ('collector','collector_dispatch') AND is_active=1)=1) AND EXISTS(SELECT 1 FROM user WHERE id=? AND role=? AND (banned IS NULL OR banned=0 OR ban_expires<=?))${scope}`,
         ).bind(
           input.collectorId,
           now,
@@ -362,11 +364,12 @@ export const bulkAssignmentApi = {
     ),
   bulkAssignmentCollectors: protectedProcedure.handler(async ({ context }) => {
     requirePermission(context, 'assignment.create');
+    requirePermission(context, 'assignment.bulk');
     return context.DB.select({
       id: collectors.id,
       displayName: collectors.displayName,
       code: collectors.code,
-      routeCount: sql<number>`(SELECT count(*) FROM telegram_routes WHERE collector_id=collectors.id AND route_type='collector' AND is_active=1)`,
+      routeCount: sql<number>`(SELECT count(*) FROM telegram_routes WHERE collector_id=collectors.id AND route_type IN ('collector','collector_dispatch') AND is_active=1)`,
     })
       .from(collectors)
       .where(eq(collectors.isActive, true))

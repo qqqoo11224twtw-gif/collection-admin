@@ -5,10 +5,12 @@ import { Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSession } from '~/lib/auth';
 import { orpc } from '~/lib/orpc';
+import { useCasePermissions } from './management-hooks';
 
 export function GlobalCaseSearch() {
   const { data: session } = useSession();
-  return session ? (
+  const permissions = useCasePermissions();
+  return session && permissions.can('case.search') ? (
     <SearchBar key={session.user.id} userId={session.user.id} />
   ) : null;
 }

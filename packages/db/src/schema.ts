@@ -24,6 +24,10 @@ export const user = sqliteTable('user', {
   image: text('image'),
   // admin plugin
   role: text('role'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  permissionAllow: text('permission_allow').notNull().default('[]'),
+  permissionDeny: text('permission_deny').notNull().default('[]'),
+  permissionVersion: integer('permission_version').notNull().default(0),
   banned: integer('banned', { mode: 'boolean' }),
   banReason: text('ban_reason'),
   banExpires: integer('ban_expires', { mode: 'timestamp_ms' }),
@@ -124,6 +128,43 @@ export const rateLimit = sqliteTable('rate_limit', {
   count: integer('count').notNull(),
   lastRequest: integer('last_request').notNull(),
 });
+
+export const systemLogs = sqliteTable(
+  'system_logs',
+  {
+    id: text('id').primaryKey(),
+    timestamp: integer('timestamp', { mode: 'timestamp_ms' }).notNull(),
+    level: text('level', {
+      enum: ['info', 'warning', 'error', 'critical'],
+    }).notNull(),
+    category: text('category').notNull(),
+    event: text('event').notNull(),
+    status: text('status').notNull(),
+    safeMessage: text('safe_message').notNull(),
+    relatedCaseId: text('related_case_id'),
+    relatedCollectorId: text('related_collector_id'),
+    relatedJobId: text('related_job_id'),
+    relatedRouteId: text('related_route_id'),
+    relatedUserId: text('related_user_id'),
+    correlationId: text('correlation_id').notNull(),
+    durationMs: integer('duration_ms'),
+    retryCount: integer('retry_count'),
+    errorCode: text('error_code'),
+    handledStatus: text('handled_status', {
+      enum: ['pending', 'acknowledged', 'resolved'],
+    })
+      .notNull()
+      .default('pending'),
+    handledBy: text('handled_by').references(() => user.id),
+    handledAt: integer('handled_at', { mode: 'timestamp_ms' }),
+    note: text('note'),
+  },
+  (t) => [
+    index('system_logs_time_idx').on(t.timestamp),
+    index('system_logs_filter_idx').on(t.category, t.level, t.timestamp),
+    index('system_logs_case_idx').on(t.relatedCaseId),
+  ],
+);
 
 // ─── Demo data (playground) ───
 // Todos are per-user private data: the API layer (protectedProcedure) scopes
@@ -677,6 +718,10 @@ export const intakeMedia = sqliteTable(
 );
 
 export const TELEGRAM_ROUTE_TYPES = [
+  'intake',
+  'collector_dispatch',
+  'collector_report',
+  'business_report',
   'collector',
   'report_destination',
   'intake_source',
@@ -685,6 +730,7 @@ export const telegramRoutes = sqliteTable(
   'telegram_routes',
   {
     id: text('id').primaryKey(),
+    name: text('name').notNull().default(''),
     collectorId: text('collector_id').references(() => collectors.id, {
       onDelete: 'restrict',
     }),
@@ -706,7 +752,7 @@ export const telegramRoutes = sqliteTable(
     ),
     check(
       'telegram_route_type_check',
-      sql`${t.routeType} IN ('collector','report_destination','intake_source')`,
+      sql`${t.routeType} IN ('collector','report_destination','intake_source','intake','collector_dispatch','collector_report','business_report')`,
     ),
     check(
       'telegram_route_topic_check',
