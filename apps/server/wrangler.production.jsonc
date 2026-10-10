@@ -1,0 +1,41 @@
+// Production API source of truth. Secrets are managed in Worker Secrets.
+// Deploy explicitly with: wrangler deploy --config apps/server/wrangler.production.jsonc
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "account_id": "b40151c62acbc2316d833cb980dac6f5",
+  "name": "collection-admin-production-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "AUTH_MODE": "open",
+    "ACCOUNT_AUTH_MODE": "managed",
+    "ACCOUNT_TOTP_KEY_VERSION": "v1",
+    "SERVER_URL": "https://api.kpirich.bid",
+    "CORS_ORIGIN": "https://admin.kpirich.bid",
+    "CASE_STORAGE_MODE": "r2",
+    "TELEGRAM_MODE": "live",
+    "BUSINESS_TIMEZONE": "Asia/Taipei",
+    "IMAGE_EXTRACTION_MODE": "disabled"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "collection-admin-production-db",
+      "database_id": "16b9cba4-9223-4cea-b969-5cc3dfe25872",
+      "migrations_dir": "../../packages/db/migrations"
+    }
+  ],
+  "kv_namespaces": [
+    { "binding": "KV", "id": "5438169d3d0d4c8cb18b41056e0dad70" }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "CASE_BUCKET",
+      "bucket_name": "collection-admin-production-private-media"
+    }
+  ],
+  "triggers": { "crons": ["* * * * *"] }
+}
