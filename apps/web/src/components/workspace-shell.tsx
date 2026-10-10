@@ -5,7 +5,7 @@ import {
   SheetDescription,
   SheetTitle,
 } from '@saasflare-dev/ui/components/sheet';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import {
   CalendarClock,
@@ -21,10 +21,12 @@ import { AuthGate } from '~/components/auth-gate';
 import { BrandLogo } from '~/components/brand-logo';
 import { GlobalCaseSearch } from '~/components/cases/global-search';
 import { useCasePermissions } from '~/components/cases/management-hooks';
-import { signOut, useSession } from '~/lib/auth';
+import { useSession } from '~/lib/auth';
+import { accountRequest } from '~/lib/managed-auth';
 import { orpc } from '~/lib/orpc';
 
 export function WorkspaceShell({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const permissions = useCasePermissions();
   const { data: session } = useSession();
   const viewer = useQuery({
@@ -102,8 +104,12 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
       visible: permissions.can('system_log.view'),
     },
   ].filter((item) => item.visible);
-  const logout = () =>
-    void signOut().then(() => navigate({ to: '/login', reloadDocument: true }));
+  const logout = async () => {
+    await accountRequest('sign-out', {});
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await navigate({ to: '/login', reloadDocument: true });
+  };
   const links = items.map((item) => (
     <Link
       key={item.to}

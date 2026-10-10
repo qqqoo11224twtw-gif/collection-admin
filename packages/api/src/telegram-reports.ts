@@ -15,6 +15,7 @@ import {
 } from './telegram-outbound';
 import { expireReportConversations } from './telegram-report-expiry';
 import {
+  acknowledgeReportExpiry,
   notifyExpiredReportCallback,
   REPORT_EXPIRED_TEXT,
 } from './telegram-report-feedback';
@@ -603,17 +604,44 @@ export async function processReportContent(
     return { code: 'REPORT_ALREADY_COMPLETED', reportId: committed.id };
   }
   const conv = await base.env.DB.prepare(
-    "SELECT * FROM telegram_report_conversations WHERE route_id=? AND kind='report' AND stage IN ('selecting','content','submitting','status','expired') ORDER BY created_at DESC LIMIT 1",
+    "SELECT * FROM telegram_report_conversations WHERE route_id=? AND kind='report' ORDER BY created_at DESC LIMIT 1",
   )
     .bind(route.id)
     .first<Conversation>();
   if (!conv) return null;
+  if (['completed', 'cancelled'].includes(conv.stage)) return null;
   const updateId = String(update.update_id),
     reply = (text: string) =>
       queueTelegramMessage(base, route, `command-reply:${updateId}`, text);
   if (conv.expires_at <= Date.now()) {
+    // An expired keyboard is handled by its callback, never by unrelated chat.
+    // Only the original pending content or an explicitly requested amount can continue.
+    const waitingAmount =
+      conv.report_id &&
+      (await base.env.DB.prepare(
+        "SELECT r.id FROM reports r JOIN cases c ON c.id=r.case_id JOIN assignments a ON a.id=r.assignment_id WHERE r.id=? AND r.workflow_status='awaiting_status' AND r.selected_status IN ('settled','direct_to_principal') AND c.voided_at IS NULL AND a.unassigned_at IS NULL AND a.collector_id=?",
+      )
+        .bind(conv.report_id, route.collectorId)
+        .first());
+    const acknowledged = await base.env.DB.prepare(
+      "SELECT id FROM audit_logs WHERE entity_id=? AND action='TELEGRAM_REPORT_EXPIRY_ACKNOWLEDGED' UNION ALL SELECT id FROM telegram_outbound_jobs WHERE route_id=? AND created_at>=? AND message_type='command_reply' AND json_extract(payload,'$.text')=? LIMIT 1",
+    )
+      .bind(conv.id, route.id, conv.created_at, expiredText)
+      .first();
+    const amountInput = /^\d+$/.test(update.message?.text?.trim() ?? '');
+    if (
+      acknowledged ||
+      !(conv.stage === 'content' || (waitingAmount && amountInput))
+    )
+      return null;
     await expireReportConversations(base.env.DB);
-    await reply(expiredText);
+    await queueTelegramMessage(
+      base,
+      route,
+      `report-expired-input:${conv.id}`,
+      expiredText,
+    );
+    await acknowledgeReportExpiry(base, conv.id);
     return { code: 'REPORT_DRAFT_EXPIRED', reportId: null };
   }
   if (conv.stage === 'status') {

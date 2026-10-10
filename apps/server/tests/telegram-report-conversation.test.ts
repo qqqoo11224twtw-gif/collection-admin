@@ -385,8 +385,86 @@ describe('visible report expiry feedback', () => {
         .first(),
     ).toBeNull();
     expect(await conversation(s.route)).toMatchObject({ stage: 'expired' });
+    const sentCount = client.sent.length;
     await immediate(message(s.route, '補充回報文字'), client);
-    expect(client.sent.at(-1)?.text).toBe(expiredText);
+    await immediate(message(s.route, '5000'), client);
+    expect(client.sent).toHaveLength(sentCount);
+  });
+  it('ordinary text and numbers are no-op without a conversation or after an expired status prompt', async () => {
+    const s = await setup(),
+      client = new FakeTelegramClient();
+    for (const text of ['哈囉', '5000'])
+      await immediate(message(s.route, text), client);
+    expect(client.sent).toHaveLength(0);
+    await immediate(message(s.route, `/回報 ${s.name} 虛構內容`), client);
+    await expire(s.route);
+    const count = client.sent.length;
+    for (const text of ['哈囉', '123', 'test'])
+      await immediate(message(s.route, text), client);
+    expect(client.sent).toHaveLength(count);
+    await immediate(message(s.route, `/回報 ${s.name} 新流程`), client);
+    expect(client.sent.length).toBeGreaterThan(count);
+    expect(await conversation(s.route)).toMatchObject({ stage: 'status' });
+  });
+  it('historical expiry feedback and voided pending amount conversations cannot capture chat', async () => {
+    for (const kind of ['historical', 'voided']) {
+      const s = await setup(),
+        client = new FakeTelegramClient();
+      await immediate(message(s.route, `/回報 ${s.name} 舊金額流程`), client);
+      const conv = await conversation(s.route);
+      const report = await env.DB.prepare(
+        'SELECT callback_token FROM reports WHERE id=?',
+      )
+        .bind(conv?.report_id)
+        .first<{ callback_token: string }>();
+      await immediate(
+        callback(s.route, `report_status:${report?.callback_token}:settled`),
+        client,
+      );
+      await expire(s.route);
+      if (kind === 'historical') {
+        await queueTelegramMessage(
+          base,
+          s.route,
+          `old-expiry:${crypto.randomUUID()}`,
+          expiredText,
+        );
+      } else {
+        await env.DB.prepare('UPDATE cases SET voided_at=? WHERE id=?')
+          .bind(Date.now(), s.cases[0].id)
+          .run();
+      }
+      expect(
+        await processReportContent(base, message(s.route, '5000'), s.route),
+      ).toBeNull();
+      expect(
+        await processReportContent(base, message(s.route, '哈囉'), s.route),
+      ).toBeNull();
+    }
+  });
+  it.each([
+    'installment',
+    'unresolved',
+    'follow_up',
+  ])('completed %s conversation does not capture later ordinary text', async (status) => {
+    const s = await setup(),
+      client = new FakeTelegramClient();
+    await immediate(message(s.route, `/回報 ${s.name} 虛構完成`), client);
+    const conv = await conversation(s.route);
+    const report = await env.DB.prepare(
+      'SELECT callback_token FROM reports WHERE id=?',
+    )
+      .bind(conv?.report_id)
+      .first<{ callback_token: string }>();
+    await immediate(
+      callback(s.route, `report_status:${report?.callback_token}:${status}`),
+      client,
+    );
+    await expire(s.route);
+    const count = client.sent.length;
+    await immediate(message(s.route, '哈囉'), client);
+    await immediate(message(s.route, '5000'), client);
+    expect(client.sent).toHaveLength(count);
   });
   it('cron-style scans never retry failed DELIVERY_UNKNOWN even when next_attempt_at is overdue', async () => {
     const s = await setup(),
@@ -1095,9 +1173,13 @@ describe('Name-only Telegram report conversation', () => {
     expect(await processReportContent(base, u, t.route)).toMatchObject({
       code: 'REPORT_DRAFT_EXPIRED',
     });
-    expect((await payload(`command-reply:${u.update_id}`)).text).toContain(
-      '回報已逾時失敗，請重新輸入 /回報。',
-    );
+    expect(
+      (
+        await payload(
+          `report-expired-input:${(await conversation(t.route))?.id}`,
+        )
+      ).text,
+    ).toContain('回報已逾時失敗，請重新輸入 /回報。');
   });
   it('assignment revoke and void reject content', async () => {
     for (const kind of ['unassigned', 'void']) {

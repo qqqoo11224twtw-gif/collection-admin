@@ -7,8 +7,13 @@ export function SessionIdleGuard() {
     let pendingTouch = false;
     let lastTouch = 0;
     let authenticated = false;
+    let transitioning = false;
+    let generation = 0;
+    let controller: AbortController | undefined;
     const endpoint = `${import.meta.env.NEXT_PUBLIC_SERVER_URL}/api/auth`;
     const check = async (touch: boolean) => {
+      if (transitioning || document.querySelector('[data-auth-busy="true"]'))
+        return;
       const onboarding =
         window.location.pathname === '/login' &&
         !!document.querySelector('[data-onboarding="true"]');
@@ -23,6 +28,9 @@ export function SessionIdleGuard() {
         return;
       }
       busy = true;
+      const currentGeneration = generation;
+      const currentController = new AbortController();
+      controller = currentController;
       const redirect = window.location.pathname + window.location.search;
       try {
         const response = await fetch(
@@ -30,12 +38,14 @@ export function SessionIdleGuard() {
           {
             method: touch ? 'POST' : 'GET',
             credentials: 'include',
+            signal: currentController.signal,
             ...(touch
               ? { headers: { 'Content-Type': 'application/json' }, body: '{}' }
               : {}),
           },
         );
         const data = await response.json();
+        if (currentGeneration !== generation || transitioning) return;
         if (
           response.status === 401 ||
           (!data && (authenticated || touch || onboarding))
@@ -53,6 +63,15 @@ export function SessionIdleGuard() {
         }
       }
     };
+    const transition = (event: Event) => {
+      transitioning = Boolean((event as CustomEvent<boolean>).detail);
+      generation++;
+      controller?.abort();
+      authenticated = false;
+      pendingTouch = false;
+      lastTouch = 0;
+    };
+    window.addEventListener('account-auth-transition', transition);
     const activity = (event: Event) => {
       if (!event.isTrusted || Date.now() - lastTouch < 1000) return;
       if (
@@ -74,6 +93,9 @@ export function SessionIdleGuard() {
     );
     return () => {
       window.clearInterval(timer);
+      generation++;
+      controller?.abort();
+      window.removeEventListener('account-auth-transition', transition);
       for (const kind of ['click', 'input', 'keydown'])
         window.removeEventListener(kind, activity);
     };

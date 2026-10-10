@@ -5,6 +5,7 @@ import {
 import { Button } from '@saasflare-dev/ui/components/button';
 import { Input } from '@saasflare-dev/ui/components/input';
 import { Label } from '@saasflare-dev/ui/components/label';
+import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
@@ -18,6 +19,7 @@ export const Route = createFileRoute('/login')({
   component: LoginPage,
 });
 function LoginPage() {
+  const queryClient = useQueryClient();
   const [ready, setReady] = useState(false);
   useEffect(() => {
     setReady(true);
@@ -74,10 +76,16 @@ function LoginPage() {
     }
     try {
       if (step === 'login') {
+        await queryClient.cancelQueries();
+        queryClient.clear();
         const value = await accountRequest<{ step: string }>('login', {
           username: data.get('username'),
           password: data.get('password'),
         });
+        setSecret('');
+        setQr('');
+        setRecovery([]);
+        setUseRecovery(false);
         await transition(value.step);
       } else if (step === 'password_change') {
         const value = await accountRequest<{ step: string }>(
@@ -109,6 +117,7 @@ function LoginPage() {
   return (
     <main
       data-onboarding={step !== 'login'}
+      data-auth-busy={busy}
       className="flex min-h-dvh items-center justify-center bg-background p-5"
     >
       <section className="w-full max-w-sm space-y-6 rounded-2xl border bg-card p-6 shadow-lg">
@@ -159,7 +168,7 @@ function LoginPage() {
             </Button>
           </div>
         ) : (
-          <form onSubmit={submit} className="space-y-4">
+          <form key={step} onSubmit={submit} className="space-y-4">
             {step === 'login' ? (
               <>
                 <Label htmlFor="username">帳號</Label>
@@ -285,6 +294,8 @@ function LoginPage() {
                   setSecret('');
                   setQr('');
                   setError('');
+                  setRecovery([]);
+                  setUseRecovery(false);
                 }}
               >
                 重新登入

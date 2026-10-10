@@ -1,8 +1,10 @@
 import { Button } from '@saasflare-dev/ui/components/button';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { KeyRound, LogIn, LogOut } from 'lucide-react';
 import { useConfigStatus } from '~/components/config-notice';
-import { signOut, useSession } from '~/lib/auth';
+import { useSession } from '~/lib/auth';
+import { accountRequest } from '~/lib/managed-auth';
 
 /**
  * Header account controls: Sign in when logged out, email + API keys +
@@ -10,6 +12,7 @@ import { signOut, useSession } from '~/lib/auth';
  * AUTH_MODE=disabled deployments (no login story to point at).
  */
 export function UserMenu() {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data: session, isPending } = useSession();
   const configQuery = useConfigStatus();
@@ -45,9 +48,12 @@ export function UserMenu() {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() =>
-          void signOut().then(() => navigate({ to: '/', reloadDocument: true }))
-        }
+        onClick={async () => {
+          await accountRequest('sign-out', {});
+          await queryClient.cancelQueries();
+          queryClient.clear();
+          await navigate({ to: '/login', reloadDocument: true });
+        }}
       >
         <LogOut size={16} />
         登出
