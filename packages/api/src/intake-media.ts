@@ -187,7 +187,11 @@ export async function intakeImageResponse(
     if (!bytes || (await sha256(bytes)) !== m.sha256)
       throw new ORPCError('NOT_FOUND');
     return new Response(bytes, {
-      headers: { ...headers, 'Content-Type': m.mediaType },
+      headers: {
+        ...headers,
+        'Content-Type': m.mediaType,
+        'Content-Disposition': 'inline',
+      },
     });
   } catch (error: unknown) {
     return Response.json(

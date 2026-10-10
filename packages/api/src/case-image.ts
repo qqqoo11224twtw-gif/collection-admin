@@ -34,7 +34,11 @@ export async function caseImageResponse(
     ).join('');
     if (digest !== media.sha256) throw new Error('SHA_MISMATCH');
     return new Response(bytes, {
-      headers: { ...headers, 'Content-Type': media.mediaType },
+      headers: {
+        ...headers,
+        'Content-Type': media.mediaType,
+        'Content-Disposition': 'inline',
+      },
     });
   } catch (error: unknown) {
     await systemLog(context.env.DB, {

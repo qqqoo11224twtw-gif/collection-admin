@@ -26,7 +26,8 @@ export const link = new RPCLink({
       if ((error as Error).name === 'AbortError') {
         return;
       }
-      console.error(error);
+      if (import.meta.env.DEV) console.error(error);
+      else console.error('API_REQUEST_FAILED');
     }),
   ],
 });

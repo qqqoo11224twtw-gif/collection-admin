@@ -6,6 +6,9 @@ import { defineConfig } from 'vite';
 import EnvironmentPlugin from 'vite-plugin-environment';
 
 export default defineConfig({
+  build: {
+    sourcemap: false,
+  },
   server: {
     port: 3000,
   },

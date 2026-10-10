@@ -34,6 +34,16 @@ const app = new Hono<{
   Bindings: typeof server.Env;
   Variables: { apiKeyId: string; apiKeyUserId: string };
 }>();
+app.onError((_error, c) => {
+  console.error('API_REQUEST_FAILED');
+  return c.json({ error: 'INTERNAL_SERVER_ERROR' }, 500);
+});
+app.use('/*', async (c, next) => {
+  await next();
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('Referrer-Policy', 'no-referrer');
+  c.header('X-Robots-Tag', 'noindex, nofollow, noarchive');
+});
 app.post('/api/telegram/webhook', async (c) => {
   let defer: ((task: Promise<unknown>) => void) | undefined;
   try {
