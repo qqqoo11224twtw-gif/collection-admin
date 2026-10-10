@@ -1,0 +1,1 @@
+ALTER TABLE `telegram_report_conversations` ADD `message_received_at` integer;

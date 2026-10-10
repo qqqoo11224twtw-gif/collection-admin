@@ -33,6 +33,7 @@ export const planCreateSchema = z
         planType: z.literal('weekly'),
         weekday: z.number().int().min(1).max(7),
         perPaymentAmount: moneySchema,
+        firstPaymentDate: dateSchema.optional(),
       })
       .strict(),
     z
@@ -41,18 +42,35 @@ export const planCreateSchema = z
         planType: z.literal('monthly'),
         dayOfMonth: z.number().int().min(1).max(31),
         perPaymentAmount: moneySchema,
+        firstPaymentDate: dateSchema.optional(),
+      })
+      .strict(),
+    z
+      .object({
+        ...planCommon,
+        planType: z.literal('custom'),
+        schedules: z
+          .array(
+            z
+              .object({ dueDate: dateSchema, expectedAmount: moneySchema })
+              .strict(),
+          )
+          .min(1)
+          .max(240),
       })
       .strict(),
   ])
   .refine(
     (input) =>
       input.planType === 'deadline' ||
+      input.planType === 'custom' ||
       input.perPaymentAmount <= input.totalAmount,
     'Per-payment amount must not exceed the total.',
   )
   .refine(
     (input) =>
       input.planType === 'deadline' ||
+      input.planType === 'custom' ||
       Math.ceil(input.totalAmount / input.perPaymentAmount) <= 240,
     'At most 240 payments per plan.',
   );
@@ -98,7 +116,8 @@ export function businessToday(now = new Date(), timezone = 'Asia/Taipei') {
   }).formatToParts(now);
   return `${parts.find((p) => p.type === 'year')?.value}-${parts.find((p) => p.type === 'month')?.value}-${parts.find((p) => p.type === 'day')?.value}`;
 }
-export function calculateCommission(amount: number, rate: number) {
+export function calculatePrincipalSplit(amount: number, returnRate: number) {
+  const rate = 1 - returnRate;
   moneySchema.parse(amount);
   const bp = Math.round(rate * 10000);
   if (
@@ -107,17 +126,28 @@ export function calculateCommission(amount: number, rate: number) {
     rate > 1 ||
     Math.abs(rate - bp / 10000) > 1e-10
   )
-    throw new Error('INVALID_COMMISSION_RATE');
-  const commission = Number((BigInt(amount) * BigInt(bp) + 5000n) / 10000n);
+    throw new Error('INVALID_RETURN_RATE');
+  const collectorShare = Number((BigInt(amount) * BigInt(bp) + 5000n) / 10000n);
   return {
-    commissionRate: bp / 10000,
-    commissionAmount: commission,
-    returnAmount: amount - commission,
+    collectorShareRate: bp / 10000,
+    collectorShare,
+    principalDue: amount - collectorShare,
   };
 }
 export function generateSchedule(raw: PlanInput, today = businessToday()) {
   const input = planCreateSchema.parse(raw);
   dateSchema.parse(today);
+  if (input.planType === 'custom') {
+    if (
+      input.schedules.some((s) => s.dueDate < today) ||
+      input.schedules.reduce((sum, s) => sum + s.expectedAmount, 0) !==
+        input.totalAmount
+    )
+      throw new Error('INVALID_CUSTOM_SCHEDULE');
+    return [...input.schedules]
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+      .map((s, index) => ({ ...s, sequence: index + 1 }));
+  }
   const format = (date: Date) => date.toISOString().slice(0, 10);
   if (input.planType === 'deadline') {
     if (input.deadlineDate < today) throw new Error('DEADLINE_IN_PAST');
@@ -130,7 +160,9 @@ export function generateSchedule(raw: PlanInput, today = businessToday()) {
     ];
   }
   let remaining = input.totalAmount;
-  const start = new Date(`${today}T00:00:00Z`);
+  const first = input.firstPaymentDate ?? today;
+  if (first < today) throw new Error('FIRST_DATE_IN_PAST');
+  const start = new Date(`${first}T00:00:00Z`);
   let due = new Date(start);
   let month = start.getUTCMonth(),
     year = start.getUTCFullYear();
@@ -143,7 +175,7 @@ export function generateSchedule(raw: PlanInput, today = businessToday()) {
     if (input.planType === 'monthly') {
       const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
       due = new Date(Date.UTC(year, month, Math.min(input.dayOfMonth, last)));
-      if (format(due) < today) {
+      if (format(due) < first) {
         month++;
         continue;
       }

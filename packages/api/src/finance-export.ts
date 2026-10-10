@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from 'fflate';
+import { exportCollectorLedger } from './collector-finance';
 import type { Context } from './context';
-import { settlementRows } from './finance';
 import { financeRangeSchema } from './finance-contract';
 
 const escapeXml = (value: string) =>
@@ -39,6 +39,9 @@ export function settlementWorkbook(
       '收',
     ]),
   ];
+  return financialWorkbook(data);
+}
+export function financialWorkbook(data: (string | number)[][]) {
   const sheet = data
     .map(
       (row, index) =>
@@ -76,20 +79,8 @@ export function settlementWorkbook(
 }
 export async function exportSettlements(context: Context, raw: unknown) {
   const range = financeRangeSchema.parse(raw);
-  const rows = await settlementRows(context, range, true);
-  const bytes = settlementWorkbook(rows.items);
-  await context.env.DB.prepare(
-    "INSERT INTO audit_logs(id,user_id,action,entity_type,entity_id,metadata,created_at) VALUES(?,?,'finance.exported','finance',?,'{}',?)",
-  )
-    .bind(
-      crypto.randomUUID(),
-      context.user?.id,
-      crypto.randomUUID(),
-      Date.now(),
-    )
-    .run();
-  return {
-    bytes,
-    filename: `settlements-${range.dateFrom ?? 'all'}-${range.dateTo ?? 'all'}.xlsx`,
-  };
+  return exportCollectorLedger(context, {
+    dateFrom: range.dateFrom,
+    dateTo: range.dateTo,
+  });
 }

@@ -44,6 +44,36 @@ export default {
       });
     }
     const input = await request.json();
+    const method = new URL(request.url).pathname.split('/').at(-1);
+    if (method === 'copyMessage') {
+      if (
+        input.chat_id !== '-1001234567890' ||
+        input.message_thread_id !== 2 ||
+        !input.caption?.startsWith('代號：')
+      )
+        return Response.json({ ok: false, error_code: 400 }, { status: 400 });
+      return Response.json({ ok: true, result: { message_id: 128 } });
+    }
+    if (method === 'copyMessages') {
+      if (input.remove_caption !== true)
+        return Response.json({ ok: false, error_code: 400 }, { status: 400 });
+      return Response.json({
+        ok: true,
+        result: input.message_ids.map((_, i) => ({ message_id: 129 + i })),
+      });
+    }
+    if (method === 'editMessageCaption') {
+      if (input.caption === 'unchanged-caption')
+        return Response.json(
+          {
+            ok: false,
+            error_code: 400,
+            description: 'Bad Request: message is not modified',
+          },
+          { status: 400 },
+        );
+      return Response.json({ ok: true, result: true });
+    }
     switch (input.text) {
       case 'invalid-json':
         return new Response('<html>unavailable</html>');

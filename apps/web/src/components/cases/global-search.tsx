@@ -27,7 +27,7 @@ function SearchBar({ userId }: { userId: string }) {
     if (location.pathname) setOpen(false);
   }, [location.pathname]);
   const options = orpc.cases.list.queryOptions({
-    input: { query, page: 1, pageSize: 6 },
+    input: { query, page: 1, pageSize: 20 },
   });
   const results = useQuery({
     ...options,
@@ -105,7 +105,7 @@ function SearchBar({ userId }: { userId: string }) {
                   找不到符合條件的案件。
                 </p>
               ) : (
-                results.data?.items.map((record) => (
+                results.data?.items.slice(0, 6).map((record) => (
                   <Link
                     key={record.id}
                     to="/cases/$caseId"

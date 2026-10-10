@@ -117,7 +117,7 @@ describe('encrypted Telegram bot management', () => {
         botId: id,
         chatId: '-1001234567890',
         topicId: 2,
-        routeType: 'intake',
+        routeType: 'business_report',
         name: '虛構路由',
         isActive: true,
       },
@@ -173,7 +173,7 @@ describe('encrypted Telegram bot management', () => {
       (
         await rpc(
           'telegram.saveRoute',
-          { botId: id, chatId: '-1001234567891', routeType: 'intake' },
+          { botId: id, chatId: '-1001234567891', routeType: 'business_report' },
           { cookie },
         )
       ).status,

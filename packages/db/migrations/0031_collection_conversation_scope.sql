@@ -1,0 +1,2 @@
+DROP INDEX `telegram_report_conversation_active`;--> statement-breakpoint
+CREATE UNIQUE INDEX `telegram_report_conversation_active` ON `telegram_report_conversations` (`route_id`,`kind`) WHERE "telegram_report_conversations"."stage" IN ('selecting','content','submitting','status');

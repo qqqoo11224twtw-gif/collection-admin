@@ -13,15 +13,13 @@ test.describe('Local case workspace', () => {
     await expect(
       page.getByRole('heading', { name: '案件管理', exact: true }),
     ).toBeVisible();
-    await expect(page.getByText('18 筆案件 · 第 1 ／ 2')).toBeVisible();
-    await expect(page.locator('tbody tr')).toHaveCount(10);
+    await expect(page.getByText('18 筆案件 · 第 1 ／ 1')).toBeVisible();
+    await expect(page.locator('tbody tr')).toHaveCount(18);
     await page.screenshot({
       path: testInfo.outputPath('cases-list.png'),
       fullPage: true,
     });
-    await page.getByRole('button', { name: '下一頁' }).click();
-    await expect(page.getByText('18 筆案件 · 第 2 ／ 2')).toBeVisible();
-    await expect(page.locator('tbody tr')).toHaveCount(8);
+    await expect(page.getByRole('button', { name: '下一頁' })).toBeDisabled();
     await page.getByLabel('搜尋案件').fill('示範星河');
     await expect(page.locator('tbody tr')).toHaveCount(6);
     await page.getByLabel('搜尋案件').fill('no-such-fictional-customer');
@@ -29,7 +27,7 @@ test.describe('Local case workspace', () => {
       page.getByRole('heading', { name: '找不到案件' }),
     ).toBeVisible();
     await page.getByRole('button', { name: '清除篩選' }).click();
-    await expect(page.locator('tbody tr')).toHaveCount(10);
+    await expect(page.locator('tbody tr')).toHaveCount(20);
   });
 
   test('global search opens case details and all six tabs', async ({
@@ -144,16 +142,25 @@ test.describe('Local case workspace', () => {
     await page.goto('/login');
     await signIn(page, 'admin@example.test');
     await expect(page.getByTestId('user-email')).toHaveText(
-      'admin@example.test',
+      'e2e-admin-example-test',
     );
-    // Delay a real request; never replace API responses or Cloudflare bindings.
+    // Hold a real request until the loading state is observed, then continue it.
+    // This avoids depending on navigation finishing within a 700ms delay.
+    let releaseRequest: (() => void) | undefined;
+    const requestGate = new Promise<void>((resolve) => {
+      releaseRequest = resolve;
+    });
     await page.route('**/rpc/cases/list', async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await requestGate;
       await route.continue();
     });
-    await page.goto('/cases');
-    await expect(page.getByLabel('載入案件中')).toBeVisible();
-    await expect(page.locator('tbody tr')).toHaveCount(10);
+    await page.goto('/cases', { waitUntil: 'domcontentloaded' });
+    try {
+      await expect(page.getByLabel('載入案件中')).toBeVisible();
+    } finally {
+      releaseRequest?.();
+    }
+    await expect(page.locator('tbody tr')).toHaveCount(20);
     await page.goto('/cases/unknown-case');
     await expect(page.getByRole('alert')).toContainText('無法載入');
     await page.getByRole('button', { name: '重試' }).click();

@@ -1,0 +1,1 @@
+ALTER TABLE `managed_sessions` ADD `last_activity_at` integer;

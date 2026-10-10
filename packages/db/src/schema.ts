@@ -28,6 +28,19 @@ export const user = sqliteTable('user', {
   permissionAllow: text('permission_allow').notNull().default('[]'),
   permissionDeny: text('permission_deny').notNull().default('[]'),
   permissionVersion: integer('permission_version').notNull().default(0),
+  username: text('username').unique(),
+  passwordHash: text('password_hash'),
+  mustChangePassword: integer('must_change_password', { mode: 'boolean' })
+    .notNull()
+    .default(true),
+  totpEnabled: integer('totp_enabled', { mode: 'boolean' })
+    .notNull()
+    .default(false),
+  totpEncrypted: text('totp_encrypted'),
+  totpKeyVersion: text('totp_key_version'),
+  lastTotpCounter: integer('last_totp_counter').notNull().default(-1),
+  authVersion: integer('auth_version').notNull().default(0),
+  deletedAt: integer('deleted_at'),
   banned: integer('banned', { mode: 'boolean' }),
   banReason: text('ban_reason'),
   banExpires: integer('ban_expires', { mode: 'timestamp_ms' }),
@@ -226,12 +239,16 @@ export const cases = sqliteTable(
     }),
     voidNote: text('void_note'),
     customerName: text('customer_name').notNull(),
+    reportName: text('report_name'),
     address: text('address').notNull(),
     // Phase one stores whole TWD dollars, never floating-point money.
     amountDue: integer('amount_due').notNull(),
     status: text('status', { enum: CASE_STATUSES })
       .notNull()
       .default('pending'),
+    currentStatus: text('current_status', {
+      enum: [...CASE_STATUSES, 'direct_to_principal'],
+    }),
     revisitStatus: text('revisit_status', { enum: REVISIT_STATUSES })
       .notNull()
       .default('pending'),
@@ -249,6 +266,7 @@ export const cases = sqliteTable(
     uniqueIndex('cases_case_no_idx').on(sql`${t.caseNo} COLLATE NOCASE`),
     index('cases_code_idx').on(sql`${t.code} COLLATE NOCASE`),
     index('cases_customer_name_idx').on(sql`${t.customerName} COLLATE NOCASE`),
+    index('cases_report_name_active_idx').on(t.reportName, t.voidedAt, t.id),
     index('cases_updated_idx').on(t.updatedAt, t.id),
     index('cases_region_updated_idx').on(t.region, t.updatedAt, t.id),
     index('cases_agent_updated_idx').on(t.assignedAgentId, t.updatedAt, t.id),
@@ -455,8 +473,15 @@ export const reports = sqliteTable(
       .notNull()
       .default('completed'),
     selectedStatus: text('selected_status', {
-      enum: ['settled', 'installment', 'unresolved', 'follow_up'],
+      enum: [
+        'settled',
+        'installment',
+        'unresolved',
+        'follow_up',
+        'direct_to_principal',
+      ],
     }),
+    financeEvent: text('finance_event', { enum: ['payment', 'offset'] }),
     completedByUserId: text('completed_by_user_id').references(() => user.id, {
       onDelete: 'restrict',
     }),
@@ -775,6 +800,12 @@ export const telegramRoutes = sqliteTable(
       sql`coalesce(${t.topicId},0)`,
       t.routeType,
     ),
+    index('telegram_routes_fast_lookup_idx').on(
+      t.chatId,
+      sql`coalesce(${t.topicId},0)`,
+      t.isActive,
+      t.routeType,
+    ),
     check(
       'telegram_route_type_check',
       sql`${t.routeType} IN ('collector','report_destination','intake_source','intake','collector_dispatch','collector_report','business_report')`,
@@ -996,7 +1027,7 @@ export const installmentPlans = sqliteTable(
       onDelete: 'restrict',
     }),
     planType: text('plan_type', {
-      enum: ['deadline', 'weekly', 'monthly'],
+      enum: ['deadline', 'weekly', 'monthly', 'custom'],
     }).notNull(),
     totalAmount: integer('total_amount').notNull(),
     perPaymentAmount: integer('per_payment_amount'),
@@ -1026,7 +1057,7 @@ export const installmentPlans = sqliteTable(
     ),
     check(
       'installment_type_check',
-      sql`(${t.planType}='deadline' AND ${t.deadlineDate} IS NOT NULL AND ${t.perPaymentAmount} IS NULL AND ${t.weekday} IS NULL AND ${t.dayOfMonth} IS NULL) OR (${t.planType}='weekly' AND ${t.weekday} BETWEEN 1 AND 7 AND ${t.perPaymentAmount} IS NOT NULL AND ${t.dayOfMonth} IS NULL AND ${t.deadlineDate} IS NULL) OR (${t.planType}='monthly' AND ${t.dayOfMonth} BETWEEN 1 AND 31 AND ${t.perPaymentAmount} IS NOT NULL AND ${t.weekday} IS NULL AND ${t.deadlineDate} IS NULL)`,
+      sql`(${t.planType}='custom' AND ${t.deadlineDate} IS NULL AND ${t.perPaymentAmount} IS NULL AND ${t.weekday} IS NULL AND ${t.dayOfMonth} IS NULL) OR (${t.planType}='deadline' AND ${t.deadlineDate} IS NOT NULL AND ${t.perPaymentAmount} IS NULL AND ${t.weekday} IS NULL AND ${t.dayOfMonth} IS NULL) OR (${t.planType}='weekly' AND ${t.weekday} BETWEEN 1 AND 7 AND ${t.perPaymentAmount} IS NOT NULL AND ${t.dayOfMonth} IS NULL AND ${t.deadlineDate} IS NULL) OR (${t.planType}='monthly' AND ${t.dayOfMonth} BETWEEN 1 AND 31 AND ${t.perPaymentAmount} IS NOT NULL AND ${t.weekday} IS NULL AND ${t.deadlineDate} IS NULL)`,
     ),
     check(
       'installment_status_check',
@@ -1060,6 +1091,11 @@ export const installmentSchedules = sqliteTable(
   (t) => [
     uniqueIndex('schedule_plan_sequence_idx').on(t.planId, t.sequence),
     index('schedule_case_due_idx').on(t.caseId, t.dueDate),
+    index('schedule_unpaid_plan_due_idx')
+      .on(t.planId, t.dueDate, t.sequence)
+      .where(
+        sql`${t.status} IN ('pending','partial','overdue') AND ${t.paidAmount}<${t.expectedAmount}`,
+      ),
     check(
       'schedule_amount_check',
       sql`${t.expectedAmount}>0 AND ${t.paidAmount}>=0 AND ${t.paidAmount}<=${t.expectedAmount}`,
@@ -1098,6 +1134,11 @@ export const payments = sqliteTable(
     source: text('source', {
       enum: ['telegram', 'admin', 'installment', 'manual'],
     }).notNull(),
+    channel: text('channel', {
+      enum: ['collector_received', 'direct_to_principal'],
+    })
+      .notNull()
+      .default('collector_received'),
     createdByUserId: text('created_by_user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'restrict' }),
@@ -1139,9 +1180,26 @@ export const settlements = sqliteTable(
     agentCodeSnapshot: text('agent_code_snapshot').notNull(),
     customerNameSnapshot: text('customer_name_snapshot').notNull(),
     receivedAmount: integer('received_amount').notNull(),
+    // Legacy name: collector split, NOT an admin fee. Preserve the split CHECK.
     commissionRate: real('commission_rate').notNull(),
     commissionAmount: integer('commission_amount').notNull(),
     returnAmount: integer('return_amount').notNull(),
+    collectorReceivedAmount: integer('collector_received_amount')
+      .notNull()
+      .default(0),
+    principalReturnDueFromCollector: integer(
+      'principal_return_due_from_collector',
+    )
+      .notNull()
+      .default(0),
+    collectorEntitlement: integer('collector_entitlement').notNull().default(0),
+    collectorReturnRateSnapshot: real('collector_return_rate_snapshot'),
+    // Deprecated fee snapshots: historical values preserved; new events write zero.
+    adminCommissionRateSnapshot: real('admin_commission_rate_snapshot'),
+    adminCommissionRate: real('admin_commission_rate').notNull().default(0),
+    adminCommissionAmount: integer('admin_commission_amount')
+      .notNull()
+      .default(0),
     returnStatus: text('return_status', { enum: ['pending', 'returned'] })
       .notNull()
       .default('pending'),
@@ -1276,4 +1334,348 @@ export const installmentWorkflows = sqliteTable(
       sql`${t.status} IN ('active','completed','cancelled','expired')`,
     ),
   ],
+);
+
+// Durable, short-lived route conversation; old rows retain callback replay guards.
+export const telegramReportConversations = sqliteTable(
+  'telegram_report_conversations',
+  {
+    id: text('id').primaryKey(),
+    routeId: text('route_id')
+      .notNull()
+      .references(() => telegramRoutes.id),
+    collectorId: text('collector_id')
+      .notNull()
+      .references(() => collectors.id),
+    stage: text('stage', {
+      enum: [
+        'selecting',
+        'content',
+        'submitting',
+        'status',
+        'completed',
+        'cancelled',
+        'expired',
+      ],
+    }).notNull(),
+    candidates: text('candidates').notNull(),
+    caseId: text('case_id').references(() => cases.id),
+    assignmentId: text('assignment_id').references(() => assignments.id),
+    reportId: text('report_id').references(() => reports.id),
+    originUpdateId: text('origin_update_id').notNull().unique(),
+    messageReceivedAt: integer('message_received_at'),
+    contentUpdateId: text('content_update_id'),
+    draftContent: text('draft_content'),
+    kind: text('kind', { enum: ['report', 'payment'] })
+      .notNull()
+      .default('report'),
+    collectionAmount: integer('collection_amount'),
+    expiresAt: integer('expires_at').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [
+    index('telegram_report_conversation_route').on(t.routeId),
+    uniqueIndex('telegram_report_conversation_active')
+      .on(t.routeId, t.kind)
+      .where(sql`${t.stage} IN ('selecting','content','submitting','status')`),
+  ],
+);
+
+// Financial events share the existing payments/settlements ledger. References
+// are immutable; voiding an event reverses its allocations without deleting it.
+export const financeSettings = sqliteTable(
+  'finance_settings',
+  {
+    id: text('id').primaryKey(),
+    // Deprecated. Only version/write_token coordination remains active.
+    adminCommissionRate: real('admin_commission_rate').notNull().default(0),
+    version: integer('version').notNull().default(0),
+    writeToken: text('write_token').notNull().default(''),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [
+    check('finance_rate_check', sql`${t.adminCommissionRate} BETWEEN 0 AND 1`),
+  ],
+);
+
+export const paymentAllocations = sqliteTable(
+  'payment_allocations',
+  {
+    id: text('id').primaryKey(),
+    paymentId: text('payment_id')
+      .notNull()
+      .references(() => payments.id, { onDelete: 'restrict' }),
+    scheduleId: text('schedule_id')
+      .notNull()
+      .references(() => installmentSchedules.id, { onDelete: 'restrict' }),
+    amount: integer('amount').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [
+    uniqueIndex('payment_allocation_unique').on(t.paymentId, t.scheduleId),
+    index('allocation_schedule').on(t.scheduleId),
+    check('payment_allocation_positive', sql`${t.amount}>0`),
+  ],
+);
+
+export const remittances = sqliteTable(
+  'remittances',
+  {
+    id: text('id').primaryKey(),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    collectorId: text('collector_id')
+      .notNull()
+      .references(() => collectors.id, { onDelete: 'restrict' }),
+    amount: integer('amount').notNull(),
+    principalAmount: integer('principal_amount').notNull().default(0),
+    commissionAmount: integer('commission_amount').notNull().default(0),
+    receivedDate: text('received_date').notNull(),
+    note: text('note').notNull().default(''),
+    createdByUserId: text('created_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    createdAt: integer('created_at').notNull(),
+    voidedAt: integer('voided_at'),
+    voidedByUserId: text('voided_by_user_id').references(() => user.id, {
+      onDelete: 'restrict',
+    }),
+    voidReason: text('void_reason'),
+    writeToken: text('write_token').notNull().default(''),
+  },
+  (t) => [
+    index('remittance_collector_date').on(t.collectorId, t.receivedDate),
+    check(
+      'remittance_amount_positive',
+      sql`${t.amount}>0 AND ${t.amount}<=1000000000000`,
+    ),
+  ],
+);
+
+export const remittanceAllocations = sqliteTable(
+  'remittance_allocations',
+  {
+    id: text('id').primaryKey(),
+    remittanceId: text('remittance_id')
+      .notNull()
+      .references(() => remittances.id, { onDelete: 'restrict' }),
+    settlementId: text('settlement_id')
+      .notNull()
+      .references(() => settlements.id, { onDelete: 'restrict' }),
+    component: text('component', {
+      enum: ['principal', 'commission'],
+    }).notNull(),
+    amount: integer('amount').notNull(),
+  },
+  (t) => [
+    index('remittance_allocation_settlement').on(t.settlementId),
+    uniqueIndex('remittance_allocation_unique').on(
+      t.remittanceId,
+      t.settlementId,
+      t.component,
+    ),
+    check('remittance_allocation_positive', sql`${t.amount}>0`),
+  ],
+);
+
+export const collectorOffsets = sqliteTable(
+  'collector_offsets',
+  {
+    id: text('id').primaryKey(),
+    sourcePaymentId: text('source_payment_id')
+      .notNull()
+      .unique()
+      .references(() => payments.id, { onDelete: 'restrict' }),
+    collectorId: text('collector_id')
+      .notNull()
+      .references(() => collectors.id, { onDelete: 'restrict' }),
+    amount: integer('amount').notNull(),
+    adminCommissionRate: real('admin_commission_rate').notNull(),
+    adminCommissionAmount: integer('admin_commission_amount').notNull(),
+    createdByUserId: text('created_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    createdAt: integer('created_at').notNull(),
+    voidedAt: integer('voided_at'),
+    voidedByUserId: text('voided_by_user_id').references(() => user.id, {
+      onDelete: 'restrict',
+    }),
+    voidReason: text('void_reason'),
+  },
+  (t) => [
+    index('collector_offset_collector').on(t.collectorId),
+    check(
+      'collector_offset_positive',
+      sql`${t.amount}>0 AND ${t.adminCommissionRate} BETWEEN 0 AND 1 AND ${t.adminCommissionAmount}>=0`,
+    ),
+  ],
+);
+
+export const offsetAllocations = sqliteTable(
+  'offset_allocations',
+  {
+    id: text('id').primaryKey(),
+    offsetId: text('offset_id')
+      .notNull()
+      .references(() => collectorOffsets.id, { onDelete: 'restrict' }),
+    settlementId: text('settlement_id')
+      .notNull()
+      .references(() => settlements.id, { onDelete: 'restrict' }),
+    component: text('component', {
+      enum: ['principal', 'commission'],
+    }).notNull(),
+    amount: integer('amount').notNull(),
+  },
+  (t) => [
+    index('offset_allocation_settlement').on(t.settlementId),
+    uniqueIndex('offset_allocation_unique').on(
+      t.offsetId,
+      t.settlementId,
+      t.component,
+    ),
+    check('offset_allocation_positive', sql`${t.amount}>0`),
+  ],
+);
+
+// Telegram references only. No file bytes, storage keys or permanent case media.
+export const telegramReportMedia = sqliteTable(
+  'telegram_report_media',
+  {
+    id: text('id').primaryKey(),
+    routeId: text('route_id')
+      .notNull()
+      .references(() => telegramRoutes.id),
+    conversationId: text('conversation_id').references(
+      () => telegramReportConversations.id,
+    ),
+    chatId: text('chat_id').notNull(),
+    messageId: integer('message_id').notNull(),
+    mediaGroupId: text('media_group_id'),
+    receivedAt: integer('received_at').notNull(),
+    acceptedAt: integer('accepted_at'),
+    expiresAt: integer('expires_at').notNull(),
+  },
+  (t) => [
+    uniqueIndex('report_media_source').on(t.chatId, t.messageId),
+    index('report_media_conversation').on(t.conversationId, t.messageId),
+    index('report_media_group').on(t.routeId, t.mediaGroupId),
+  ],
+);
+
+export const collectorFinanceSettings = sqliteTable(
+  'collector_finance_settings',
+  {
+    id: text('id').primaryKey(),
+    collectorId: text('collector_id')
+      .notNull()
+      .references(() => collectors.id, { onDelete: 'restrict' }),
+    kind: text('kind', { enum: ['return', 'commission'] }).notNull(),
+    // Legacy mirror retained for migration compatibility; calculations use the separate columns below.
+    rate: real('rate').notNull(),
+    returnRate: real('return_rate'),
+    commissionRate: real('commission_rate'),
+    active: integer('active', { mode: 'boolean' }).notNull(),
+    effectiveFrom: integer('effective_from').notNull(),
+    effectiveTo: integer('effective_to'),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    createdAt: integer('created_at').notNull(),
+    updatedBy: text('updated_by')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [
+    uniqueIndex('collector_finance_active_unique')
+      .on(t.collectorId, t.kind)
+      .where(sql`${t.active}=1`),
+    check(
+      'collector_finance_rate_check',
+      sql`${t.rate} BETWEEN 0 AND 1 AND ${t.kind} IN ('return','commission') AND ((${t.active}=1 AND ${t.effectiveTo} IS NULL) OR (${t.active}=0 AND ${t.effectiveTo} IS NOT NULL))`,
+    ),
+  ],
+);
+
+export const collectorPayouts = sqliteTable(
+  'collector_payouts',
+  {
+    id: text('id').primaryKey(),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    collectorId: text('collector_id')
+      .notNull()
+      .references(() => collectors.id, { onDelete: 'restrict' }),
+    amount: integer('amount').notNull(),
+    principalAmount: integer('principal_amount').notNull(),
+    commissionAmount: integer('commission_amount').notNull(),
+    receivedDate: text('received_date').notNull(),
+    note: text('note').notNull().default(''),
+    createdByUserId: text('created_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    createdAt: integer('created_at').notNull(),
+    voidedAt: integer('voided_at'),
+    voidedByUserId: text('voided_by_user_id').references(() => user.id, {
+      onDelete: 'restrict',
+    }),
+    voidReason: text('void_reason'),
+    writeToken: text('write_token').notNull(),
+  },
+  (t) => [
+    index('payout_collector_date').on(t.collectorId, t.receivedDate),
+    check(
+      'payout_amount_check',
+      sql`${t.amount}>0 AND ${t.amount}<=1000000000000 AND ${t.principalAmount}>=0 AND ${t.commissionAmount}>=0 AND ${t.principalAmount}+${t.commissionAmount}=${t.amount}`,
+    ),
+  ],
+);
+export const managedAuthChallenges = sqliteTable(
+  'managed_auth_challenges',
+  {
+    id: text('id').primaryKey(),
+    tokenHash: text('token_hash').notNull().unique(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    stage: text('stage', {
+      enum: ['password_change', 'enroll', 'totp', 'completed'],
+    }).notNull(),
+    authVersion: integer('auth_version').notNull(),
+    secretEncrypted: text('secret_encrypted'),
+    keyVersion: text('key_version'),
+    expiresAt: integer('expires_at').notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    writeToken: text('write_token').notNull().default(''),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('auth_challenge_user_expiry').on(t.userId, t.expiresAt)],
+);
+export const recoveryCodes = sqliteTable(
+  'auth_recovery_codes',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    codeHash: text('code_hash').notNull().unique(),
+    createdAt: integer('created_at').notNull(),
+    usedAt: integer('used_at'),
+    usedToken: text('used_token'),
+  },
+  (t) => [index('recovery_user').on(t.userId)],
+);
+export const managedSessions = sqliteTable(
+  'managed_sessions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'restrict' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    authVersion: integer('auth_version').notNull(),
+    expiresAt: integer('expires_at').notNull(),
+    lastActivityAt: integer('last_activity_at'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('managed_session_user').on(t.userId)],
 );

@@ -10,7 +10,7 @@ import { runTelegramProcessing } from '@saasflare-dev/api/telegram-processing';
 import { DEMO_IMAGES } from '@saasflare-dev/db/demo-images';
 import { drizzle } from 'drizzle-orm/d1';
 import { beforeAll, expect, it } from 'vitest';
-import { adminCookie, rpc, userCookie } from './helpers';
+import { adminCookie, assignFinanceFixture, rpc, userCookie } from './helpers';
 
 let admin: string, ordinary: string, collector: string;
 const base: Context = {
@@ -444,6 +444,10 @@ it('creating a case never dispatches; missing route warns and a different collec
 });
 it('void preserves linked receipts and pending returns, blocks new receipts and retains ordinary settlement rules', async () => {
   const id = await create();
+  await env.DB.prepare('UPDATE cases SET amount_due=15000 WHERE id=?')
+    .bind(id)
+    .run();
+  await assignFinanceFixture(id);
   const payment = await rpc(
     'finance.createPayment',
     {

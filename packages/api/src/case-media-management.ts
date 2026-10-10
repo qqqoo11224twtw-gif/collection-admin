@@ -106,7 +106,10 @@ export async function uploadCaseImages(
     throw new ORPCError('FORBIDDEN');
   const form = await limitedFormData(request);
   if (
-    [...form.keys()].some((key) => key !== 'files' && key !== 'expectedVersion')
+    [...form.keys()].some(
+      (key) =>
+        key !== 'files' && key !== 'expectedVersion' && key !== 'uploadKey',
+    )
   )
     throw new ORPCError('BAD_REQUEST');
   const versionValue = form.get('expectedVersion');
@@ -114,6 +117,46 @@ export async function uploadCaseImages(
     typeof versionValue === 'string' && /^\d+$/.test(versionValue)
       ? Number(versionValue)
       : -1;
+  const uploadKey = form.get('uploadKey');
+  if (
+    uploadKey !== null &&
+    (typeof uploadKey !== 'string' || !/^[a-f0-9-]{36}$/.test(uploadKey))
+  )
+    throw new ORPCError('BAD_REQUEST');
+  if (uploadKey) {
+    const prior = await context.env.DB.prepare(
+      "SELECT metadata FROM audit_logs WHERE entity_id=? AND action='media.uploaded' AND json_extract(metadata,'$.uploadKey')=? LIMIT 1",
+    )
+      .bind(caseId, uploadKey)
+      .first<{ metadata: string }>();
+    if (prior) {
+      const saved = JSON.parse(prior.metadata) as {
+        mediaIds: string[];
+        fingerprint: string;
+      };
+      const values = form.getAll('files');
+      if (!values.length || values.length > 5)
+        throw new ORPCError('BAD_REQUEST');
+      const hashes = await Promise.all(
+        values.map(async (value) => {
+          if (typeof value === 'string') throw new ORPCError('BAD_REQUEST');
+          return sha256(await value.arrayBuffer());
+        }),
+      );
+      if (saved.fingerprint !== hashes.join(':'))
+        throw new ORPCError('CONFLICT');
+      const present = await context.env.DB.prepare(
+        `SELECT count(*) count FROM case_media WHERE case_id=? AND id IN (${saved.mediaIds.map(() => '?').join(',')})`,
+      )
+        .bind(caseId, ...saved.mediaIds)
+        .first<{ count: number }>();
+      if (present?.count !== saved.mediaIds.length)
+        throw new ORPCError('CONFLICT', {
+          message: '圖片已被移除，請重新選擇上傳。',
+        });
+      return { ids: saved.mediaIds, version: record.version };
+    }
+  }
   if (
     !Number.isSafeInteger(expectedVersion) ||
     expectedVersion !== record.version
@@ -211,6 +254,8 @@ export async function uploadCaseImages(
           mediaIds: items.map((item) => item.id),
           count: items.length,
           version: expectedVersion + 1,
+          uploadKey: uploadKey ?? null,
+          fingerprint: items.map((item) => item.hash).join(':'),
         },
         token,
       ),

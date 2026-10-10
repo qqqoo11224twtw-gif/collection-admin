@@ -1,0 +1,1 @@
+ALTER TABLE `telegram_report_media` ADD `accepted_at` integer;

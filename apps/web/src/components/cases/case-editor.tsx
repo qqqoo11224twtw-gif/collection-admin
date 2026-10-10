@@ -69,7 +69,12 @@ function CaseEditorForm({ record }: { record: CaseRecord }) {
                 region: (text('region') || null) as CaseRecord['region'],
                 address: text('address'),
                 amountDue: Number(text('amountDue')),
-                status: text('status') as CaseRecord['status'],
+                status: (text('status') === 'direct_to_principal'
+                  ? 'settled'
+                  : text('status')) as Exclude<
+                  CaseRecord['status'],
+                  'direct_to_principal'
+                >,
                 revisitStatus: text(
                   'revisitStatus',
                 ) as CaseRecord['revisitStatus'],
@@ -158,6 +163,9 @@ function CaseEditorForm({ record }: { record: CaseRecord }) {
                   className={selectClass}
                   defaultValue={record?.status ?? 'pending'}
                 >
+                  {record?.status === 'direct_to_principal' && (
+                    <option value="direct_to_principal">後結</option>
+                  )}
                   {[
                     'pending',
                     'assigned',

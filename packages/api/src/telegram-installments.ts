@@ -3,6 +3,7 @@ import { installmentWorkflows, type telegramRoutes } from '@saasflare-dev/db';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { atomicCaseWrite } from './audit';
+import { telegramDate } from './business-dates';
 import { requireCaseAccess } from './case-access';
 import type { Context } from './context';
 import { financeAudit } from './finance-audit';
@@ -26,7 +27,14 @@ import { reportRoutePrincipal } from './telegram-report-principal';
 
 const dataSchema = z
   .object({
-    planType: z.enum(['deadline', 'weekly', 'monthly']).optional(),
+    planType: z.enum(['deadline', 'weekly', 'monthly', 'custom']).optional(),
+    firstPaymentDate: dateSchema.optional(),
+    schedules: z
+      .array(
+        z.object({ dueDate: dateSchema, expectedAmount: moneySchema }).strict(),
+      )
+      .max(240)
+      .optional(),
     deadlineDate: dateSchema.optional(),
     weekday: z.number().int().min(1).max(7).optional(),
     dayOfMonth: z.number().int().min(1).max(31).optional(),
@@ -86,11 +94,12 @@ async function prompt(context: Context, row: Workflow, route: Route) {
           [{ label: '📅 指定日期前處理', action: 'deadline' }],
           [{ label: '🗓 每週', action: 'weekly' }],
           [{ label: '📆 每月', action: 'monthly' }],
+          [{ label: '自訂分期', action: 'schedule' }],
           [cancel],
         ];
         break;
       case 'deadline':
-        text = '請輸入截止日期（YYYY/MM/DD）。';
+        text = '請輸入付款日期（MM/DD，例如 10/20）。';
         buttons = [[cancel]];
         break;
       case 'weekday':
@@ -123,6 +132,14 @@ async function prompt(context: Context, row: Workflow, route: Route) {
         text = '請輸入每次付款金額（整數台幣）。';
         buttons = [[cancel]];
         break;
+      case 'first':
+        text = '請輸入首次付款日（MM/DD，例如 10/20）。';
+        buttons = [[cancel]];
+        break;
+      case 'schedule':
+        text = '請逐行輸入自訂分期：MM/DD 金額，例如 10/20 5000。';
+        buttons = [[cancel]];
+        break;
       case 'total':
         text = '請輸入總共需要支付的金額（整數台幣）。';
         buttons = [[cancel]];
@@ -141,12 +158,14 @@ async function prompt(context: Context, row: Workflow, route: Route) {
           ),
         );
         const timing =
-          plan.planType === 'deadline'
-            ? `處理期限：${plan.deadlineDate}`
-            : plan.planType === 'weekly'
-              ? `付款日：每週${['一', '二', '三', '四', '五', '六', '日'][plan.weekday - 1]}`
-              : `付款日：每月${plan.dayOfMonth}號（缺日採月底）`;
-        text = `分期確認\n案件：${record.customerName} / ${record.code}\n方式：${{ deadline: '指定日期前處理', weekly: '每週', monthly: '每月' }[plan.planType]}\n${timing}\n${plan.planType === 'deadline' ? '' : `每期：${plan.perPaymentAmount}\n`}總額：${plan.totalAmount}\n預計期數：${schedule.length}\n首期：${schedule[0].dueDate}`;
+          plan.planType === 'custom'
+            ? '自訂分期日期與金額'
+            : plan.planType === 'deadline'
+              ? `處理期限：${plan.deadlineDate}`
+              : plan.planType === 'weekly'
+                ? `付款日：每週${['一', '二', '三', '四', '五', '六', '日'][plan.weekday - 1]}`
+                : `付款日：每月${plan.dayOfMonth}號（缺日採月底）`;
+        text = `分期確認\n案件：${record.customerName} / ${record.code}\n方式：${{ deadline: '指定日期前處理', weekly: '每週', monthly: '每月', custom: '自訂' }[plan.planType]}\n${timing}\n總額：${plan.totalAmount}\n預計期數：${schedule.length}\n首期：${schedule[0].dueDate}`;
         buttons = [[{ label: '確認建立', action: 'confirm' }, cancel]];
         break;
       }
@@ -244,7 +263,7 @@ export async function processInstallmentUpdate(
 ) {
   const callback = update.callback_query;
   const match =
-    /^ip:([a-f0-9]{32}):(\d{1,8}):(deadline|weekly|monthly|week[1-7]|day(?:5|10|15|20|25)|custom|confirm|cancel)$/.exec(
+    /^ip:([a-f0-9]{32}):(\d{1,8}):(deadline|weekly|monthly|schedule|week[1-7]|day(?:5|10|15|20|25)|custom|confirm|cancel)$/.exec(
       callback?.data ?? '',
     );
   const [row] = match
@@ -326,6 +345,9 @@ export async function processInstallmentUpdate(
     if (callback)
       await client.answerCallbackQuery(callback.id, '分期計畫已建立。');
     return { code: 'INSTALLMENT_CREATED', reportId: row.reportId };
+  } else if (row.step === 'type' && action === 'schedule') {
+    data.planType = 'custom';
+    step = 'schedule';
   } else if (
     row.step === 'type' &&
     ['deadline', 'weekly', 'monthly'].includes(action ?? '')
@@ -339,18 +361,60 @@ export async function processInstallmentUpdate(
           : 'monthday';
   } else if (row.step === 'weekday' && action?.startsWith('week')) {
     data.weekday = Number(action.slice(4));
-    step = 'per';
+    step = 'first';
   } else if (row.step === 'monthday' && action?.startsWith('day')) {
     data.dayOfMonth = Number(action.slice(3));
-    step = 'per';
+    step = 'first';
   } else if (row.step === 'monthday' && action === 'custom') step = 'customday';
   else if (!callback) {
     const text = update.message?.text?.trim() ?? '';
     try {
       if (row.step === 'deadline') {
-        data.deadlineDate = dateSchema.parse(text.replaceAll('/', '-'));
-        if (data.deadlineDate < businessToday()) throw new Error('past');
+        data.deadlineDate = telegramDate(
+          text,
+          businessToday(
+            new Date(),
+            context.env.BUSINESS_TIMEZONE ?? 'Asia/Taipei',
+          ),
+        );
         step = 'total';
+      } else if (row.step === 'first') {
+        data.firstPaymentDate = telegramDate(
+          text,
+          businessToday(
+            new Date(),
+            context.env.BUSINESS_TIMEZONE ?? 'Asia/Taipei',
+          ),
+        );
+        const first = new Date(`${data.firstPaymentDate}T00:00:00Z`);
+        if (data.planType === 'weekly') data.weekday = first.getUTCDay() || 7;
+        if (data.planType === 'monthly') data.dayOfMonth = first.getUTCDate();
+        step = 'per';
+      } else if (row.step === 'schedule') {
+        data.schedules = text.split(/\n/).map((line) => {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length !== 2) throw new Error('format');
+          return {
+            dueDate: telegramDate(
+              parts[0],
+              businessToday(
+                new Date(),
+                context.env.BUSINESS_TIMEZONE ?? 'Asia/Taipei',
+              ),
+            ),
+            expectedAmount: moneySchema.parse(Number(parts[1])),
+          };
+        });
+        data.totalAmount = data.schedules.reduce(
+          (sum, s) => sum + s.expectedAmount,
+          0,
+        );
+        planCreateSchema.parse({
+          ...data,
+          caseId: row.caseId,
+          reportId: row.reportId,
+        });
+        step = 'confirm';
       } else if (row.step === 'customday') {
         data.dayOfMonth = z
           .number()
@@ -358,7 +422,7 @@ export async function processInstallmentUpdate(
           .min(1)
           .max(31)
           .parse(/^\d+$/.test(text) ? Number(text) : NaN);
-        step = 'per';
+        step = 'first';
       } else if (row.step === 'per' || row.step === 'total') {
         const amount = moneySchema.parse(
           /^\d+(?:,\d{3})*$/.test(text)

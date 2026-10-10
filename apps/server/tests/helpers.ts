@@ -1,6 +1,39 @@
 import { env } from 'cloudflare:workers';
 import app from '../src/index';
 
+/** Historical schedule fixture only; retired public APIs cannot create plans. */
+export async function historicalInstallmentFixture(
+  caseId: string,
+  status: 'active' | 'cancelled' = 'active',
+) {
+  const actor = await env.DB.prepare(
+    "SELECT id FROM user WHERE email='boss@test.dev'",
+  ).first<{ id: string }>();
+  if (!actor) throw Error('Fixture admin missing');
+  const id = crypto.randomUUID(),
+    scheduleId = crypto.randomUUID(),
+    now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE cases SET status='installment' WHERE id=?").bind(
+      caseId,
+    ),
+    env.DB.prepare(
+      "INSERT INTO installment_plans(id,case_id,plan_type,total_amount,deadline_date,status,created_by_user_id,created_at,updated_at) VALUES(?,?,'deadline',5000,'2026-12-31',?,?,?,?)",
+    ).bind(id, caseId, status, actor.id, now, now),
+    env.DB.prepare(
+      "INSERT INTO installment_schedules(id,plan_id,case_id,sequence,due_date,expected_amount,paid_amount,status,created_at,updated_at) VALUES(?,?,?,1,'2026-12-31',5000,0,?,?,?)",
+    ).bind(
+      scheduleId,
+      id,
+      caseId,
+      status === 'cancelled' ? 'cancelled' : 'pending',
+      now,
+      now,
+    ),
+  ]);
+  return { id, scheduleId };
+}
+
 /** Shared harness for the integration tests: sign-in + authed oRPC calls. */
 
 /**
@@ -117,4 +150,72 @@ export async function rpc(
   );
   const raw = (await resp.json().catch(() => ({}))) as { json?: unknown };
   return { status: resp.status, body: raw.json };
+}
+
+/** Explicit fictional financial fixture; never used by the application or staging seed. */
+export async function configureFinanceFixture(
+  collectorId: string,
+  returnRate = 0.5,
+  commissionRate = 0,
+) {
+  const actor = await env.DB.prepare(
+    "SELECT id FROM user WHERE email='boss@test.dev'",
+  ).first<{ id: string }>();
+  if (!actor) throw Error('Fixture admin missing');
+  const now = Date.now();
+  for (const [kind, rate] of [
+    ['return', returnRate],
+    ['commission', commissionRate],
+  ] as const) {
+    await env.DB.prepare(
+      'UPDATE collector_finance_settings SET active=0,effective_to=?,updated_at=? WHERE collector_id=? AND kind=? AND active=1',
+    )
+      .bind(now, now, collectorId, kind)
+      .run();
+    await env.DB.prepare(
+      'INSERT INTO collector_finance_settings(id,collector_id,kind,rate,return_rate,commission_rate,active,effective_from,created_by,created_at,updated_by,updated_at) VALUES(?,?,?,?,?,?,1,?,?,?,?,?)',
+    )
+      .bind(
+        crypto.randomUUID(),
+        collectorId,
+        kind,
+        rate,
+        kind === 'return' ? rate : null,
+        kind === 'commission' ? rate : null,
+        now,
+        actor.id,
+        now,
+        actor.id,
+        now,
+      )
+      .run();
+  }
+}
+export async function assignFinanceFixture(caseId: string) {
+  let collector = (
+    await env.DB.prepare(
+      'SELECT collector_id FROM assignments WHERE case_id=? AND unassigned_at IS NULL',
+    )
+      .bind(caseId)
+      .first<{ collector_id: string }>()
+  )?.collector_id;
+  if (!collector) {
+    const actor = await env.DB.prepare(
+      "SELECT id FROM user WHERE email='boss@test.dev'",
+    ).first<{ id: string }>();
+    if (!actor) throw Error('Fixture admin missing');
+    collector = crypto.randomUUID();
+    await env.DB.prepare(
+      'INSERT INTO collectors(id,display_name,code,is_active,created_at,updated_at) VALUES(?,?,?,1,?,?)',
+    )
+      .bind(collector, '虛構財務 fixture', collector, Date.now(), Date.now())
+      .run();
+    await env.DB.prepare(
+      'INSERT INTO assignments(id,case_id,collector_id,assigned_by_user_id,assigned_at) VALUES(?,?,?,?,?)',
+    )
+      .bind(crypto.randomUUID(), caseId, collector, actor.id, Date.now())
+      .run();
+  }
+  await configureFinanceFixture(collector);
+  return collector;
 }

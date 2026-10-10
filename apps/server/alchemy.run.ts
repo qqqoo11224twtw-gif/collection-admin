@@ -94,13 +94,13 @@ if (!process.env.AUTH_MODE && app.stage !== 'local') {
 // must not come up half-configured (default signing secret or console-logged
 // OTPs). `disabled` deployments need none of these.
 if (authMode !== 'disabled' && app.stage !== 'local' && !isPRStage) {
-  const missing = ['BETTER_AUTH_SECRET', 'RESEND_API_KEY', 'EMAIL_FROM'].filter(
+  const missing = ['BETTER_AUTH_SECRET', 'ACCOUNT_TOTP_ENCRYPTION_KEY'].filter(
     (k) => !process.env[k],
   );
   // No admin channel: blocks admin-only outright (nobody could sign in);
   // open mode keeps the requirement too — every product retains the
   // ADMIN_EMAILS admin channel (docs/auth.md).
-  if (!process.env.ADMIN_EMAILS) missing.push('ADMIN_EMAILS');
+
   if (missing.length > 0) {
     throw new Error(
       `stage "${app.stage}" with AUTH_MODE=${authMode} requires env: ${missing.join(', ')} (see docs/auth.md)`,
@@ -171,6 +171,11 @@ export const server = await Worker('server', {
     // Auth switch + secrets (docs/auth.md). Local defaults are fine for dev;
     // deployed auth-enabled stages fail closed above.
     AUTH_MODE: authMode,
+    ACCOUNT_AUTH_MODE: 'managed',
+    ACCOUNT_TOTP_ENCRYPTION_KEY: process.env.ACCOUNT_TOTP_ENCRYPTION_KEY ?? '',
+    ACCOUNT_TOTP_KEY_VERSION: process.env.ACCOUNT_TOTP_KEY_VERSION ?? 'v1',
+    ACCOUNT_TOTP_ENCRYPTION_KEYS:
+      process.env.ACCOUNT_TOTP_ENCRYPTION_KEYS ?? '',
     BETTER_AUTH_SECRET:
       process.env.BETTER_AUTH_SECRET ?? 'local-dev-secret-not-for-prod',
     // Comma-separated emails granted the admin role (in admin-only mode, the

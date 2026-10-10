@@ -13,6 +13,7 @@ import {
   intakeImageResponse,
   uploadIntakeImages,
 } from '@saasflare-dev/api/intake-media';
+import { managedAuthEnabled } from '@saasflare-dev/api/managed-auth';
 import { createManualCase } from '@saasflare-dev/api/manual-cases';
 import { systemLog } from '@saasflare-dev/api/system-log';
 import { telegramClient } from '@saasflare-dev/api/telegram-client';
@@ -33,8 +34,15 @@ const app = new Hono<{
   Bindings: typeof server.Env;
   Variables: { apiKeyId: string; apiKeyUserId: string };
 }>();
-app.post('/api/telegram/webhook', async (c) =>
-  telegramWebhook(
+app.post('/api/telegram/webhook', async (c) => {
+  let defer: ((task: Promise<unknown>) => void) | undefined;
+  try {
+    const execution = c.executionCtx;
+    defer = (task) => execution.waitUntil(task);
+  } catch {
+    /* Direct integration requests have no execution context. */
+  }
+  return telegramWebhook(
     {
       env,
       DB: drizzle(env.DB),
@@ -42,11 +50,34 @@ app.post('/api/telegram/webhook', async (c) =>
       session: null,
       user: null,
       isAdmin: false,
+      defer,
     },
     c.req.raw,
-  ),
-);
+  );
+});
 app.use(logger());
+
+app.use('/*', async (c, next) => {
+  if (c.req.path.startsWith('/rpc') || c.req.path.startsWith('/api/auth'))
+    c.header('Cache-Control', 'no-store');
+  if (
+    managedAuthEnabled() &&
+    c.req.method === 'POST' &&
+    c.req.header('cookie') &&
+    (c.req.path.startsWith('/rpc/') || c.req.path.startsWith('/api/'))
+  ) {
+    const origin = c.req.header('origin');
+    if (
+      !origin ||
+      !(env.CORS_ORIGIN ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .includes(origin)
+    )
+      return c.json({ code: 'FORBIDDEN' }, 403);
+  }
+  return next();
+});
 
 app.use(
   '/*',
@@ -187,7 +218,8 @@ app.get('/api/v1/whoami', (c) => {
 // stage — enforced fail-closed in alchemy.run.ts) the endpoint does not
 // exist.
 app.get('/api/dev/otp', async (c) => {
-  if (env.RESEND_API_KEY || authMode() === 'disabled') return c.notFound();
+  if (managedAuthEnabled() || env.RESEND_API_KEY || authMode() === 'disabled')
+    return c.notFound();
   const email = (c.req.query('email') ?? '').trim().toLowerCase();
   if (!email) return c.json({ error: 'email required' }, 400);
   const [row] = await drizzle(env.DB)

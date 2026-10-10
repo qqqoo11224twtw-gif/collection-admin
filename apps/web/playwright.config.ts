@@ -21,6 +21,7 @@ export default defineConfig({
   use: {
     baseURL,
     headless: true,
+    extraHTTPHeaders: { Origin: baseURL },
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     trace: 'retain-on-failure',

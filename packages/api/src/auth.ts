@@ -14,6 +14,12 @@ import { admin, emailOTP } from 'better-auth/plugins';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { sendEmail } from './email';
+import { apiKeySessionHeaders } from './managed-api-key-bridge';
+import {
+  managedAuthEnabled,
+  managedAuthHandler,
+  managedSession,
+} from './managed-auth';
 import { systemLog } from './system-log';
 
 /**
@@ -204,6 +210,7 @@ export interface SessionUser {
   permissionAllow?: string;
   permissionDeny?: string;
   permissionVersion?: number;
+  username?: string | null;
 }
 export interface SessionInfo {
   user: SessionUser;
@@ -212,6 +219,7 @@ export interface SessionInfo {
 
 /** Mounted at /api/auth/* (email-otp, session, sign-out, ...). */
 export async function authHandler(request: Request): Promise<Response> {
+  if (managedAuthEnabled()) return managedAuthHandler(request);
   const path = new URL(request.url).pathname;
   let relatedUserId: string | undefined;
   if (path.endsWith('/sign-out'))
@@ -344,6 +352,7 @@ export async function createUserApiKey(
   // Omitted → the plugin default applies (null = never expires).
   expiresInSeconds?: number,
 ): Promise<ApiKeyMeta & { key: string }> {
+  headers = await apiKeySessionHeaders(headers);
   const created = await getAuth().api.createApiKey({
     body: {
       name,
@@ -357,6 +366,7 @@ export async function createUserApiKey(
 /** List the session user's keys — safe metadata only. */
 export async function listUserApiKeys(headers: Headers): Promise<ApiKeyMeta[]> {
   // 1.6 returns a wrapper object, not a bare array.
+  headers = await apiKeySessionHeaders(headers);
   const { apiKeys } = await getAuth().api.listApiKeys({ headers });
   return apiKeys.map(toApiKeyMeta);
 }
@@ -366,6 +376,7 @@ export async function revokeUserApiKey(
   headers: Headers,
   keyId: string,
 ): Promise<{ success: boolean }> {
+  headers = await apiKeySessionHeaders(headers);
   const result = await getAuth().api.deleteApiKey({
     body: { keyId },
     headers,
@@ -388,6 +399,9 @@ export async function verifyApiKey(
     const owner = await drizzle(env.DB)
       .select({
         active: user.active,
+        deletedAt: user.deletedAt,
+        mustChangePassword: user.mustChangePassword,
+        totpEnabled: user.totpEnabled,
         banned: user.banned,
         banExpires: user.banExpires,
       })
@@ -396,6 +410,9 @@ export async function verifyApiKey(
       .limit(1);
     if (
       !owner[0]?.active ||
+      owner[0].deletedAt ||
+      (managedAuthEnabled() &&
+        (owner[0].mustChangePassword || !owner[0].totpEnabled)) ||
       (owner[0].banned &&
         (!owner[0].banExpires || owner[0].banExpires.getTime() > Date.now()))
     )
@@ -419,6 +436,7 @@ export async function getSession(
   headers: Headers,
 ): Promise<SessionInfo | null> {
   if (authMode() === 'disabled') return null;
+  if (managedAuthEnabled()) return managedSession(headers);
   const s = (await getAuth().api.getSession({ headers })) as SessionInfo | null;
   if (!s) return null;
   const [record] = await drizzle(env.DB)
@@ -447,6 +465,16 @@ export async function getSession(
     });
     return null;
   }
-  s.user = record;
+  s.user = {
+    id: record.id,
+    name: record.name,
+    email: record.email,
+    username: record.username ?? undefined,
+    role: record.role,
+    active: record.active,
+    permissionAllow: record.permissionAllow,
+    permissionDeny: record.permissionDeny,
+    permissionVersion: record.permissionVersion,
+  };
   return s;
 }

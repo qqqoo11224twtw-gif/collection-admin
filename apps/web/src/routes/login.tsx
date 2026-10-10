@@ -1,325 +1,298 @@
+import {
+  PASSWORD_LENGTH_MESSAGE,
+  PASSWORD_MIN_LENGTH,
+} from '@saasflare-dev/api/password-policy';
 import { Button } from '@saasflare-dev/ui/components/button';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-} from '@saasflare-dev/ui/components/card';
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from '@saasflare-dev/ui/components/field';
 import { Input } from '@saasflare-dev/ui/components/input';
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from '@saasflare-dev/ui/components/input-otp';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { Loader2 } from 'lucide-react';
+import { Label } from '@saasflare-dev/ui/components/label';
+import { createFileRoute } from '@tanstack/react-router';
+import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { BrandLogo } from '~/components/brand-logo';
-import { useConfigStatus } from '~/components/config-notice';
-import { authClient, useSession } from '~/lib/auth';
-
+import { accountRequest } from '~/lib/managed-auth';
 export const Route = createFileRoute('/login')({
-  validateSearch: (search: Record<string, unknown>): { redirect?: string } =>
-    typeof search.redirect === 'string' ? { redirect: search.redirect } : {},
+  validateSearch: (search: Record<string, unknown>) =>
+    typeof search.redirect === 'string'
+      ? { redirect: search.redirect }
+      : ({} as { redirect?: string }),
   component: LoginPage,
 });
-
-/**
- * Only same-app paths — never a full URL — to rule out open redirects.
- * /login itself is rejected too: a stale or nested redirect back to the
- * login page would bounce the user through it instead of landing home.
- */
-function safeRedirect(target: string | undefined): string {
-  if (
-    target?.startsWith('/') &&
-    !target.startsWith('//') &&
-    !target.startsWith('/login')
-  ) {
-    return target;
-  }
-  return '/';
-}
-
-/** Pragmatic email shape check — the server is the real gate. */
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
 function LoginPage() {
-  const navigate = useNavigate();
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setReady(true);
+    if (new URLSearchParams(window.location.search).get('idle') === 'true')
+      setError('已超過 15 分鐘未操作，請重新登入。');
+  }, []);
   const { redirect } = Route.useSearch();
-  const { data: session, isPending } = useSession();
-  const [step, setStep] = useState<'email' | 'otp'>('email');
-  const [email, setEmail] = useState('');
-  const [emailTouched, setEmailTouched] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  // Separate in-flight flags: resending a code must not spin the Verify
-  // button, and verifying must not relabel the resend link.
-  const [sending, setSending] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  // Seconds until "Resend code" unlocks. The server rate-limits OTP sends
-  // (3/min/IP); the cooldown keeps normal users from ever hitting that wall.
-  const [cooldown, setCooldown] = useState(0);
-
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const timer = setTimeout(() => setCooldown((s) => s - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [cooldown]);
-
-  const configQuery = useConfigStatus();
-  const authMode = configQuery.data?.authMode;
-  const localMailMode =
-    configQuery.data?.mode === 'local' &&
-    configQuery.data.warnings.some(
-      (v) => v === 'RESEND_API_KEY' || v === 'EMAIL_FROM',
+  const [step, setStep] = useState('login'),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(() =>
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('idle') === 'true'
+        ? '已超過 15 分鐘未操作，請重新登入。'
+        : '',
+    ),
+    [qr, setQr] = useState(''),
+    [secret, setSecret] = useState(''),
+    [recovery, setRecovery] = useState<string[]>([]),
+    [useRecovery, setUseRecovery] = useState(false);
+  const finish = () => {
+    window.location.assign(
+      redirect?.startsWith('/') &&
+        !redirect.startsWith('//') &&
+        !redirect.startsWith('/login')
+        ? redirect
+        : '/cases',
     );
-
-  const emailValid = isValidEmail(email);
-  const showEmailError = emailTouched && email.length > 0 && !emailValid;
-
-  // Already signed in → straight to the original destination. Replace, so
-  // Back never lands on /login only to be bounced forward again.
-  useEffect(() => {
-    if (!isPending && session) {
-      void navigate({ to: safeRedirect(redirect), replace: true });
+  };
+  async function transition(next: string) {
+    setStep(next);
+    if (next === 'enroll') {
+      const enrollment = await accountRequest<{ secret: string; uri: string }>(
+        'onboarding/totp',
+        {},
+      );
+      setSecret(enrollment.secret);
+      setQr(await QRCode.toDataURL(enrollment.uri, { width: 220, margin: 2 }));
     }
-  }, [isPending, session, navigate, redirect]);
-
-  const sendCode = async () => {
-    // Hard gate: a malformed email never reaches the OTP step.
-    if (!emailValid) {
-      setEmailTouched(true);
+  }
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    const data = new FormData(event.currentTarget);
+    if (
+      step === 'password_change' &&
+      ['newPassword', 'confirmPassword'].some(
+        (name) => String(data.get(name) ?? '').length < PASSWORD_MIN_LENGTH,
+      )
+    ) {
+      setError(PASSWORD_LENGTH_MESSAGE);
+      setBusy(false);
       return;
     }
-    setSending(true);
-    setError(null);
     try {
-      const { error: sendError } =
-        await authClient.emailOtp.sendVerificationOtp({
-          email: email.trim(),
-          type: 'sign-in',
+      if (step === 'login') {
+        const value = await accountRequest<{ step: string }>('login', {
+          username: data.get('username'),
+          password: data.get('password'),
         });
-      if (sendError) {
-        // The server checks the active allowlist before any code is generated.
-        setError(
-          ['EMAIL_NOT_ALLOWED', 'USER_INACTIVE', 'EMAIL_NOT_ADMIN'].includes(
-            sendError.code ?? '',
-          )
-            ? '此帳號未被授權使用本系統。'
-            : '無法寄送驗證碼，請稍後重試。',
+        await transition(value.step);
+      } else if (step === 'password_change') {
+        const value = await accountRequest<{ step: string }>(
+          'onboarding/password',
+          {
+            newPassword: data.get('newPassword'),
+            confirmPassword: data.get('confirmPassword'),
+          },
         );
-        return;
+        await transition(value.step);
+      } else {
+        const value = await accountRequest<{ recoveryCodes?: string[] }>(
+          useRecovery ? 'verify-recovery' : 'verify-totp',
+          { code: data.get('code') },
+        );
+        setSecret('');
+        setQr('');
+        if (value.recoveryCodes) {
+          setRecovery(value.recoveryCodes);
+          setStep('recovery');
+        } else finish();
       }
-      setStep('otp');
-      setOtp('');
-      setCooldown(60);
-    } catch {
-      setError('網路連線失敗，請重試。');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '登入失敗');
     } finally {
-      setSending(false);
+      setBusy(false);
     }
-  };
-
-  const verify = async (code: string) => {
-    setVerifying(true);
-    setError(null);
-    try {
-      const { error: verifyError } = await authClient.signIn.emailOtp({
-        email: email.trim(),
-        otp: code,
-      });
-      if (verifyError) {
-        setError('驗證碼錯誤或已過期。');
-        setOtp('');
-        return;
-      }
-      // Replace /login in history: Back after signing in should return to
-      // wherever the user came from, not to a login form that would
-      // immediately bounce them forward again.
-      void navigate({ to: safeRedirect(redirect), replace: true });
-    } catch {
-      setError('網路連線失敗，請重試。');
-    } finally {
-      setVerifying(false);
-    }
-  };
-
-  // AUTH_MODE=disabled deployments should delete this route; until then it
-  // explains itself instead of a dead form (the server 404s /api/auth/*).
-  if (authMode === 'disabled') {
-    return (
-      <main className="flex min-h-svh flex-col items-center justify-center gap-3 p-5 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">登入系統</h1>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          此環境已停用登入功能，設定方式請參閱 docs/auth.md。
-        </p>
-        <Button asChild variant="outline" size="sm">
-          <Link to="/">返回首頁</Link>
-        </Button>
-      </main>
-    );
   }
-
   return (
-    <main className="flex min-h-svh flex-col bg-muted/30">
-      <div className="flex flex-1 items-center justify-center p-5 pb-20">
-        <div className="w-full max-w-sm">
-          {/* Brand */}
-          <div className="mb-8 flex flex-col items-center gap-2 text-center">
-            <BrandLogo />
-            <h1 className="text-2xl font-semibold tracking-tight">登入系統</h1>
-            <p className="text-sm text-muted-foreground">
-              安全、清楚、有效率的案件管理系統
+    <main
+      data-onboarding={step !== 'login'}
+      className="flex min-h-dvh items-center justify-center bg-background p-5"
+    >
+      <section className="w-full max-w-sm space-y-6 rounded-2xl border bg-card p-6 shadow-lg">
+        <BrandLogo />
+        <div>
+          <h1 className="text-2xl font-semibold">
+            {step === 'login'
+              ? '登入管理後台'
+              : step === 'password_change'
+                ? '設定新密碼'
+                : step === 'enroll'
+                  ? '綁定驗證器'
+                  : step === 'recovery'
+                    ? '保存復原碼'
+                    : '兩步驟驗證'}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {step === 'login'
+              ? '使用管理員提供的帳號登入。'
+              : step === 'password_change'
+                ? '首次登入必須更換暫時密碼。密碼至少需要 6 碼。'
+                : step === 'enroll'
+                  ? '以 Google Authenticator 等驗證器掃描 QR Code。'
+                  : '安全驗證完成前，無法操作後台。'}
+          </p>
+        </div>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        {step === 'recovery' ? (
+          <div className="space-y-4">
+            <p className="text-sm">
+              復原碼只顯示一次，每組只能使用一次。請保存至安全位置。
             </p>
+            <pre className="overflow-x-auto rounded-lg bg-muted p-3 text-xs">
+              {recovery.join('\n')}
+            </pre>
+            <Button
+              className="w-full"
+              onClick={() => {
+                setRecovery([]);
+                finish();
+              }}
+            >
+              已安全保存，進入後台
+            </Button>
           </div>
-
-          <Card className="shadow-sm">
-            {step === 'email' ? (
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void sendCode();
-                }}
-              >
-                <CardContent>
-                  <FieldGroup>
-                    <Field data-invalid={showEmailError || undefined}>
-                      <FieldLabel htmlFor="email">電子郵件</FieldLabel>
-                      <Input
-                        id="email"
-                        type="email"
-                        autoComplete="email"
-                        autoFocus
-                        placeholder="請輸入電子郵件"
-                        aria-invalid={showEmailError || undefined}
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        onBlur={() => setEmailTouched(true)}
-                      />
-                      {showEmailError && (
-                        <FieldDescription className="text-destructive">
-                          請輸入有效的電子郵件地址。
-                        </FieldDescription>
-                      )}
-                      {error && (
-                        <FieldDescription className="text-destructive">
-                          {error}
-                        </FieldDescription>
-                      )}
-                    </Field>
-                  </FieldGroup>
-                </CardContent>
-                <CardFooter className="flex-col gap-3 pt-6">
-                  <Button
-                    className="w-full"
-                    disabled={sending || !emailValid}
-                    type="submit"
-                  >
-                    {sending && <Loader2 size={16} className="animate-spin" />}
-                    {sending ? '寄送中…' : '取得驗證碼'}
-                  </Button>
-                  <p className="text-center text-sm text-muted-foreground">
-                    不需要密碼，系統會寄送 6 位數驗證碼。
-                  </p>
-                </CardFooter>
-              </form>
+        ) : (
+          <form onSubmit={submit} className="space-y-4">
+            {step === 'login' ? (
+              <>
+                <Label htmlFor="username">帳號</Label>
+                <Input
+                  id="username"
+                  name="username"
+                  autoComplete="username"
+                  required
+                  maxLength={64}
+                />
+                <Label htmlFor="password">密碼</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                />
+              </>
+            ) : step === 'password_change' ? (
+              <>
+                <Label htmlFor="newPassword">新密碼</Label>
+                <Input
+                  id="newPassword"
+                  name="newPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={PASSWORD_MIN_LENGTH}
+                  onInvalid={(e) => {
+                    if (
+                      e.currentTarget.validity.tooShort ||
+                      e.currentTarget.validity.valueMissing
+                    )
+                      e.currentTarget.setCustomValidity(
+                        PASSWORD_LENGTH_MESSAGE,
+                      );
+                  }}
+                  onInput={(e) => e.currentTarget.setCustomValidity('')}
+                  required
+                />
+                <Label htmlFor="confirmPassword">確認新密碼</Label>
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={PASSWORD_MIN_LENGTH}
+                  onInvalid={(e) => {
+                    if (
+                      e.currentTarget.validity.tooShort ||
+                      e.currentTarget.validity.valueMissing
+                    )
+                      e.currentTarget.setCustomValidity(
+                        PASSWORD_LENGTH_MESSAGE,
+                      );
+                  }}
+                  onInput={(e) => e.currentTarget.setCustomValidity('')}
+                  required
+                />
+              </>
             ) : (
               <>
-                <CardContent>
-                  <FieldGroup>
-                    <Field data-invalid={!!error || undefined}>
-                      <FieldLabel htmlFor="otp">
-                        請輸入寄送至以下信箱的驗證碼：{' '}
-                        <span className="font-medium text-foreground">
-                          {email.trim()}
-                        </span>
-                      </FieldLabel>
-                      <InputOTP
-                        id="otp"
-                        maxLength={6}
-                        autoFocus
-                        value={otp}
-                        disabled={verifying}
-                        data-testid="otp-input"
-                        onChange={(value) => {
-                          setOtp(value);
-                          // Auto-submit on the 6th digit.
-                          if (value.length === 6) void verify(value);
-                        }}
-                        containerClassName="justify-center py-2"
-                      >
-                        <InputOTPGroup>
-                          {[0, 1, 2, 3, 4, 5].map((i) => (
-                            <InputOTPSlot
-                              key={i}
-                              index={i}
-                              className="h-11 w-11 text-base"
-                            />
-                          ))}
-                        </InputOTPGroup>
-                      </InputOTP>
-                      {error && (
-                        <FieldDescription className="text-center text-destructive">
-                          {error}
-                        </FieldDescription>
-                      )}
-                      {localMailMode && (
-                        <FieldDescription className="text-center">
-                          本機測試：驗證碼僅可從 /api/dev/otp 取得，不寫入日誌。
-                        </FieldDescription>
-                      )}
-                    </Field>
-                  </FieldGroup>
-                </CardContent>
-                <CardFooter className="flex-col gap-3 pt-6">
-                  <Button
-                    className="w-full"
-                    disabled={verifying || otp.length !== 6}
-                    onClick={() => void verify(otp)}
-                  >
-                    {verifying && (
-                      <Loader2 size={16} className="animate-spin" />
+                {step === 'enroll' && (
+                  <div className="space-y-3">
+                    {qr && (
+                      <img
+                        src={qr}
+                        alt="驗證器 QR Code"
+                        className="mx-auto rounded-lg"
+                      />
                     )}
-                    {verifying ? '驗證中…' : '登入系統'}
-                  </Button>
-                  <div className="flex w-full items-center justify-between text-xs text-muted-foreground">
-                    <button
-                      type="button"
-                      className="hover:text-foreground"
-                      onClick={() => {
-                        setStep('email');
-                        setOtp('');
-                        setError(null);
-                      }}
-                    >
-                      使用其他電子郵件
-                    </button>
-                    <button
-                      type="button"
-                      className="hover:text-foreground disabled:opacity-50 disabled:hover:text-muted-foreground"
-                      disabled={sending || verifying || cooldown > 0}
-                      onClick={() => void sendCode()}
-                    >
-                      {sending
-                        ? '寄送中…'
-                        : cooldown > 0
-                          ? `重新寄送驗證碼（${cooldown} 秒）`
-                          : '重新寄送驗證碼'}
-                    </button>
+                    <Label htmlFor="totpSecret">手動輸入金鑰</Label>
+                    <Input
+                      id="totpSecret"
+                      value={secret}
+                      readOnly
+                      autoComplete="off"
+                    />
                   </div>
-                </CardFooter>
+                )}
+                <Label htmlFor="code">
+                  {useRecovery ? '復原碼' : '驗證器六位驗證碼'}
+                </Label>
+                <Input
+                  id="code"
+                  name="code"
+                  autoComplete="one-time-code"
+                  inputMode={useRecovery ? 'text' : 'numeric'}
+                  pattern={useRecovery ? undefined : '[0-9]{6}'}
+                  required
+                />
+                {step === 'totp' && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setUseRecovery(!useRecovery)}
+                  >
+                    {useRecovery ? '改用驗證器' : '使用復原碼'}
+                  </Button>
+                )}
               </>
             )}
-          </Card>
-        </div>
-      </div>
+            <Button
+              type="submit"
+              className="h-11 w-full"
+              disabled={busy || !ready || (step === 'enroll' && !secret)}
+            >
+              {busy
+                ? '驗證中…'
+                : step === 'login'
+                  ? '登入'
+                  : step === 'password_change'
+                    ? '儲存新密碼'
+                    : '驗證並登入'}
+            </Button>
+            {step !== 'login' && (
+              <Button
+                variant="ghost"
+                className="w-full"
+                type="button"
+                onClick={() => {
+                  setStep('login');
+                  setSecret('');
+                  setQr('');
+                  setError('');
+                }}
+              >
+                重新登入
+              </Button>
+            )}
+          </form>
+        )}
+      </section>
     </main>
   );
 }

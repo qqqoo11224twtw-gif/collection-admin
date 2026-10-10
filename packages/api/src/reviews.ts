@@ -29,7 +29,13 @@ export const reviewsApi = {
   pendingCount: protectedProcedure.handler(async ({ context }) => {
     const [row] = await context.DB.select({ count: count() })
       .from(reviewItems)
-      .where(and(reviewVisibility(context), eq(reviewItems.status, 'pending')));
+      .where(
+        and(
+          reviewVisibility(context),
+          sql`${reviewItems.entityType}<>'intake'`,
+          eq(reviewItems.status, 'pending'),
+        ),
+      );
     return row.count;
   }),
   list: protectedProcedure
@@ -39,6 +45,7 @@ export const reviewsApi = {
       const pattern = `%${escaped}%`;
       const where = and(
         reviewVisibility(context),
+        sql`${reviewItems.entityType}<>'intake'`,
         input.status ? eq(reviewItems.status, input.status) : undefined,
         input.reviewType
           ? eq(reviewItems.reviewType, input.reviewType)

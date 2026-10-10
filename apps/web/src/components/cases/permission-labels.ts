@@ -1,4 +1,5 @@
 export const permissionLabels: Record<string, string> = {
+  'finance.return_rate.manage': '管理外收回帳比例',
   'case.view': '查看案件（相容）',
   'case.view_own': '查看自己案件',
   'case.view_all': '查看全部案件',
@@ -20,6 +21,7 @@ export const permissionLabels: Record<string, string> = {
   'settlement.mark_returned': '標記已回款',
   'settlement.mark_pending': '標記尚未回款',
   'finance.export': '匯出 Excel',
+  'finance.settings.manage': '管理回帳比例（相容）',
   'telegram_bot.manage': '管理 Telegram 機器人憑證',
   'telegram_route.manage': '管理 Telegram 群組',
   'review.view': '查看待確認',

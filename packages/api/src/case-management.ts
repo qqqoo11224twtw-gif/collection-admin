@@ -105,7 +105,7 @@ export const caseManagementApi = {
       if (!changed.length) return { id, version: record.version };
       await atomicCaseWrite(context, [
         context.env.DB.prepare(
-          'UPDATE cases SET customer_name=?,code=?,address=?,amount_due=?,status=?,revisit_status=?,revisit_reason=?,region=?,updated_at=?,version=version+1,write_token=? WHERE id=? AND version=?',
+          'UPDATE cases SET current_status=NULL,customer_name=?,report_name=NULL,code=?,address=?,amount_due=?,status=?,revisit_status=?,revisit_reason=?,region=?,updated_at=?,version=version+1,write_token=? WHERE id=? AND version=?',
         ).bind(
           input.customerName,
           input.code,
@@ -120,6 +120,15 @@ export const caseManagementApi = {
           id,
           expectedVersion,
         ),
+        ...(record.status === 'settled' &&
+        record.currentStatus === 'direct_to_principal' &&
+        input.status === 'settled'
+          ? [
+              context.env.DB.prepare(
+                'UPDATE cases SET current_status=? WHERE id=? AND write_token=?',
+              ).bind('direct_to_principal', id, token),
+            ]
+          : []),
         auditStatement(
           context,
           'case.edited',
@@ -178,7 +187,8 @@ export const caseManagementApi = {
         .limit(1);
       if (current) requirePermission(context, 'assignment.reassign');
       if (
-        current?.collectorId === input.collectorId ||
+        (current?.collectorId === input.collectorId &&
+          current.recordType === 'assignment') ||
         (!current && !input.collectorId)
       )
         throw new ORPCError('CONFLICT', {

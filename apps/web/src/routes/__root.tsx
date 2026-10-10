@@ -9,6 +9,7 @@ import {
   Scripts,
 } from '@tanstack/react-router';
 import { ThemeProvider } from 'next-themes';
+import { SessionIdleGuard } from '~/components/session-idle-guard';
 import { APP_ID } from '~/lib/brand';
 import globalsCss from '~/styles/globals.css?url';
 
@@ -57,6 +58,7 @@ function RootComponent() {
           <TooltipProvider>
             <div className="min-h-svh w-full flex flex-col">
               <Outlet />
+              <SessionIdleGuard />
             </div>
             <Toaster richColors />
           </TooltipProvider>

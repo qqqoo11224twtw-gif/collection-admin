@@ -267,9 +267,14 @@ export function ReportsPanel({
                 <Badge variant="secondary">
                   {record.workflowStatus === 'awaiting_status'
                     ? '等待外收人員確認'
-                    : statuses[record.status]}
+                    : record.financeEvent === 'payment'
+                      ? '實際收款'
+                      : record.financeEvent === 'offset'
+                        ? '後結'
+                        : statuses[record.status]}
                 </Badge>
                 {permissions.can('report.edit') &&
+                  !record.financeEvent &&
                   record.workflowStatus === 'completed' && (
                     <ReportEditor
                       caseId={caseId}
@@ -284,8 +289,11 @@ export function ReportsPanel({
             </p>
             {record.selectedStatus && (
               <p className="mt-4 text-sm text-muted-foreground">
-                外收人員已選擇： {statuses[record.selectedStatus]} · 確認人{' '}
-                {record.completedBy ?? record.author}
+                外收人員已選擇：{' '}
+                {record.selectedStatus === 'direct_to_principal'
+                  ? '後結'
+                  : statuses[record.selectedStatus]}{' '}
+                · 確認人 {record.completedBy ?? record.author}
                 {record.completedAt && ` · ${timestamp(record.completedAt)}`}
               </p>
             )}

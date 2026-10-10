@@ -37,6 +37,9 @@ export const Route = createFileRoute('/cases/')({
       ? { voided: true }
       : {}),
     page: Math.max(1, Math.min(100000, Math.floor(Number(search.page) || 1))),
+    ...([20, 50, 200, 500].includes(Number(search.pageSize))
+      ? { pageSize: Number(search.pageSize) as 20 | 50 | 200 | 500 }
+      : {}),
     query: typeof search.query === 'string' ? search.query.slice(0, 120) : '',
     ...(search.regionMissing === true || search.regionMissing === 'true'
       ? { regionMissing: true }
@@ -72,7 +75,7 @@ function CasesPage() {
   const mobile = useMobile();
   const permissions = useCasePermissions();
   const search = Route.useSearch();
-  const { page, query } = search;
+  const { page, pageSize = 20, query } = search;
   const navigate = Route.useNavigate();
   const { data: session } = useSession();
   const selectionKey = JSON.stringify([session?.user.id, search]);
@@ -86,7 +89,7 @@ function CasesPage() {
   const canSelect =
     canAssign || permissions.can('case.edit') || permissions.can('case.delete');
   const options = orpc.cases.list.queryOptions({
-    input: { ...search, pageSize: 10 },
+    input: { ...search, pageSize },
   });
   const result = useQuery({
     ...options,
@@ -94,7 +97,7 @@ function CasesPage() {
     enabled: !!session,
     retry: false,
   });
-  const pages = Math.max(1, Math.ceil((result.data?.total ?? 0) / 10));
+  const pages = Math.max(1, Math.ceil((result.data?.total ?? 0) / pageSize));
   const selectable =
     result.data?.items
       .filter(
@@ -124,7 +127,14 @@ function CasesPage() {
             查看案件、委外狀態與後續追蹤事項。
           </p>
         </div>
-        {permissions.can('case.create') && <CaseEditor />}
+        {permissions.can('case.create') && (
+          <div className="flex flex-wrap gap-2">
+            <CaseEditor />
+            <Button variant="outline" asChild>
+              <Link to="/cases/bulk-create">批量建檔</Link>
+            </Button>
+          </div>
+        )}
         {permissions.can('case.search') && (
           <Input
             aria-label="搜尋案件"
@@ -142,6 +152,29 @@ function CasesPage() {
         )}
       </div>
       {/* Filters compose against current assignments rather than a textual case status. */}
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        每頁顯示
+        <select
+          aria-label="每頁顯示"
+          className="h-9 rounded-md border border-input bg-background px-2 text-foreground"
+          value={pageSize}
+          onChange={(event) =>
+            void navigate({
+              search: {
+                ...search,
+                page: 1,
+                pageSize: Number(event.target.value) as 20 | 50 | 200 | 500,
+              },
+            })
+          }
+        >
+          {[20, 50, 200, 500].map((size) => (
+            <option key={size} value={size}>
+              {size} 條/頁
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           {

@@ -1,0 +1,1 @@
+CREATE INDEX `schedule_unpaid_plan_due_idx` ON `installment_schedules` (`plan_id`,`due_date`,`sequence`) WHERE "installment_schedules"."status" IN ('pending','partial','overdue') AND "installment_schedules"."paid_amount"<"installment_schedules"."expected_amount";

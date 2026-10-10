@@ -15,6 +15,10 @@ import { caseIdSchema, caseListSchema } from './case-contract';
 import { protectedProcedure } from './middleware';
 import { permissionPolicy, requirePermission } from './permissions';
 
+const displayCaseStatus = sql<
+  typeof cases.$inferSelect.status | 'direct_to_principal'
+>`CASE WHEN cases.status='settled' AND cases.current_status='direct_to_principal' THEN 'direct_to_principal' ELSE cases.status END`;
+
 function searchCondition(query: string) {
   if (!query) return undefined;
   // Escape LIKE metacharacters; user text is always bound as a parameter.
@@ -37,6 +41,7 @@ function searchCondition(query: string) {
 export const casesApi = {
   viewer: protectedProcedure.handler(({ context }) => ({
     role: context.user?.role ?? 'user',
+    username: context.user?.username ?? null,
   })),
   list: protectedProcedure
     .input(caseListSchema)
@@ -50,7 +55,7 @@ export const casesApi = {
         searchCondition(input.query),
         input.region ? eq(cases.region, input.region) : undefined,
         input.regionMissing ? isNull(cases.region) : undefined,
-        input.status ? eq(cases.status, input.status) : undefined,
+        input.status ? sql`${displayCaseStatus}=${input.status}` : undefined,
         input.collectorId
           ? sql`EXISTS(SELECT 1 FROM assignments a WHERE a.case_id=cases.id AND a.unassigned_at IS NULL AND a.collector_id=${input.collectorId})`
           : undefined,
@@ -69,7 +74,7 @@ export const casesApi = {
           customerName: cases.customerName,
           address: cases.address,
           amountDue: cases.amountDue,
-          status: cases.status,
+          status: displayCaseStatus,
           region: cases.region,
           source: cases.source,
           revisitStatus: cases.revisitStatus,
@@ -100,11 +105,15 @@ export const casesApi = {
   detail: protectedProcedure
     .input(caseIdSchema)
     .handler(async ({ context, input }) => {
-      const { writeToken: _writeToken, ...record } = await requireCaseAccess(
-        context,
-        input.id,
-      );
-      return record;
+      const {
+        writeToken: _writeToken,
+        reportName: _reportName,
+        ...record
+      } = await requireCaseAccess(context, input.id);
+      const [state] = await context.DB.select({ status: displayCaseStatus })
+        .from(cases)
+        .where(eq(cases.id, record.id));
+      return { ...record, status: state.status };
     }),
   regions: protectedProcedure.handler(async ({ context }) => {
     requirePermission(context, 'case.view');

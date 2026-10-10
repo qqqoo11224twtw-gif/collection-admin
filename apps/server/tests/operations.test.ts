@@ -1,8 +1,6 @@
 import { env } from 'cloudflare:workers';
 import type { Context } from '@saasflare-dev/api/context';
 import { createPayment } from '@saasflare-dev/api/finance';
-import { enqueueImageExtraction } from '@saasflare-dev/api/image-extraction-service';
-import { FakeImageExtractionProvider } from '@saasflare-dev/api/openai-image-extraction';
 import { permissionPolicy } from '@saasflare-dev/api/permissions';
 import {
   cleanupSystemLogs,
@@ -29,6 +27,7 @@ import { beforeAll, expect, it } from 'vitest';
 import app from '../src/index';
 import {
   adminCookie,
+  configureFinanceFixture,
   H,
   provisionUser,
   rpc,
@@ -333,6 +332,7 @@ async function reportSetup() {
       { cookie: admin },
     )
   ).body as { id: string };
+  await configureFinanceFixture(collector.id);
   await rpc(
     'cases.assign',
     {
@@ -358,7 +358,7 @@ it('report photos retain no photo metadata, private media or AI jobs', async () 
     .first();
   expect(row).toMatchObject({
     payload: '{}',
-    result_code: 'REPORT_MEDIA_IGNORED',
+    result_code: 'REPORT_MEDIA_NO_ACTIVE_DRAFT',
     intake_id: null,
     media_id: null,
   });
@@ -370,8 +370,7 @@ it('route collector without Telegram identity reports and different group member
   const client = new FakeTelegramClient();
   const report = reportFixture(++sequence, chat, 111, code);
   if (report.message) report.message.message_thread_id = 2;
-  await receiveTelegramUpdate(base, report);
-  await processTelegramUpdates(base, client, Date.now() + 10000);
+  await receiveNameReport(report, client);
   const r = await env.DB.prepare(
     'SELECT id,callback_token,collector_id FROM reports WHERE origin_key=?',
   )
@@ -440,7 +439,7 @@ it('route conflicts and inactive collectors rejected; route test does not expose
         { cookie: admin },
       )
     ).status,
-  ).toBe(409);
+  ).toBe(403);
   expect(
     (
       await rpc(
@@ -540,30 +539,28 @@ it('foreign keys remain valid', async () => {
     (await env.DB.prepare('PRAGMA foreign_key_check').all()).results,
   ).toEqual([]);
 });
-it('manual drafts cannot invoke image classification', async () => {
-  const receipt = await rpc(
-    'intake.receive',
-    {
-      source: 'manual',
-      proposedData: {
-        code: 'NO-AI',
-        customer_name: '虛構人工客戶',
-        address: '虛構街',
-        amount_due: 100,
-      },
-    },
-    { cookie: admin },
-  );
-  const provider = new FakeImageExtractionProvider();
-  const actor = await telegramPrincipal(base, actorId);
-  await expect(
-    enqueueImageExtraction(
-      actor,
-      (receipt.body as { id: string }).id,
-      provider,
-    ),
-  ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-  expect(provider.calls).toBe(0);
+it('manual intake and image recognition APIs are retired', async () => {
+  expect(
+    (
+      await rpc(
+        'intake.receive',
+        {
+          source: 'manual',
+          proposedData: {
+            code: 'NO-AI',
+            customer_name: '虛構人工客戶',
+            address: '虛構街',
+            amount_due: 100,
+          },
+        },
+        { cookie: admin },
+      )
+    ).status,
+  ).toBe(403);
+  expect(
+    (await rpc('intake.extractImages', { id: 'archived' }, { cookie: admin }))
+      .status,
+  ).toBe(403);
 });
 it('route changes are used by the next outbound job; inactive routes stop delivery', async () => {
   const { collector, c, chat } = await reportSetup();
@@ -682,7 +679,7 @@ it('canonical audit.view grant authorizes the existing audit endpoint', async ()
     (await rpc('cases.audit', { id: record?.id }, { cookie })).status,
   ).toBe(200);
 });
-it('a former report target deliberately repurposed as intake accepts private photo intake', async () => {
+it('a former report target cannot be repurposed as active intake', async () => {
   const { route, chat } = await reportSetup();
   await env.DB.prepare('UPDATE telegram_routes SET is_active=0 WHERE id=?')
     .bind(route.id)
@@ -692,38 +689,34 @@ it('a former report target deliberately repurposed as intake accepts private pho
       await rpc(
         'telegram.saveRoute',
         {
-          name: '虛構改設收件',
           chatId: String(chat),
           topicId: 2,
-          collectorId: null,
           routeType: 'intake',
           isActive: true,
         },
         { cookie: admin },
       )
     ).status,
-  ).toBe(200);
+  ).toBe(403);
   const update = photoFixture(++sequence, chat, { topicId: 2 });
   const client = new FakeTelegramClient();
   await receiveTelegramUpdate(base, update);
   await processTelegramUpdates(base, client, Date.now() + 10000);
-  const row = await env.DB.prepare(
-    'SELECT result_code,intake_id,media_id FROM telegram_updates WHERE id=?',
-  )
-    .bind(String(update.update_id))
-    .first();
-  expect(row?.result_code).not.toBe('REPORT_MEDIA_IGNORED');
-  expect(row?.intake_id).toBeTruthy();
-  expect(row?.media_id).toBeTruthy();
-  expect(client.downloads).toHaveLength(1);
+  expect(client.downloads).toHaveLength(0);
+  expect(
+    await env.DB.prepare(
+      'SELECT intake_id,media_id FROM telegram_updates WHERE id=?',
+    )
+      .bind(String(update.update_id))
+      .first(),
+  ).toMatchObject({ intake_id: null, media_id: null });
 });
 it('settlement selection can be corrected before receipt; stale money request cannot insert ledger', async () => {
   const { route, chat, c, code } = await reportSetup();
   const client = new FakeTelegramClient();
   const update = reportFixture(++sequence, chat, 123, code);
   if (update.message) update.message.message_thread_id = 2;
-  await receiveTelegramUpdate(base, update);
-  await processTelegramUpdates(base, client, Date.now() + 10000);
+  await receiveNameReport(update, client);
   const report = await env.DB.prepare(
     'SELECT id,callback_token,assignment_id FROM reports WHERE origin_key=?',
   )
@@ -821,3 +814,29 @@ it('concurrent demotion cannot remove the last permission manager', async () => 
     )?.n,
   ).toBe(1);
 });
+
+// Exercise the new name query + next-message content, retaining finance assertions.
+async function receiveNameReport(
+  update: ReturnType<typeof reportFixture>,
+  client: FakeTelegramClient,
+) {
+  const m = update.message;
+  if (!m) throw new Error('Expected text fixture');
+  const name =
+    (
+      await env.DB.prepare('SELECT customer_name FROM cases WHERE code=?')
+        .bind(m.text?.split(' ')[1] ?? '')
+        .first<{ customer_name: string }>()
+    )?.customer_name ?? '';
+  await receiveTelegramUpdate(base, {
+    ...update,
+    update_id: 100000000 + update.update_id,
+    message: { ...m, text: `/回報 ${name}` },
+  });
+  await processTelegramUpdates(base, client, Date.now() + 10000);
+  await receiveTelegramUpdate(base, {
+    ...update,
+    message: { ...m, text: '虛構回報：已到訪' },
+  });
+  await processTelegramUpdates(base, client, Date.now() + 10000);
+}

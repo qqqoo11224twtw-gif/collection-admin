@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { isRemote, signIn } from './auth-helpers';
 
-test('unauthenticated homepage presents the safe OTP login', async ({
+test('unauthenticated homepage presents the managed account login', async ({
   page,
 }) => {
   await page.goto('/');
   await expect(page).toHaveURL(/\/login/);
   await expect(page).toHaveTitle('案件管理後台');
-  await expect(page.getByLabel('電子郵件', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('帳號', { exact: true })).toBeVisible();
 });
 test('dashboard reads permission-scoped case data', async ({ page }) => {
   test.skip(isRemote, 'Local fictional account');

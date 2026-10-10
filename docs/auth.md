@@ -1,5 +1,9 @@
 # Auth — AUTH_MODE, sessions, admin, API keys
 
+## Formal account integration (2026-10-10)
+
+Formal login is now username + password + TOTP. Email allowlist/OTP below describes historical behavior and legacy-test coverage only. See [production candidate preparation](production-candidate.md) for deployment secrets, migrations and recovery planning. No public registration.
+
 ## Operations integration override (2026-10-09)
 
 The operational product now uses **provisioned active users only** in both

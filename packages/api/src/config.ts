@@ -1,4 +1,5 @@
 import { authMode } from './auth';
+import { managedAuthEnabled } from './managed-auth';
 import { protectedProcedure, publicProcedure } from './middleware';
 import { requirePermission } from './permissions';
 
@@ -37,19 +38,23 @@ export const configApi = {
       // ADMIN_EMAILS: in admin-only mode nobody can sign in without it —
       // blocks everywhere. In open mode customers can still sign in, but the
       // product has no admin channel — warn.
-      const hasAdmins = (env.ADMIN_EMAILS ?? '')
-        .split(',')
-        .some((e) => e.trim().length > 0);
-      if (!hasAdmins) {
-        (mode === 'admin-only' ? missing : warnings).push('ADMIN_EMAILS');
+      if (managedAuthEnabled()) {
+        if (!isLocal && !env.ACCOUNT_TOTP_ENCRYPTION_KEY)
+          missing.push('ACCOUNT_TOTP_ENCRYPTION_KEY');
+      } else {
+        const hasAdmins = (env.ADMIN_EMAILS ?? '')
+          .split(',')
+          .some((e) => e.trim().length > 0);
+        if (!hasAdmins) {
+          (mode === 'admin-only' ? missing : warnings).push('ADMIN_EMAILS');
+        }
+
+        // Mail delivery: deployed → OTPs are undeliverable, sign-in impossible.
+        const mailGaps: string[] = [];
+        if (!env.RESEND_API_KEY) mailGaps.push('RESEND_API_KEY');
+        if (!env.EMAIL_FROM) mailGaps.push('EMAIL_FROM');
+        (isLocal ? warnings : missing).push(...mailGaps);
       }
-
-      // Mail delivery: deployed → OTPs are undeliverable, sign-in impossible.
-      const mailGaps: string[] = [];
-      if (!env.RESEND_API_KEY) mailGaps.push('RESEND_API_KEY');
-      if (!env.EMAIL_FROM) mailGaps.push('EMAIL_FROM');
-      (isLocal ? warnings : missing).push(...mailGaps);
-
       // Session signing secret still on the dev default.
       if (env.BETTER_AUTH_SECRET === 'local-dev-secret-not-for-prod') {
         (isLocal ? warnings : missing).push('BETTER_AUTH_SECRET');

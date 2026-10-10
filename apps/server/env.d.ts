@@ -4,6 +4,10 @@
 import type { server } from './alchemy.run.ts';
 
 export type ServerEnv = typeof server.Env & {
+  ACCOUNT_AUTH_MODE?: string;
+  ACCOUNT_TOTP_ENCRYPTION_KEY?: string;
+  ACCOUNT_TOTP_KEY_VERSION?: string;
+  ACCOUNT_TOTP_ENCRYPTION_KEYS?: string;
   CASE_BUCKET?: R2Bucket;
   TELEGRAM_MODE?: string;
   TELEGRAM_BOT_TOKEN?: string;
@@ -15,7 +19,6 @@ export type ServerEnv = typeof server.Env & {
   OPENAI_IMAGE_MODEL?: string;
   OPENAI_REQUEST_TIMEOUT_MS?: string;
   OPENAI_MAX_RETRIES?: string;
-  COMMISSION_RATE?: string;
 };
 
 declare module 'cloudflare:workers' {

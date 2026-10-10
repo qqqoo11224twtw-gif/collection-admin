@@ -8,10 +8,10 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import {
+  CalendarClock,
   ChevronRight,
   FolderOpen,
   Home,
-  Inbox,
   LogOut,
   Menu,
   Wallet,
@@ -35,16 +35,29 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
     ...orpc.reviews.pendingCount.queryOptions(),
     enabled: permissions.can('review.view') && permissions.can('case.view'),
   });
+  const priorityOptions = orpc.installments.priorityCount.queryOptions();
+  const priority = useQuery({
+    ...priorityOptions,
+    queryKey: [session?.user.id, ...priorityOptions.queryKey],
+    enabled:
+      !!session &&
+      permissions.can('case.view') &&
+      permissions.can('installment.view'),
+    staleTime: 30000,
+    refetchInterval: 60000,
+  });
   const location = useLocation();
   const navigate = useNavigate();
   const [more, setMore] = useState(false);
   const items = [
     { label: '儀表總覽', to: '/', visible: true },
+    { label: '我的帳號', to: '/cases/profile', visible: true },
     { label: '案件管理', to: '/cases', visible: permissions.can('case.view') },
     {
-      label: '收件管理',
-      to: '/cases/intake',
-      visible: permissions.can('intake.view'),
+      label: '分期客追蹤',
+      to: '/cases/installments',
+      visible:
+        permissions.can('case.view') && permissions.can('installment.view'),
     },
     {
       label: '待確認',
@@ -62,7 +75,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
       visible: permissions.can('collector.manage'),
     },
     {
-      label: '財務管理',
+      label: permissions.can('case.view_all') ? '財務管理' : '我的財務',
       to: '/cases/finance',
       visible: permissions.can('settlement.view'),
     },
@@ -74,7 +87,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         permissions.can('telegram_bot.manage'),
     },
     {
-      label: '使用者與權限',
+      label: '帳號管理',
       to: '/cases/users',
       visible: permissions.can('user_permission.manage'),
     },
@@ -105,6 +118,11 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             {pendingReviews.data}
           </span>
         )}
+        {item.to === '/cases/installments' && priority.data !== undefined && (
+          <span className="ml-auto rounded-md bg-warning/10 px-2 py-0.5 text-xs text-warning">
+            {priority.data}
+          </span>
+        )}
         <ChevronRight className="size-3 opacity-40" />
       </span>
     </Link>
@@ -122,10 +140,13 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
               { title: '總覽', paths: ['/'] },
               {
                 title: '案件',
-                paths: ['/cases', '/cases/intake', '/cases/reviews'],
+                paths: ['/cases', '/cases/reviews'],
               },
               { title: '調度', paths: ['/cases/regions', '/cases/collectors'] },
-              { title: '財務', paths: ['/cases/finance'] },
+              {
+                title: '財務',
+                paths: ['/cases/installments', '/cases/finance'],
+              },
               { title: 'Telegram', paths: ['/cases/telegram'] },
               {
                 title: '系統管理',
@@ -152,7 +173,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           </nav>
           <div className="mt-4 space-y-2 border-t pt-4">
             <p className="truncate text-sm" data-testid="user-email">
-              {session?.user.email}
+              {viewer.data?.username ?? session?.user.name}
             </p>
             <p className="text-xs text-muted-foreground">
               {(
@@ -214,10 +235,12 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
               visible: permissions.can('case.view'),
             },
             {
-              label: '收件',
-              to: '/cases/intake',
-              icon: Inbox,
-              visible: permissions.can('intake.view'),
+              label: '分期客追蹤',
+              to: '/cases/installments',
+              icon: CalendarClock,
+              visible:
+                permissions.can('case.view') &&
+                permissions.can('installment.view'),
             },
             {
               label: '財務',

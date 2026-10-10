@@ -3,7 +3,7 @@ import { isRemote, SERVER_URL, signIn } from './auth-helpers';
 
 test.describe('Local Telegram administration', () => {
   test.skip(isRemote, 'Synthetic local Telegram configuration only');
-  test('admin manages intake route, tests delivery, simulates private image and checks mobile layout', async ({
+  test('admin manages business report route, tests delivery and checks mobile layout', async ({
     page,
   }, info) => {
     await page.goto('/cases');
@@ -13,17 +13,18 @@ test.describe('Local Telegram administration', () => {
     await expect(
       page.getByRole('heading', { name: 'Telegram 群組設定' }),
     ).toBeVisible();
+    await page.getByRole('button', { name: '業務回報群', exact: true }).click();
     const suffix = Date.now();
     const chatId = `-${suffix}`;
     await page.getByRole('button', { name: '新增路由', exact: true }).click();
     await page
       .getByLabel('名稱', { exact: true })
-      .fill(`虛構測試收件-${suffix}`);
+      .fill(`虛構測試業務回報-${suffix}`);
     await page.getByLabel('群組 ID', { exact: true }).fill(chatId);
     await page.getByLabel('Topic ID（選填）').fill('55');
     await page.getByRole('button', { name: '儲存路由', exact: true }).click();
     const row = page
-      .getByText(`虛構測試收件-${suffix}`, { exact: true })
+      .getByText(`虛構測試業務回報-${suffix}`, { exact: true })
       .locator('..');
     await expect(row).toBeVisible();
     await row.getByRole('button', { name: '測試發送' }).click();
@@ -37,39 +38,19 @@ test.describe('Local Telegram administration', () => {
     await row.getByRole('button', { name: '啟用', exact: true }).click();
     await expect(row.getByText('啟用', { exact: true })).toBeVisible();
     await expect(page.getByLabel('Telegram 使用者 ID')).toHaveCount(0);
-    const payload = {
-      update_id: suffix,
-      message: {
-        message_id: 1,
-        date: 1791400000,
-        chat: { id: Number(chatId) },
-        message_thread_id: 55,
-        from: { id: 900001 },
-        photo: [{ file_id: 'fictional-browser-image', file_size: 500 }],
-      },
-    };
-    const receive = await page.request.post(
-      `${SERVER_URL}/rpc/telegram/simulate`,
-      { data: { json: payload } },
-    );
-    expect(receive.status()).toBe(200);
-    // The local scheduler drains the durable inbox without a manual processing request.
-    await expect
-      .poll(
-        async () => {
-          const response = await page.request.post(
-            `${SERVER_URL}/rpc/telegram/updates`,
-            { data: {} },
-          );
-          const body = (await response.json()) as {
-            json: { id: string; status: string }[];
-          };
-          return body.json.find((update) => update.id === String(suffix))
-            ?.status;
+    const retired = await page.request.post(
+      `${SERVER_URL}/rpc/telegram/saveRoute`,
+      {
+        data: {
+          json: {
+            chatId: String(Number(chatId) - 1),
+            routeType: 'intake',
+            isActive: true,
+          },
         },
-        { timeout: 15000 },
-      )
-      .toBe('done');
+      },
+    );
+    expect(retired.status()).toBe(403);
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(
       page.getByRole('heading', { name: 'Telegram 群組設定' }),

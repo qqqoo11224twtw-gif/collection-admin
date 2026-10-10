@@ -12,6 +12,7 @@ import { requireCaseAccess } from './case-access';
 import { caseIdSchema } from './case-contract';
 import { caseLookupSchema, lookupCase } from './case-lookup';
 import type { Context } from './context';
+import { closeTerminalInstallments } from './installment-lifecycle';
 import { protectedProcedure } from './middleware';
 import { permissionPolicy, requirePermission } from './permissions';
 import {
@@ -55,8 +56,9 @@ function caseWrite(
     ? ' AND EXISTS (SELECT 1 FROM reports WHERE id=? AND version=?)'
     : '';
   return context.env.DB.prepare(
-    `UPDATE cases SET status=COALESCE(?,status), revisit_status=COALESCE(?,revisit_status), revisit_reason=CASE WHEN ? IS NOT NULL THEN ? ELSE revisit_reason END, updated_at=?,version=version+1,write_token=? WHERE id=? AND version=?${scope}${reportGuard}`,
+    `UPDATE cases SET current_status=CASE WHEN ? IS NULL THEN current_status ELSE NULL END,status=COALESCE(?,status), revisit_status=COALESCE(?,revisit_status), revisit_reason=CASE WHEN ? IS NOT NULL THEN ? ELSE revisit_reason END, updated_at=?,version=version+1,write_token=? WHERE id=? AND version=?${scope}${reportGuard}`,
   ).bind(
+    sync ? reportCaseStatus(fields.status) : null,
     sync ? reportCaseStatus(fields.status) : null,
     sync ? fields.revisitStatus : null,
     sync ? fields.revisitStatus : null,
@@ -75,7 +77,7 @@ export async function createReport(
   input: ReturnType<typeof reportCreateSchema.parse>,
   source: 'admin' | 'collector_portal' | 'telegram' | 'api',
   originKey?: string,
-  pending?: { telegramUserId: string; routeId: string },
+  pending?: { telegramUserId: string; routeId: string; receivedAt?: number },
 ) {
   requirePermission(context, 'report.create');
   input = reportCreateSchema.parse(input);
@@ -149,7 +151,7 @@ export async function createReport(
       Number(fields.paymentDetected),
       fields.paymentAmount,
       source,
-      now,
+      pending?.receivedAt ?? now,
       now,
       originKey ?? null,
       pending ? 'awaiting_status' : 'completed',
@@ -161,6 +163,7 @@ export async function createReport(
       input.caseId,
       token,
     ),
+    ...closeTerminalInstallments(context, input.caseId, token),
     auditStatement(
       context,
       'report.created',
@@ -225,6 +228,7 @@ export const reportsApi = {
         version: reports.version,
         workflowStatus: reports.workflowStatus,
         selectedStatus: reports.selectedStatus,
+        financeEvent: reports.financeEvent,
         completedAt: reports.completedAt,
         completedBy: sql<
           string | null
@@ -246,6 +250,10 @@ export const reportsApi = {
         .where(and(eq(reports.id, input.id), eq(reports.caseId, input.caseId)))
         .limit(1);
       if (!record) throw new ORPCError('NOT_FOUND');
+      if (record.financeEvent)
+        throw new ORPCError('BAD_REQUEST', {
+          message: '財務回報不可直接編輯，請透過財務事件作廢／更正並保留歷史。',
+        });
       if (record.workflowStatus === 'awaiting_status')
         throw new ORPCError('CONFLICT', {
           message: 'This report is awaiting its collector status selection.',
@@ -297,6 +305,7 @@ export const reportsApi = {
           input.caseId,
           token,
         ),
+        ...closeTerminalInstallments(context, input.caseId, token),
         auditStatement(
           context,
           'report.edited',

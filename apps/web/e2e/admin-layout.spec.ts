@@ -12,13 +12,14 @@ test.describe('正式後台 responsive 驗收', () => {
     const pages = [
       ['/', '儀表總覽'],
       ['/cases', '案件管理'],
-      ['/cases/intake', '收件管理'],
+      ['/cases/installments', '分期客追蹤'],
+      ['/cases/bulk-create', '批量建檔'],
       ['/cases/reviews', '待確認'],
       ['/cases/regions', '地區調度'],
       ['/cases/collectors', '外收人員'],
-      ['/cases/finance', '財務管理'],
+      ['/cases/finance', '外收結算財報'],
       ['/cases/telegram', 'Telegram 群組設定'],
-      ['/cases/users', '使用者與權限'],
+      ['/cases/users', '帳號管理'],
       ['/cases/system-logs', '系統管理日誌'],
       ['/cases/integrations', '系統整合狀態'],
     ];
@@ -57,7 +58,7 @@ test.describe('正式後台 responsive 驗收', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: '更多', exact: true }).click();
     const sheet = page.getByRole('dialog');
-    await expect(sheet).toContainText('使用者與權限');
+    await expect(sheet).toContainText('帳號管理');
     await sheet
       .getByRole('link', { name: 'Telegram 設定', exact: true })
       .click();
@@ -87,22 +88,43 @@ test.describe('正式後台 responsive 驗收', () => {
     await page.goto('/cases');
     await signIn(page, 'phase8-admin@example.test');
     const email = `route-ui-${Date.now()}@example.test`;
+    const managerContext = await page
+      .context()
+      .browser()
+      ?.newContext({
+        baseURL: 'http://localhost:3000',
+        extraHTTPHeaders: { Origin: 'http://localhost:3000' },
+      });
+    const manager = await managerContext.newPage();
+    await manager.goto('/login');
+    await signIn(manager, email);
+    const users = await page.request.post(
+      'http://localhost:4000/rpc/users/list',
+      { data: {} },
+    );
+    const target = (await users.json()).json.find(
+      (u: { email: string }) => u.email === email,
+    );
     const create = await page.request.post(
-      'http://localhost:4000/rpc/users/save',
+      'http://localhost:4000/rpc/accounts/save',
       {
         data: {
           json: {
+            id: target.id,
+            username: `e2e-${email.replace(/[^a-z0-9]/g, '-')}`,
             name: '虛構群組管理員',
-            email,
             role: 'restricted',
             active: true,
+            collectorId: null,
             allow: ['telegram_route.manage'],
             deny: [],
+            expectedVersion: target.version,
           },
         },
       },
     );
     expect(create.status()).toBe(200);
+    await managerContext.close();
     await page.context().clearCookies();
     await page.goto('/login');
     await signIn(page, email);
@@ -122,7 +144,7 @@ test.describe('正式後台 responsive 驗收', () => {
       ).status(),
     ).toBe(403);
     await page.getByRole('button', { name: '新增路由', exact: true }).click();
-    await expect(page.getByRole('dialog')).toContainText('小幫手收件');
+    await expect(page.getByRole('dialog')).toContainText('外收派件群');
     await page
       .getByRole('dialog')
       .getByRole('button', { name: '取消', exact: true })

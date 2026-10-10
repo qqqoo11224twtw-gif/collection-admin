@@ -1,95 +1,96 @@
 import { expect, test } from '@playwright/test';
-import { fillUntilEnabled, isRemote, SERVER_URL, signIn } from './auth-helpers';
+import {
+  completeEnrollment,
+  isRemote,
+  SERVER_URL,
+  signIn,
+} from './auth-helpers';
 
-test.describe('營運設定與 Email 白名單', () => {
-  test.setTimeout(60000);
-  test.skip(isRemote, 'Only local fictional data');
-  test('admin creates allowlisted account and updates individual permissions on mobile', async ({
+test.describe('正式帳號與營運設定', () => {
+  test.skip(isRemote, 'Local fictional data only');
+  test.setTimeout(120000);
+  test('admin creates account with grouped overrides; first password change and TOTP are mandatory', async ({
     page,
   }, info) => {
     await page.goto('/cases');
     await signIn(page, 'phase8-admin@example.test');
     await page.goto('/cases/users');
     await expect(
-      page.getByRole('heading', { name: '使用者與權限' }),
+      page.getByRole('heading', { name: '帳號管理', exact: true }),
     ).toBeVisible();
-    const email = `operations-${Date.now()}@example.test`;
-    await page.getByRole('button', { name: '新增使用者', exact: true }).click();
-    await page.getByLabel('姓名', { exact: true }).fill('虛構財務營運帳號');
-    await page.getByLabel('電子郵件', { exact: true }).fill(email);
-    await page.getByLabel('角色', { exact: true }).selectOption('finance');
-    await page.getByLabel('新增案件', { exact: true }).selectOption('allow');
-    await page.getByLabel('搜尋案件', { exact: true }).selectOption('deny');
-    await page.getByRole('button', { name: '儲存', exact: true }).click();
-    await expect(page.getByText(email, { exact: true })).toBeVisible();
+    const username = `operations-${Date.now()}`;
+    await page.getByRole('button', { name: '新增帳號', exact: true }).click();
+    await page.getByLabel('帳號', { exact: true }).fill(username);
+    await page.getByLabel('顯示名稱').fill('虛構營運管理員');
+    await page.getByLabel('角色範本').selectOption('restricted');
+    await page.getByLabel('案件管理權限').selectOption('allow');
+    await page.locator('summary').filter({ hasText: '進階權限' }).click();
+    await page.getByLabel('case.search', { exact: true }).selectOption('deny');
+    await page.getByRole('button', { name: '儲存變更', exact: true }).click();
+    const password = await page.getByLabel('一次性暫時密碼').inputValue();
+    expect(password.length).toBeGreaterThan(24);
+    await page.getByRole('button', { name: '已安全交付' }).click();
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.getByText(email, { exact: true })).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
     await page.screenshot({
-      path: info.outputPath('users-mobile.png'),
-      fullPage: true,
+      path: info.outputPath('managed-accounts-mobile.png'),
     });
     await page.context().clearCookies();
     await page.goto('/login');
-    await signIn(page, email);
-    await page.goto('/cases');
+    await page.getByLabel('帳號', { exact: true }).fill(username);
+    await page.getByLabel('密碼', { exact: true }).fill(password);
+    await page.getByRole('button', { name: '登入', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: '設定新密碼' }),
+    ).toBeVisible();
+    const denied = await page.request.post(`${SERVER_URL}/rpc/cases/list`, {
+      data: { json: {} },
+    });
+    expect(denied.status()).toBe(401);
+    await page
+      .getByLabel('新密碼', { exact: true })
+      .fill('Fictional-new-account-password!');
+    await page.getByLabel('確認新密碼').fill('Fictional-new-account-password!');
+    await page.getByRole('button', { name: '儲存新密碼' }).click();
+    await completeEnrollment(page);
     await expect(
       page.getByRole('button', { name: '新增案件', exact: true }),
     ).toBeVisible();
-    await expect(
-      page.getByRole('textbox', { name: '搜尋案件', exact: true }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole('textbox', { name: '全域案件搜尋' }),
-    ).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'Telegram 設定' })).toHaveCount(
-      0,
-    );
-    const search = await page.request.post(`${SERVER_URL}/rpc/cases/list`, {
-      data: { json: { query: 'abc' } },
-    });
-    expect(search.status()).toBe(403);
+    expect(
+      (
+        await page.request.post(`${SERVER_URL}/rpc/cases/list`, {
+          data: { json: { query: 'test' } },
+        })
+      ).status(),
+    ).toBe(403);
   });
-  test('system logs support filters, safe details, handling and mobile layout', async ({
+  test('system log captures failed managed login, supports handling and mobile layout', async ({
     page,
   }, info) => {
     await page.goto('/cases');
     await signIn(page, 'phase8-admin@example.test');
-    await page.request.post(
-      `${SERVER_URL}/api/auth/email-otp/send-verification-otp`,
-      {
-        data: {
-          email: `unauthorized-${Date.now()}@example.test`,
-          type: 'sign-in',
-        },
+    await page.request.post(`${SERVER_URL}/api/auth/login`, {
+      data: {
+        username: `missing-log-${Date.now()}`,
+        password: 'Fictional-invalid-password!',
       },
-    );
+    });
     await page.goto('/cases/system-logs');
-    await expect(
-      page.getByRole('heading', { name: '系統管理日誌' }),
-    ).toBeVisible();
     await page.getByLabel('事件狀態').selectOption('denied');
-    await page.getByLabel('搜尋日誌').fill('EMAIL_NOT_ALLOWED');
-    await expect(
-      page.getByText('此 Email 未被管理員授權登入。', { exact: true }).first(),
-    ).toBeVisible();
-    await page
-      .getByText('此 Email 未被管理員授權登入。', { exact: true })
-      .first()
-      .click();
+    await page.getByLabel('搜尋日誌').fill('LOGIN_PASSWORD_FAILED');
+    const row = page
+      .getByRole('button')
+      .filter({ hasText: 'LOGIN_PASSWORD_FAILED' })
+      .first();
+    await expect(row).toBeVisible();
+    await row.click();
     await expect(page.getByRole('heading', { name: '日誌詳情' })).toBeVisible();
-    await page.getByLabel('處理備註').fill('虛構驗收已確認');
+    await page.getByLabel('處理備註').fill('虛構安全驗收');
     await page.getByRole('button', { name: '已處理', exact: true }).click();
-    await expect(
-      page
-        .getByRole('button')
-        .filter({ hasText: /EMAIL_NOT_ALLOWED/ })
-        .first(),
-    ).toContainText('已處理');
     await page.setViewportSize({ width: 390, height: 844 });
     expect(
       await page.evaluate(
@@ -97,27 +98,7 @@ test.describe('營運設定與 Email 白名單', () => {
       ),
     ).toBe(true);
     await page.screenshot({
-      path: info.outputPath('system-logs-mobile.png'),
-      fullPage: true,
+      path: info.outputPath('managed-login-log-mobile.png'),
     });
-  });
-  test('unauthorized email sees Chinese rejection and no registration entry', async ({
-    page,
-  }) => {
-    await page.goto('/login');
-    await fillUntilEnabled(
-      page,
-      '請輸入電子郵件',
-      `not-allowed-${Date.now()}@example.test`,
-      /取得驗證碼/,
-    );
-    await page.getByRole('button', { name: '取得驗證碼', exact: true }).click();
-    await expect(
-      page.getByText('此帳號未被授權使用本系統。', { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByTestId('otp-input')).toHaveCount(0);
-    await expect(
-      page.getByRole('button', { name: /註冊|建立帳號/ }),
-    ).toHaveCount(0);
   });
 });

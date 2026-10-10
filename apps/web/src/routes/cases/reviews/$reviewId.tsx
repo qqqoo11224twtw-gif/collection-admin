@@ -62,7 +62,10 @@ function ReviewForm({ record }: { record: Review }) {
   const [error, setError] = useState('');
   const proposal = record.proposedData;
   const pending = record.status === 'pending';
-  const editable = pending && permissions.can('review.resolve');
+  const editable =
+    pending &&
+    record.entityType !== 'intake' &&
+    permissions.can('review.resolve');
   const classification =
     proposal.type === 'report_classification' ? proposal.classification : null;
   const payment =

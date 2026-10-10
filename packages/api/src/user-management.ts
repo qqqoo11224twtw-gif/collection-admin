@@ -2,6 +2,7 @@ import { ORPCError } from '@orpc/server';
 import { user } from '@saasflare-dev/db';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { managedAuthEnabled } from './managed-auth';
 import { protectedProcedure } from './middleware';
 import {
   PERMISSIONS,
@@ -32,7 +33,7 @@ export const userSaveSchema = z.strictObject({
   expectedVersion: z.number().int().nonnegative().default(0),
 });
 export const MANAGER_SQL =
-  "active=1 AND (role='admin' OR EXISTS(SELECT 1 FROM json_each(permission_allow) WHERE value='user_permission.manage')) AND NOT EXISTS(SELECT 1 FROM json_each(permission_deny) WHERE value='user_permission.manage')";
+  "active=1 AND deleted_at IS NULL AND (role='admin' OR EXISTS(SELECT 1 FROM json_each(permission_allow) WHERE value='user_permission.manage')) AND NOT EXISTS(SELECT 1 FROM json_each(permission_deny) WHERE value='user_permission.manage')";
 export const usersApi = {
   list: protectedProcedure.handler(async ({ context }) => {
     requirePermission(context, 'user_permission.manage');
@@ -61,6 +62,8 @@ export const usersApi = {
     .input(userSaveSchema)
     .handler(async ({ context, input }) => {
       const actor = requirePermission(context, 'user_permission.manage');
+      if (managedAuthEnabled())
+        throw new ORPCError('FORBIDDEN', { message: '請使用正式帳號管理。' });
       const existing = input.id
         ? await context.DB.select()
             .from(user)

@@ -8,10 +8,10 @@ export async function telegramPrincipal(
   userId: string,
   collectorScope = false,
 ): Promise<Context> {
-  const [record] = await base.DB.select()
-    .from(user)
-    .where(eq(user.id, userId))
-    .limit(1);
+  const [record] =
+    base.telegramPrincipalRecord?.id === userId
+      ? [base.telegramPrincipalRecord]
+      : await base.DB.select().from(user).where(eq(user.id, userId)).limit(1);
   if (
     !record ||
     !record.active ||
@@ -22,6 +22,7 @@ export async function telegramPrincipal(
   const now = new Date();
   const context: Context = {
     ...base,
+    telegramPrincipalRecord: record,
     user: {
       ...record,
       role: collectorScope ? 'user' : (record.role ?? 'user'),

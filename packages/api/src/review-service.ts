@@ -5,7 +5,9 @@ import { atomicCaseWrite } from './audit';
 import { requireCaseAccess } from './case-access';
 import { lookupCase } from './case-lookup';
 import type { Context } from './context';
+import { closeTerminalInstallments } from './installment-lifecycle';
 import { resolveIntakeReview } from './intake-resolver';
+import { rejectRetiredIntake } from './intake-retirement';
 import { requireIntake } from './intake-service';
 import { permissionPolicy, requirePermission } from './permissions';
 import { type ReportFields, reportCaseStatus } from './report-classification';
@@ -319,6 +321,7 @@ export async function resolveReview(context: Context, raw: unknown) {
   }
   const proposal = row.proposedData;
   if (row.entityType === 'intake' && row.entityId) {
+    rejectRetiredIntake();
     let confirmed: ReviewConfirmed | null = null;
     if (input.decision !== 'rejected') {
       if (input.decision === 'corrected' && !input.confirmedData)
@@ -451,8 +454,9 @@ export async function resolveReview(context: Context, raw: unknown) {
       .limit(1);
     statements.push(
       context.env.DB.prepare(
-        `UPDATE cases SET status=COALESCE(?,status),revisit_status=COALESCE(?,revisit_status),revisit_reason=CASE WHEN ? IS NOT NULL THEN ? ELSE revisit_reason END,updated_at=?,version=version+1,write_token=? WHERE id=? AND ${authorizedGuard}`,
+        `UPDATE cases SET current_status=CASE WHEN ? IS NULL THEN current_status ELSE NULL END,status=COALESCE(?,status),revisit_status=COALESCE(?,revisit_status),revisit_reason=CASE WHEN ? IS NOT NULL THEN ? ELSE revisit_reason END,updated_at=?,version=version+1,write_token=? WHERE id=? AND ${authorizedGuard}`,
       ).bind(
+        latest?.id === proposal.reportId ? reportCaseStatus(c.status) : null,
         latest?.id === proposal.reportId ? reportCaseStatus(c.status) : null,
         latest?.id === proposal.reportId ? c.revisit_status : null,
         latest?.id === proposal.reportId ? c.revisit_status : null,
@@ -483,7 +487,7 @@ export async function resolveReview(context: Context, raw: unknown) {
     const c = confirmed.extraction;
     statements.push(
       context.env.DB.prepare(
-        `UPDATE cases SET code=?,customer_name=?,address=?,amount_due=?,updated_at=?,version=version+1,write_token=? WHERE id=? AND ${authorizedGuard}`,
+        `UPDATE cases SET code=?,customer_name=?,report_name=NULL,address=?,amount_due=?,updated_at=?,version=version+1,write_token=? WHERE id=? AND ${authorizedGuard}`,
       ).bind(
         c.code,
         c.customer_name,
@@ -520,6 +524,8 @@ export async function resolveReview(context: Context, raw: unknown) {
       ),
     );
   }
+  if (caseId)
+    statements.push(...closeTerminalInstallments(context, caseId, token));
   statements.push(
     reviewAuditStatement(
       context,

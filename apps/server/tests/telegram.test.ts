@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { CaseMatchingService } from '@saasflare-dev/api/case-matching';
 import type { Context } from '@saasflare-dev/api/context';
 import { FakeTelegramClient } from '@saasflare-dev/api/telegram-client';
+import type { TelegramUpdate } from '@saasflare-dev/api/telegram-contract';
 import {
   callbackFixture,
   photoFixture,
@@ -14,14 +15,18 @@ import {
 } from '@saasflare-dev/api/telegram-outbound';
 import { telegramPrincipal } from '@saasflare-dev/api/telegram-principal';
 import {
-  finalizeAlbums,
   processTelegramUpdates,
   receiveTelegramUpdate,
 } from '@saasflare-dev/api/telegram-processing';
 import { drizzle } from 'drizzle-orm/d1';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import app from '../src/index';
-import { adminCookie, rpc, userCookie } from './helpers';
+import {
+  adminCookie,
+  configureFinanceFixture,
+  rpc,
+  userCookie,
+} from './helpers';
 
 let admin: string;
 let ordinary: string;
@@ -39,6 +44,16 @@ async function route(
   collector: string | null = null,
   topicId: number | null = null,
 ) {
+  if (['intake', 'intake_source'].includes(routeType)) {
+    const id = crypto.randomUUID(),
+      now = Date.now();
+    await env.DB.prepare(
+      'INSERT INTO telegram_routes(id,chat_id,topic_id,route_type,is_active,managed_by_user_id,created_at,updated_at) VALUES(?,?,?,?,1,?,?,?)',
+    )
+      .bind(id, String(chatId), topicId, routeType, adminId, now, now)
+      .run();
+    return id;
+  }
   const r = await rpc(
     'telegram.saveRoute',
     {
@@ -97,14 +112,46 @@ async function updateRow(id: number) {
       last_error_code: string;
     }>();
 }
+// Existing downstream transport fixtures now drive the real two-message conversation.
 async function receive(raw: unknown) {
+  const u = raw as TelegramUpdate;
+  const marker = ' 虛構回報：已到訪';
+  const text = u.message?.text;
+  if (text?.startsWith('/回報 ') && text.endsWith(marker) && u.message) {
+    if (await updateRow(u.update_id)) return receiveTelegramUpdate(base, u);
+    const identifier = text.slice('/回報 '.length, -marker.length);
+    const c = await env.DB.prepare(
+      'SELECT customer_name FROM cases WHERE code=? OR case_no=? LIMIT 1',
+    )
+      .bind(identifier, identifier)
+      .first<{ customer_name: string }>();
+    const name = c?.customer_name ?? identifier;
+    const start = {
+      ...u,
+      update_id: 100000000 + u.update_id,
+      message: { ...u.message, text: `/回報 ${name}` },
+    };
+    await receiveTelegramUpdate(base, start);
+    await processTelegramUpdates(base, new FakeTelegramClient(), tick());
+    const state = await updateRow(start.update_id);
+    return receiveTelegramUpdate(base, {
+      ...u,
+      message: {
+        ...u.message,
+        text:
+          state?.result_code === 'AWAITING_REPORT_CONTENT'
+            ? '虛構回報：已到訪'
+            : `/回報 ${name}`,
+      },
+    });
+  }
   return receiveTelegramUpdate(base, raw);
 }
 async function run(client = new FakeTelegramClient(), now = tick()) {
   await processTelegramUpdates(base, client, now);
   // Phase-six transport fixtures now explicitly simulate the phase-seven human button.
   const waiting = await env.DB.prepare(
-    "SELECT r.callback_token FROM reports r JOIN assignments a ON a.id=r.assignment_id WHERE r.workflow_status='awaiting_status' AND r.selected_status IS NULL AND a.unassigned_at IS NULL",
+    "SELECT r.callback_token FROM reports r JOIN assignments a ON a.id=r.assignment_id WHERE r.workflow_status='awaiting_status' AND r.selected_status IS NULL AND a.unassigned_at IS NULL AND NOT EXISTS(SELECT 1 FROM telegram_report_conversations conv WHERE conv.report_id=r.id AND conv.stage<>'status')",
   ).all<{ callback_token: string }>();
   for (const row of waiting.results)
     await receive(
@@ -162,6 +209,7 @@ beforeAll(async () => {
   );
   expect(c.status).toBe(200);
   collectorId = (c.body as { id: string }).id;
+  await configureFinanceFixture(collectorId);
   intakeChat = -100900001;
   collectorChat = -100900002;
   await route(intakeChat, 'intake_source');
@@ -235,6 +283,7 @@ describe('Telegram manual report confirmation', () => {
     expect(buttons.map((x) => x.text)).toEqual([
       '✅ 結清',
       '💰 分期',
+      '🏦 後結',
       '❌ 無解',
       '🔁 安排二訪',
     ]);
@@ -373,10 +422,8 @@ describe('Telegram manual report confirmation', () => {
     'deadline',
     'weekly',
     'monthly',
-  ] as const)('persists %s installment setup and creates schedules only after an idempotent confirmation', async (type) => {
-    await env.DB.prepare(
-      "UPDATE installment_workflows SET status='cancelled' WHERE status='active'",
-    ).run();
+    'custom',
+  ])('retired %s callback cannot start a questionnaire or create a schedule', async (type) => {
     const { c, row, client } = await pending();
     await receive(
       callbackFixture(
@@ -388,104 +435,36 @@ describe('Telegram manual report confirmation', () => {
       ),
     );
     await processTelegramUpdates(base, client, tick());
-    async function workflow() {
-      return await env.DB.prepare(
-        'SELECT * FROM installment_workflows WHERE report_id=?',
+    expect(
+      await env.DB.prepare('SELECT status FROM cases WHERE id=?')
+        .bind(c.id)
+        .first(),
+    ).toMatchObject({ status: 'installment' });
+    const old = callbackFixture(
+      ++sequence,
+      collectorChat,
+      900001,
+      row.callback_token,
+      'installment',
+    );
+    if (old.callback_query)
+      old.callback_query.data = `ip:${row.callback_token}:0:${type}`;
+    await receive(old);
+    await processTelegramUpdates(base, client, tick());
+    expect(
+      await env.DB.prepare(
+        'SELECT count(*) AS n FROM installment_workflows WHERE report_id=?',
       )
         .bind(row.id)
-        .first<{
-          id: string;
-          token: string;
-          version: number;
-          status: string;
-          step: string;
-        }>();
-    }
-    async function button(action: string, wrongSender = false) {
-      const state = await workflow();
-      const update = callbackFixture(
-        ++sequence,
-        collectorChat,
-        wrongSender ? 900002 : 900001,
-        row.callback_token,
-        'installment',
-      );
-      if (update.callback_query)
-        update.callback_query.data = `ip:${state?.token}:${state?.version}:${action}`;
-      await receive(update);
-      await processTelegramUpdates(base, client, tick());
-      return update;
-    }
-    async function text(content: string) {
-      const update = reportFixture(++sequence, collectorChat, 900001, c.code);
-      if (update.message) update.message.text = content;
-      await receive(update);
-      await processTelegramUpdates(base, client, tick());
-    }
-    expect((await workflow())?.step).toBe('type');
-    await button(type);
-    if (type === 'deadline') {
-      await text('2026/02/30');
-      expect((await workflow())?.step).toBe('deadline');
-      await text('2090/10/20');
-    } else if (type === 'weekly') await button('week3');
-    else await button('day10');
-    if (type !== 'deadline') {
-      await text('-1');
-      expect((await workflow())?.step).toBe('per');
-      await text('5000');
-    }
-    await text(type === 'deadline' ? '15000' : '23000');
-    expect((await workflow())?.step).toBe('confirm');
+        .first(),
+    ).toEqual({ n: 0 });
     expect(
-      (
-        await env.DB.prepare(
-          'SELECT count(*) AS n FROM installment_plans WHERE report_id=?',
-        )
-          .bind(row.id)
-          .first()
-      )?.n,
-    ).toBe(0);
-    const confirmation = await button('confirm');
-    await receive(confirmation);
-    await processTelegramUpdates(base, client, tick());
-    const completed = await workflow();
-    expect(completed?.status).toBe('completed');
-    expect(
-      (
-        await env.DB.prepare(
-          'SELECT count(*) AS n FROM installment_plans WHERE report_id=?',
-        )
-          .bind(row.id)
-          .first()
-      )?.n,
-    ).toBe(1);
-    const schedules = await env.DB.prepare(
-      'SELECT expected_amount FROM installment_schedules WHERE case_id=? ORDER BY sequence',
-    )
-      .bind(c.id)
-      .all();
-    expect(schedules.results.map((s) => s.expected_amount)).toEqual(
-      type === 'deadline' ? [15000] : [5000, 5000, 5000, 5000, 3000],
-    );
-    expect(
-      (
-        await env.DB.prepare(
-          'SELECT count(*) AS n FROM payments WHERE case_id=?',
-        )
-          .bind(c.id)
-          .first()
-      )?.n,
-    ).toBe(0);
-    expect(
-      (
-        await env.DB.prepare(
-          "SELECT count(*) AS n FROM audit_logs WHERE entity_id=? AND action='installment.plan_created'",
-        )
-          .bind(c.id)
-          .first()
-      )?.n,
-    ).toBe(1);
+      await env.DB.prepare(
+        'SELECT count(*) AS n FROM installment_plans WHERE case_id=?',
+      )
+        .bind(c.id)
+        .first(),
+    ).toEqual({ n: 0 });
   });
   it('rejects malformed token, wrong source topic and an ended assignment', async () => {
     const { row, client } = await pending();
@@ -563,104 +542,20 @@ describe('Telegram local integration', () => {
     );
     expect(invalid.status).toBe(400);
   });
-  it('webhook persists quickly; duplicate update creates one intake and one private media without repeat download', async () => {
-    const u = photoFixture(600002, intakeChat);
-    for (let i = 0; i < 2; i++) {
-      const r = await app.fetch(
-        new Request('http://localhost/api/telegram/webhook', {
-          method: 'POST',
-          headers: {
-            'X-Telegram-Bot-Api-Secret-Token': 'test-webhook-placeholder',
-          },
-          body: JSON.stringify(u),
-        }),
-      );
-      expect(r.status).toBe(200);
-    }
-    expect((await updateRow(600002))?.intake_id).toBeNull();
-    const fake = await run();
-    await receive(u);
-    await run(fake);
-    const row = await updateRow(600002);
-    expect(row?.status).toBe('done');
-    expect(fake.downloads).toHaveLength(1);
-    const media = await env.DB.prepare(
-      'SELECT id,storage_key FROM intake_media WHERE intake_id=?',
-    )
-      .bind(row?.intake_id)
-      .all<{ id: string; storage_key: string }>();
-    expect(media.results).toHaveLength(1);
-    expect(media.results[0].storage_key).toMatch(/^intakes\//);
-    const response = await app.fetch(
-      new Request(
-        `http://localhost/api/intake/${row?.intake_id}/media/${media.results[0].id}/image`,
-      ),
-    );
-    expect(response.status).toBe(401);
-  });
-  it('accepts document images and rejects disallowed source topics', async () => {
-    await receive(photoFixture(600003, intakeChat, { document: true }));
-    await run();
-    expect((await updateRow(600003))?.status).toBe('done');
-    await receive(photoFixture(600004, intakeChat, { topicId: 999 }));
-    await run();
-    expect(await updateRow(600004)).toMatchObject({
-      status: 'failed',
-      last_error_code: 'SOURCE_DENIED',
+  it('retired intake receipts are idempotent and never download private images', async () => {
+    const update = photoFixture(600001, intakeChat);
+    const client = new FakeTelegramClient();
+    await receive(update);
+    await receive(update);
+    await run(client);
+    expect(await updateRow(600001)).toMatchObject({
+      status: 'done',
+      result_code: 'TELEGRAM_INTAKE_DISABLED',
+      intake_id: null,
     });
+    expect(client.downloads).toHaveLength(0);
   });
-  it('collects three album images including delayed arrivals, preserving message order and quiet period', async () => {
-    const fake = new FakeTelegramClient();
-    const album = 'fictional-album';
-    const first = photoFixture(600005, intakeChat, { album, messageId: 20 });
-    await receive(first);
-    await run(fake, Date.now());
-    const second = photoFixture(600006, intakeChat, { album, messageId: 10 });
-    await receive(second);
-    await receive(second);
-    await run(fake, Date.now());
-    const pending = await env.DB.prepare(
-      'SELECT finalized_at FROM telegram_albums WHERE id=?',
-    )
-      .bind(`${intakeChat}:0:${album}`)
-      .first<{ finalized_at: number | null }>();
-    expect(pending?.finalized_at).toBeNull();
-    await receive(photoFixture(600007, intakeChat, { album, messageId: 30 }));
-    await run(fake, Date.now());
-    await finalizeAlbums(base, tick());
-    const rows = await env.DB.prepare(
-      'SELECT intake_id FROM telegram_updates WHERE id IN (?,?,?)',
-    )
-      .bind('600005', '600006', '600007')
-      .all<{ intake_id: string }>();
-    expect(new Set(rows.results.map((r) => r.intake_id)).size).toBe(1);
-    const images = await env.DB.prepare(
-      'SELECT sort_order FROM intake_media WHERE intake_id=? ORDER BY sort_order',
-    )
-      .bind(rows.results[0].intake_id)
-      .all<{ sort_order: number }>();
-    expect(images.results.map((r) => r.sort_order)).toEqual([10, 20, 30]);
-    expect(fake.downloads).toHaveLength(3);
-    expect(
-      (
-        await env.DB.prepare(
-          'SELECT finalized_at FROM telegram_albums WHERE id=?',
-        )
-          .bind(`${intakeChat}:0:${album}`)
-          .first<{ finalized_at: number }>()
-      )?.finalized_at,
-    ).toBeTruthy();
-  });
-  it('download failure retries safely and reaches success without a second media row', async () => {
-    await receive(photoFixture(600008, intakeChat));
-    const fake = new FakeTelegramClient();
-    fake.downloadFailures = 1;
-    await run(fake);
-    expect((await updateRow(600008))?.status).toBe('pending');
-    await run(fake, tick() + 10000);
-    expect((await updateRow(600008))?.status).toBe('done');
-    expect(fake.downloads).toHaveLength(2);
-  });
+
   it('same name plus different codes is no match and produces separate cases for different events', async () => {
     const name = `虛構同名-${crypto.randomUUID()}`;
     await createCase(name, `A-${crypto.randomUUID()}`);
@@ -674,28 +569,15 @@ describe('Telegram local integration', () => {
     expect((await new CaseMatchingService().match(context, p)).kind).toBe(
       'no_match',
     );
-    const receipt = await rpc(
-      'intake.receive',
-      {
-        source: 'telegram',
-        externalId: `distinct-${crypto.randomUUID()}`,
-        proposedData: p,
-      },
-      { cookie: admin },
-    );
-    const id = (receipt.body as { id: string }).id;
-    const d = await rpc('intake.detail', { id }, { cookie: admin });
-    const resolved = await rpc(
-      'intake.resolve',
-      {
-        id,
-        expectedVersion: (d.body as { version: number }).version,
-        action: 'create',
-      },
-      { cookie: admin },
-    );
-    expect(resolved.status).toBe(200);
-    expect(resolved.body).toMatchObject({ status: 'created' });
+    expect(
+      (
+        await rpc(
+          'intake.receive',
+          { source: 'manual', proposedData: p },
+          { cookie: admin },
+        )
+      ).status,
+    ).toBe(403);
   });
   it('same name and code strongly match, missing code or conflicting address require review', async () => {
     const name = `虛構規則-${crypto.randomUUID()}`;
@@ -720,24 +602,15 @@ describe('Telegram local integration', () => {
     expect(
       (await service.match(context, { ...p, code: 'OTHER' }, c.caseNo)).kind,
     ).toBe('unique_match');
-    const receipt = await rpc(
-      'intake.receive',
-      {
-        source: 'manual',
-        proposedData: { ...p, address: '明顯不同的虛構地址' },
-      },
-      { cookie: admin },
-    );
-    const id = (receipt.body as { id: string }).id;
     expect(
       (
         await rpc(
-          'intake.process',
-          { id, expectedVersion: 0 },
+          'intake.receive',
+          { source: 'manual', proposedData: p },
           { cookie: admin },
         )
-      ).body,
-    ).toMatchObject({ status: 'needs_review' });
+      ).status,
+    ).toBe(403);
   });
   it('collector reports assigned case, confirms manually and queues an idempotent outbound job', async () => {
     const c = await assignedCase();
@@ -810,8 +683,12 @@ describe('Telegram local integration', () => {
       .bind('command-reply:600012')
       .first<{ payload: string }>();
     const text = JSON.parse(job?.payload ?? '{}').text;
-    expect(text).toContain(a.caseNo);
-    expect(text).toContain(b.caseNo);
+    expect(
+      JSON.stringify(JSON.parse(job?.payload ?? '{}').replyMarkup),
+    ).toContain(name.slice(0, 22));
+    expect(
+      JSON.stringify(JSON.parse(job?.payload ?? '{}').replyMarkup),
+    ).not.toContain(b.caseNo);
     expect(text).not.toContain('虛構地址甲');
     expect(text).not.toContain('50000');
   });
@@ -960,48 +837,7 @@ describe('Telegram local integration', () => {
       (await rpc('telegram.process', undefined, { cookie: ordinary })).status,
     ).toBe(403);
   });
-  it('concurrent webhook delivery and processors have one receipt, download and media row', async () => {
-    const update = photoFixture(600016, intakeChat);
-    await Promise.all([receive(update), receive(update)]);
-    const fake = new FakeTelegramClient();
-    await Promise.all([run(fake), run(fake)]);
-    expect((await updateRow(600016))?.status).toBe('done');
-    expect(
-      fake.downloads.filter((id) => id === 'fictional-image-600016'),
-    ).toHaveLength(1);
-    expect(
-      (
-        await env.DB.prepare(
-          'SELECT count(*) AS n FROM intake_media WHERE id=?',
-        )
-          .bind('telegram-600016')
-          .first<{ n: number }>()
-      )?.n,
-    ).toBe(1);
-  });
-  it('staged private download survives a database rollback and is not downloaded again', async () => {
-    await receive(photoFixture(600017, intakeChat));
-    await env.DB.exec(
-      "CREATE TRIGGER fictional_media_fail BEFORE INSERT ON intake_media WHEN NEW.id='telegram-600017' BEGIN SELECT RAISE(ABORT,'FICTIONAL_DB_FAILURE'); END;",
-    );
-    const fake = new FakeTelegramClient();
-    try {
-      await run(fake);
-      expect((await updateRow(600017))?.status).toBe('pending');
-      expect(
-        await env.DB.prepare('SELECT id FROM intake_media WHERE id=?')
-          .bind('telegram-600017')
-          .first(),
-      ).toBeNull();
-    } finally {
-      await env.DB.exec('DROP TRIGGER fictional_media_fail;');
-    }
-    await run(fake, tick() + 10000);
-    expect((await updateRow(600017))?.status).toBe('done');
-    expect(
-      fake.downloads.filter((id) => id === 'fictional-image-600017'),
-    ).toHaveLength(1);
-  });
+
   it('report commit survives outbound queue failure and retry repairs jobs after assignment changes', async () => {
     const c = await assignedCase();
     await receive(reportFixture(600018, collectorChat, 900001, c.code));
@@ -1043,15 +879,7 @@ describe('Telegram local integration', () => {
     ).toBe(1);
   });
   it('processing and outbound failures stop at five attempts with safe audit codes', async () => {
-    await receive(photoFixture(600019, intakeChat));
-    const fake = new FakeTelegramClient();
-    fake.downloadFailures = 100;
     const start = tick();
-    for (let n = 0; n < 5; n++) await run(fake, start + n * 400000);
-    expect(await updateRow(600019)).toMatchObject({
-      status: 'failed',
-      last_error_code: 'DOWNLOAD_TIMEOUT',
-    });
     const c = await assignedCase();
     await receive(reportFixture(600020, collectorChat, 900001, c.code));
     await run();
@@ -1144,9 +972,6 @@ describe('Telegram local integration', () => {
     for (const action of [
       'telegram.update_received',
       'telegram.duplicate_ignored',
-      'telegram.intake_created',
-      'telegram.media_received',
-      'telegram.album_finalized',
       'telegram.report_created',
       'telegram.report_lookup_ambiguous',
       'report.outbound_queued',
@@ -1196,42 +1021,5 @@ describe('Telegram local integration', () => {
         .bind(row?.report_id, destinationId)
         .first(),
     ).toBeTruthy();
-  });
-  it('an unfinished album cannot be resolved into a formal case', async () => {
-    await receive(
-      photoFixture(600025, intakeChat, { album: 'fictional-collecting' }),
-    );
-    await run(new FakeTelegramClient(), Date.now());
-    const row = await updateRow(600025);
-    const detail = await rpc(
-      'intake.detail',
-      { id: row?.intake_id },
-      { cookie: admin },
-    );
-    const d = detail.body as { version: number };
-    const result = await rpc(
-      'intake.resolve',
-      {
-        id: row?.intake_id,
-        expectedVersion: d.version,
-        action: 'create',
-        confirmedData: {
-          code: crypto.randomUUID(),
-          customer_name: crypto.randomUUID(),
-          address: '虛構尚未收齊',
-          amount_due: 100,
-        },
-      },
-      { cookie: admin },
-    );
-    expect(result.status).toBe(409);
-    expect(
-      await env.DB.prepare(
-        'SELECT matched_case_id FROM intake_items WHERE id=?',
-      )
-        .bind(row?.intake_id)
-        .first(),
-    ).toMatchObject({ matched_case_id: null });
-    await finalizeAlbums(base, tick());
   });
 });

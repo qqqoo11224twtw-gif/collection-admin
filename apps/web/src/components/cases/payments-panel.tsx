@@ -45,14 +45,21 @@ export function PaymentsPanel({ caseId }: { caseId: string }) {
       retry: false,
     });
   const receive = useMutation(orpc.finance.createPayment.mutationOptions()),
-    voidPayment = useMutation(orpc.finance.voidPayment.mutationOptions()),
-    cancelPlan = useMutation(orpc.installments.cancel.mutationOptions());
+    voidPayment = useMutation(orpc.finance.voidPayment.mutationOptions());
   if (!permissions.can('payment.view'))
     return (
       <p className="text-sm text-muted-foreground">無收款紀錄查看權限。</p>
     );
   return (
     <div className="space-y-6">
+      <p className="font-medium">
+        累計實收：
+        {money(
+          payments.data
+            ?.filter((p) => p.status === 'received')
+            .reduce((sum, p) => sum + p.receivedAmount, 0) ?? 0,
+        )}
+      </p>
       {/* Actual receipts are independent of the forecast schedule. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
@@ -90,8 +97,7 @@ export function PaymentsPanel({ caseId }: { caseId: string }) {
                       idempotencyKey: key.current,
                       receivedDate: String(data.get('date')),
                       receivedAmount: Number(data.get('amount')),
-                      installmentScheduleId:
-                        String(data.get('schedule') ?? '') || null,
+                      installmentScheduleId: null,
                     });
                     await refresh();
                     setOpen(false);
@@ -127,27 +133,7 @@ export function PaymentsPanel({ caseId }: { caseId: string }) {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="payment-schedule">分期期別（選填）</Label>
-                  <select
-                    id="payment-schedule"
-                    name="schedule"
-                    defaultValue=""
-                    className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="">不指定分期期別</option>
-                    {plans.data?.schedules
-                      .filter(
-                        (s) => s.status !== 'paid' && s.status !== 'cancelled',
-                      )
-                      .map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.dueDate} · {money(s.expectedAmount - s.paidAmount)}{' '}
-                          剩餘
-                        </option>
-                      ))}
-                  </select>
-                </div>
+
                 {error && (
                   <p role="alert" className="text-sm text-destructive">
                     {error}
@@ -187,7 +173,8 @@ export function PaymentsPanel({ caseId }: { caseId: string }) {
                 </p>
               </div>
               {permissions.can('payment.void') &&
-                payment.status === 'received' && (
+                payment.status === 'received' &&
+                payment.canVoid && (
                   <Button
                     variant="outline"
                     disabled={voidPayment.isPending}
@@ -218,14 +205,14 @@ export function PaymentsPanel({ caseId }: { caseId: string }) {
       {/* Plans predict expected amounts and never create actual receipts. */}
       {permissions.can('installment.view') && (
         <section className="space-y-4">
-          <h2 className="text-lg font-medium">分期計畫</h2>
+          <h2 className="text-lg font-medium">歷史分期計畫（唯讀）</h2>
           {plans.isError ? (
             <CaseError retry={() => void plans.refetch()} />
           ) : plans.isPending ? (
             <LoadingCases />
           ) : !plans.data.plans.length ? (
             <p className="text-sm text-muted-foreground">
-              暫無分期計畫，外收人員可在 Telegram 選擇分期後設定。
+              暫無歷史分期計畫。新的分期回報只標記案件，不建立期程。
             </p>
           ) : (
             plans.data.plans.map((plan) => (
@@ -238,29 +225,17 @@ export function PaymentsPanel({ caseId }: { caseId: string }) {
                     {displayLabel(plan.planType)} · {money(plan.totalAmount)} ·{' '}
                     {displayLabel(plan.status)}
                   </p>
-                  {plan.status === 'active' &&
-                    permissions.can('installment.cancel') && (
-                      <Button
-                        variant="outline"
-                        disabled={cancelPlan.isPending}
-                        onClick={async () => {
-                          try {
-                            await cancelPlan.mutateAsync({
-                              id: plan.id,
-                              expectedVersion: plan.version,
-                            });
-                            await refresh();
-                          } catch (failure: unknown) {
-                            setError(
-                              displayError(failure, '無法取消分期計畫。'),
-                            );
-                          }
-                        }}
-                      >
-                        取消分期計畫
-                      </Button>
-                    )}
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  原定分期總額：{money(plan.totalAmount)} · 已分配至分期：
+                  {money(plan.allocatedAmount)} · 剩餘計畫金額：
+                  {money(plan.remainingPlannedAmount)} · 剩餘期數：
+                  {plan.remainingInstallmentCount}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  分期是收款計畫，不代表客戶實際欠款；未分配實收：
+                  {money(plans.data.unappliedAmount)}
+                </p>
                 <ol className="space-y-2">
                   {plans.data.schedules
                     .filter((s) => s.planId === plan.id)
@@ -273,9 +248,10 @@ export function PaymentsPanel({ caseId }: { caseId: string }) {
                           {s.sequence}. {s.dueDate}
                         </span>
                         <span className="tabular-nums">
-                          應收 {money(s.expectedAmount)} · 已收{' '}
-                          {money(s.paidAmount)} ·{' '}
-                          {installmentStatusLabel(s.status)}
+                          計畫金額 {money(s.expectedAmount)} · 已分配{' '}
+                          {money(s.paidAmount)} · 剩餘計畫金額{' '}
+                          {money(Math.max(0, s.expectedAmount - s.paidAmount))}{' '}
+                          · {installmentStatusLabel(s.status)}
                         </span>
                       </li>
                     ))}

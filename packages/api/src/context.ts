@@ -35,4 +35,14 @@ export async function createContext(c: HonoContext) {
 
 export type Context = Awaited<ReturnType<typeof createContext>> & {
   telegramCollectorId?: string;
+  // Only set by telegramPrincipal, scoped to one claimed update/request.
+  telegramPrincipalRecord?: typeof import('@saasflare-dev/db').user['$inferSelect'];
+  telegramReply?: (key: string) => Promise<void>;
+  telegramTiming?: {
+    webhook_received_at: number;
+    route_lookup_ms: number;
+    case_lookup_ms: number;
+    conversation_write_ms: number;
+    telegram_send_ms: number;
+  };
 };

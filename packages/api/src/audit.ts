@@ -29,6 +29,7 @@ export interface AuditMetadata {
   entityId?: string | null;
   reportId?: string;
   fields?: string[];
+  inputFingerprint?: string;
   mediaIds?: string[];
   collectorId?: string | null;
   previousCollectorId?: string | null;
@@ -36,6 +37,12 @@ export interface AuditMetadata {
   version?: number;
   bulkAssignmentId?: string;
   assignmentId?: string;
+  bulkCollectorId?: string | null;
+  bulkMode?: 'new' | 'historical';
+  bulkFormalDispatch?: boolean;
+  bulkImageCount?: number;
+  uploadKey?: string | null;
+  fingerprint?: string;
 }
 export function auditStatement(
   context: Context,

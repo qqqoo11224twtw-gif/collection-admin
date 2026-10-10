@@ -18,7 +18,6 @@ export const Route = createFileRoute('/cases/telegram')({
   component: TelegramPage,
 });
 const types = {
-  intake: '小幫手收件',
   collector_dispatch: '外收派件群',
   collector_report: '外收回報群',
   business_report: '業務回報群',
@@ -41,7 +40,7 @@ function TelegramPage() {
   const routes = useQuery({ ...orpc.telegram.routes.queryOptions(), enabled }),
     options = useQuery({ ...orpc.telegram.options.queryOptions(), enabled });
   const [editing, setEditing] = useState<string | null>(null),
-    [group, setGroup] = useState<keyof typeof types>('intake'),
+    [group, setGroup] = useState<keyof typeof types>('collector_dispatch'),
     [message, setMessage] = useState(''),
     [testId, setTestId] = useState<string | null>(null);
   const save = useMutation(
@@ -161,6 +160,46 @@ function TelegramPage() {
             </div>
           )}
           <Button onClick={() => setEditing('new')}>新增路由</Button>
+          {routes.data?.some((r) => canonical(r.routeType) === 'intake') && (
+            <details className="rounded-xl border bg-card p-4">
+              <summary className="cursor-pointer text-sm text-muted-foreground">
+                舊收件路由已退役（僅保留設定紀錄）
+              </summary>
+              <p className="mt-3 text-sm text-muted-foreground">
+                不接收新案件、不下載圖片，也不執行圖片辨識。
+              </p>
+              {routes.data
+                .filter((r) => canonical(r.routeType) === 'intake')
+                .map((r) => (
+                  <div
+                    key={r.id}
+                    className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-sm"
+                  >
+                    <span>{r.name || '舊收件路由'} · 已退役</span>
+                    {r.isActive && (
+                      <Button
+                        variant="outline"
+                        disabled={save.isPending}
+                        onClick={() =>
+                          save.mutate({
+                            id: r.id,
+                            botId: r.botId,
+                            name: r.name,
+                            chatId: r.chatId,
+                            topicId: r.topicId,
+                            collectorId: r.collectorId,
+                            routeType: 'intake',
+                            isActive: false,
+                          })
+                        }
+                      >
+                        停用舊設定
+                      </Button>
+                    )}
+                  </div>
+                ))}
+            </details>
+          )}
           <Dialog
             open={!!editing}
             onOpenChange={(open) => {

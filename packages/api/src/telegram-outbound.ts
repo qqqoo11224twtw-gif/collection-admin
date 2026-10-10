@@ -1,6 +1,7 @@
 import { telegramOutboundJobs, telegramRoutes } from '@saasflare-dev/db';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Context } from './context';
+import { renderPaymentBusinessReport } from './customer-payments';
 import { telegramAudit } from './telegram-adapter';
 import {
   botClientForRoute,
@@ -20,6 +21,7 @@ import {
   type TelegramSettings,
 } from './telegram-contract';
 import { sendAssignmentMedia } from './telegram-dispatch-media';
+import { sendReportMedia } from './telegram-report-media';
 export function businessDate(time: number, timezone = 'Asia/Taipei') {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: timezone,
@@ -94,6 +96,10 @@ export async function queueTelegramMessage(
       },
     ),
   ]);
+  // Interactive replies use the same durable dedupe key and delivery claim.
+  // Business forwarding and assignment dispatch remain background jobs.
+  if ((!reportId || options.commandReply) && context.telegramReply)
+    await context.telegramReply(key);
 }
 export async function queueReportDestination(
   context: Context,
@@ -101,13 +107,15 @@ export async function queueReportDestination(
 ) {
   const settings: TelegramSettings = context.env;
   const report = await context.env.DB.prepare(
-    "SELECT r.content,r.created_at,r.collector_id,c.code,c.customer_name FROM reports r JOIN cases c ON c.id=r.case_id WHERE r.id=? AND r.workflow_status='completed'",
+    "SELECT r.content,r.created_at,r.collector_id,r.case_id,r.finance_event,c.code,c.customer_name FROM reports r JOIN cases c ON c.id=r.case_id WHERE r.id=? AND r.workflow_status='completed'",
   )
     .bind(reportId)
     .first<{
       content: string;
       created_at: number;
       collector_id: string | null;
+      case_id: string;
+      finance_event: string | null;
       code: string;
       customer_name: string;
     }>();
@@ -121,15 +129,35 @@ export async function queueReportDestination(
         sql`(${telegramRoutes.collectorId} IS NULL OR ${telegramRoutes.collectorId}=${report.collector_id})`,
       ),
     );
-  const text = renderBusinessReport(
-    {
-      code: report.code,
-      customerName: report.customer_name,
-      content: report.content,
-      createdAt: report.created_at,
-    },
-    settings.BUSINESS_TIMEZONE ?? 'Asia/Taipei',
-  );
+  const payment =
+    report.finance_event === 'payment'
+      ? await context.env.DB.prepare(
+          "SELECT id FROM payments WHERE idempotency_key=? AND status='received'",
+        )
+          .bind(reportId)
+          .first<{ id: string }>()
+      : null;
+  const text = payment
+    ? await renderPaymentBusinessReport(context, {
+        caseId: report.case_id,
+        paymentId: payment.id,
+        code: report.code,
+        customerName: report.customer_name,
+        content: report.content,
+        date: businessDate(
+          report.created_at,
+          settings.BUSINESS_TIMEZONE ?? 'Asia/Taipei',
+        ),
+      })
+    : renderBusinessReport(
+        {
+          code: report.code,
+          customerName: report.customer_name,
+          content: report.content,
+          createdAt: report.created_at,
+        },
+        settings.BUSINESS_TIMEZONE ?? 'Asia/Taipei',
+      );
   for (const route of routes)
     await queueTelegramMessage(
       context,
@@ -156,13 +184,17 @@ export async function processOutbound(
   context: Context,
   client: TelegramClient,
   now = Date.now(),
+  replyKey?: string,
+  immediateRoute?: typeof telegramRoutes.$inferSelect,
 ) {
   // A crashed/expired sending lease is uncertain: do not automatically re-send it.
-  const expired = await context.env.DB.prepare(
-    "SELECT id,message_type FROM telegram_outbound_jobs WHERE status='sending' AND lease_until<=? LIMIT 20",
-  )
-    .bind(now)
-    .all<{ id: string; message_type: string }>();
+  const expired = replyKey
+    ? { results: [] }
+    : await context.env.DB.prepare(
+        "SELECT id,message_type FROM telegram_outbound_jobs WHERE status='sending' AND lease_until<=? LIMIT 20",
+      )
+        .bind(now)
+        .all<{ id: string; message_type: string }>();
   for (const row of expired.results) {
     const token = crypto.randomUUID();
     await context.env.DB.batch([
@@ -183,26 +215,59 @@ export async function processOutbound(
       ),
     ]);
   }
-  const pending = await context.env.DB.prepare(
-    "SELECT id FROM telegram_outbound_jobs WHERE status='pending' AND next_attempt_at<=? ORDER BY next_attempt_at,id LIMIT 20",
-  )
-    .bind(now)
-    .all<{ id: string }>();
+  const immediateJobs =
+    replyKey && immediateRoute
+      ? await context.DB.update(telegramOutboundJobs)
+          .set({
+            status: 'sending',
+            attempts: sql`${telegramOutboundJobs.attempts}+1`,
+            leaseUntil: new Date(now + 120000),
+            leaseToken: crypto.randomUUID(),
+          })
+          .where(
+            and(
+              eq(telegramOutboundJobs.dedupeKey, replyKey),
+              eq(telegramOutboundJobs.messageType, 'command_reply'),
+              eq(telegramOutboundJobs.status, 'pending'),
+              sql`${telegramOutboundJobs.nextAttemptAt}<=${now}`,
+              sql`NOT EXISTS(SELECT 1 FROM telegram_outbound_jobs peer JOIN telegram_routes pr ON pr.id=peer.route_id WHERE peer.id<>${telegramOutboundJobs.id} AND pr.chat_id=${immediateRoute.chatId} AND coalesce(pr.topic_id,0)=${immediateRoute.topicId ?? 0} AND (peer.status='sending' OR (peer.status='pending' AND peer.message_type='report_destination' AND json_extract(peer.dispatch_state,'$.textId') IS NOT NULL)))`,
+              sql`EXISTS(SELECT 1 FROM telegram_routes r WHERE r.id=${telegramOutboundJobs.routeId} AND r.id=${immediateRoute.id} AND r.chat_id=${immediateRoute.chatId} AND coalesce(r.topic_id,0)=${immediateRoute.topicId ?? 0} AND r.route_type=${immediateRoute.routeType} AND r.collector_id IS ${immediateRoute.collectorId} AND r.bot_id IS ${immediateRoute.botId} AND r.managed_by_user_id=${immediateRoute.managedByUserId} AND r.is_active=1 AND (r.bot_id IS NULL OR EXISTS(SELECT 1 FROM telegram_bots b WHERE b.id=r.bot_id AND b.is_active=1)))`,
+            ),
+          )
+          .returning()
+      : null;
+  const pending = immediateJobs
+    ? { results: immediateJobs }
+    : await context.env.DB.prepare(
+        replyKey
+          ? "SELECT id FROM telegram_outbound_jobs WHERE dedupe_key=? AND message_type='command_reply' AND status='pending' AND next_attempt_at<=?"
+          : "SELECT id FROM telegram_outbound_jobs WHERE status='pending' AND next_attempt_at<=? ORDER BY next_attempt_at,id LIMIT 20",
+      )
+        .bind(...(replyKey ? [replyKey, now] : [now]))
+        .all<{ id: string }>();
   for (const candidate of pending.results) {
-    const token = crypto.randomUUID();
-    const claim = await context.env.DB.prepare(
-      "UPDATE telegram_outbound_jobs SET status='sending',attempts=attempts+1,lease_until=?,lease_token=? WHERE id=? AND status='pending' AND next_attempt_at<=?",
-    )
-      .bind(Math.max(now, Date.now()) + 120000, token, candidate.id, now)
-      .run();
+    const ready = immediateJobs?.find((job) => job.id === candidate.id);
+    const token = ready?.leaseToken ?? crypto.randomUUID();
+    const claim = ready
+      ? { meta: { changes: 1 } }
+      : await context.env.DB.prepare(
+          "UPDATE telegram_outbound_jobs SET status='sending',attempts=attempts+1,lease_until=?,lease_token=? WHERE id=? AND status='pending' AND next_attempt_at<=? AND NOT EXISTS(SELECT 1 FROM telegram_outbound_jobs peer JOIN telegram_routes pr ON pr.id=peer.route_id JOIN telegram_routes target ON target.id=telegram_outbound_jobs.route_id WHERE peer.id<>telegram_outbound_jobs.id AND pr.chat_id=target.chat_id AND coalesce(pr.topic_id,0)=coalesce(target.topic_id,0) AND (peer.status='sending' OR (peer.status='pending' AND peer.message_type='report_destination' AND json_extract(peer.dispatch_state,'$.textId') IS NOT NULL)))",
+        )
+          .bind(Math.max(now, Date.now()) + 120000, token, candidate.id, now)
+          .run();
     if (claim.meta.changes !== 1) continue;
-    const [job] = await context.DB.select()
-      .from(telegramOutboundJobs)
-      .where(eq(telegramOutboundJobs.id, candidate.id));
+    const [job] = ready
+      ? [ready]
+      : await context.DB.select()
+          .from(telegramOutboundJobs)
+          .where(eq(telegramOutboundJobs.id, candidate.id));
     try {
-      const [route] = await context.DB.select()
-        .from(telegramRoutes)
-        .where(eq(telegramRoutes.id, job.routeId));
+      const [route] =
+        ready && immediateRoute
+          ? [immediateRoute]
+          : await context.DB.select()
+              .from(telegramRoutes)
+              .where(eq(telegramRoutes.id, job.routeId));
       const payload = outboundPayloadSchema.parse(JSON.parse(job.payload));
       if (!route?.isActive) throw new TelegramFailure('ROUTE_CHANGED', false);
       payload.chatId = route.chatId;
@@ -226,11 +291,10 @@ export async function processOutbound(
           .first();
         if (!valid) throw new TelegramFailure('ASSIGNMENT_CHANGED', false);
       }
-      const deliveryClient = await botClientForRoute(
-        context,
-        route.botId,
-        client,
-      );
+      const deliveryClient = ready
+        ? client
+        : await botClientForRoute(context, route.botId, client);
+      const sendStarted = performance.now();
       const messageId =
         job.messageType === 'assignment_dispatch'
           ? await sendAssignmentMedia(
@@ -240,7 +304,18 @@ export async function processOutbound(
               payload,
               token,
             )
-          : await deliveryClient.sendMessage(payload);
+          : job.messageType === 'report_destination'
+            ? await sendReportMedia(
+                context,
+                deliveryClient,
+                job,
+                payload,
+                token,
+              )
+            : await deliveryClient.sendMessage(payload);
+      if (context.telegramTiming)
+        context.telegramTiming.telegram_send_ms +=
+          performance.now() - sendStarted;
       await context.env.DB.batch([
         context.env.DB.prepare(
           "UPDATE telegram_outbound_jobs SET status='sent',telegram_message_id=?,sent_at=?,last_error_code=NULL,lease_until=NULL WHERE id=? AND status='sending' AND lease_token=?",

@@ -351,14 +351,7 @@ function LogsPage() {
             {row.related_route_id && (
               <Link to="/cases/telegram">查看群組設定</Link>
             )}
-            {row.intake_id && permissions.can('intake.view') && (
-              <Link
-                to="/cases/intake/$intakeId"
-                params={{ intakeId: row.intake_id }}
-              >
-                查看收件
-              </Link>
-            )}
+
             {row.review_item_id && permissions.can('review.view') && (
               <Link
                 to="/cases/reviews/$reviewId"

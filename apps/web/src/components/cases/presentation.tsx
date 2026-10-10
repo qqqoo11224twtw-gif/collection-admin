@@ -13,6 +13,7 @@ export const statusLabels = {
   follow_up: '安排二訪',
   installment: '分期',
   settled: '結清',
+  direct_to_principal: '後結',
   unresolved: '無解',
 };
 const colors = {
@@ -21,6 +22,7 @@ const colors = {
   follow_up: 'bg-warning/10 text-warning',
   installment: 'bg-info/10 text-info',
   settled: 'bg-success/10 text-success',
+  direct_to_principal: 'bg-info/10 text-info',
   unresolved: 'bg-destructive/10 text-destructive',
 };
 export function StatusBadge({ status }: { status: CaseRecord['status'] }) {

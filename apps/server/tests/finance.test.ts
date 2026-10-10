@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import {
-  calculateCommission,
+  calculatePrincipalSplit,
   generateSchedule,
   planCreateSchema,
 } from '@saasflare-dev/api/finance-contract';
@@ -8,14 +8,24 @@ import { DEMO_IMAGES } from '@saasflare-dev/db/demo-images';
 import { strFromU8, unzipSync } from 'fflate';
 import { beforeAll, expect, it } from 'vitest';
 import app from '../src/index';
-import { adminCookie, rpc, userCookie } from './helpers';
+import {
+  adminCookie,
+  assignFinanceFixture,
+  configureFinanceFixture,
+  historicalInstallmentFixture,
+  rpc,
+  userCookie,
+} from './helpers';
 
 let admin: string, ordinary: string;
 beforeAll(async () => {
   admin = await adminCookie();
   ordinary = await userCookie();
 });
-async function createCase(extra: Record<string, unknown> = {}) {
+async function createCase(
+  extra: Record<string, unknown> = {},
+  financialFixture = true,
+) {
   const r = await rpc(
     'cases.create',
     {
@@ -34,6 +44,8 @@ async function createCase(extra: Record<string, unknown> = {}) {
   );
   expect(r.status).toBe(200);
   expect((r.body as { kind: string }).kind).toBe('created');
+  if (financialFixture)
+    await assignFinanceFixture((r.body as { id: string }).id);
   return r.body as { id: string; caseNo: string };
 }
 async function payment(
@@ -125,88 +137,64 @@ it('generates deadline, weekly remainder and actual calendar months with leap an
       totalAmount: 100,
     }).success,
   ).toBe(false);
-  expect(calculateCommission(15000, 0.5)).toEqual({
-    commissionRate: 0.5,
-    commissionAmount: 7500,
-    returnAmount: 7500,
+  expect(calculatePrincipalSplit(15000, 0.5)).toEqual({
+    collectorShareRate: 0.5,
+    collectorShare: 7500,
+    principalDue: 7500,
   });
-  expect(calculateCommission(3, 0.5).returnAmount).toBe(1);
-  expect(calculateCommission(15000, 0.25).returnAmount).toBe(11250);
+  expect(calculatePrincipalSplit(3, 0.5).principalDue).toBe(1);
+  expect(calculatePrincipalSplit(15000, 0.75).principalDue).toBe(11250);
 });
-it('plan creation predicts receipts, payment advances a schedule, void restores it without deleting history', async () => {
-  const c = await createCase();
-  const plan = await rpc(
-    'installments.create',
-    {
-      caseId: c.id,
-      planType: 'weekly',
-      weekday: 3,
-      perPaymentAmount: 5000,
-      totalAmount: 23000,
-    },
-    { cookie: admin },
-  );
-  expect(plan.status).toBe(200);
-  const list = await rpc('installments.list', { id: c.id }, { cookie: admin });
-  const schedules = (
-    list.body as { schedules: { id: string; expectedAmount: number }[] }
-  ).schedules;
-  expect(schedules).toHaveLength(5);
+it('retired plan API rejects new schedules; actual receipt and void preserve the historical snapshot', async () => {
+  const c = await createCase(),
+    legacy = await historicalInstallmentFixture(c.id);
+  const before = await env.DB.prepare(
+    'SELECT * FROM installment_schedules WHERE id=?',
+  )
+    .bind(legacy.scheduleId)
+    .first();
   expect(
     (
-      await env.DB.prepare('SELECT count(*) AS n FROM payments WHERE case_id=?')
-        .bind(c.id)
-        .first()
-    )?.n,
-  ).toBe(0);
-  const receipt = await payment(c.id, {
-    receivedAmount: 2000,
-    installmentScheduleId: schedules[0].id,
-  });
-  expect(receipt.status).toBe(200);
-  const id = (receipt.body as { id: string }).id;
-  expect(
-    (
-      await env.DB.prepare(
-        'SELECT paid_amount FROM installment_schedules WHERE id=?',
+      await rpc(
+        'installments.create',
+        {
+          caseId: c.id,
+          planType: 'deadline',
+          deadlineDate: '2026-12-31',
+          totalAmount: 5000,
+        },
+        { cookie: admin },
       )
-        .bind(schedules[0].id)
-        .first()
-    )?.paid_amount,
-  ).toBe(2000);
-  expect(
-    (
-      await payment(c.id, {
-        receivedAmount: 4000,
-        installmentScheduleId: schedules[0].id,
-      })
     ).status,
   ).toBe(400);
+  const received = await payment(c.id, { receivedAmount: 8000 });
+  expect(received.status).toBe(200);
+  expect(
+    await env.DB.prepare(
+      'SELECT count(*) n FROM payment_allocations WHERE payment_id=?',
+    )
+      .bind((received.body as { id: string }).id)
+      .first(),
+  ).toEqual({ n: 0 });
+  expect(
+    await env.DB.prepare('SELECT * FROM installment_schedules WHERE id=?')
+      .bind(legacy.scheduleId)
+      .first(),
+  ).toEqual(before);
   expect(
     (
       await rpc(
         'finance.voidPayment',
-        { id, expectedVersion: 0 },
+        { id: (received.body as { id: string }).id, expectedVersion: 0 },
         { cookie: admin },
       )
     ).status,
   ).toBe(200);
   expect(
-    (
-      await env.DB.prepare(
-        'SELECT paid_amount FROM installment_schedules WHERE id=?',
-      )
-        .bind(schedules[0].id)
-        .first()
-    )?.paid_amount,
-  ).toBe(0);
-  expect(
-    (
-      await env.DB.prepare('SELECT status FROM payments WHERE id=?')
-        .bind(id)
-        .first()
-    )?.status,
-  ).toBe('voided');
+    await env.DB.prepare('SELECT * FROM installment_schedules WHERE id=?')
+      .bind(legacy.scheduleId)
+      .first(),
+  ).toEqual(before);
 });
 it('concurrent payment retries create one pending settlement; return marking is separate and permission guarded', async () => {
   const c = await createCase();
@@ -258,15 +246,6 @@ it('concurrent payment retries create one pending settlement; return marking is 
   expect(
     (
       await rpc(
-        'finance.voidPayment',
-        { id, expectedVersion: 0 },
-        { cookie: admin },
-      )
-    ).status,
-  ).toBe(409);
-  expect(
-    (
-      await rpc(
         'finance.markSettlement',
         { id: row.id, expectedVersion: 1, returnStatus: 'pending' },
         { cookie: admin },
@@ -280,11 +259,20 @@ it('concurrent payment retries create one pending settlement; return marking is 
         .first()
     )?.returned_at,
   ).toBeNull();
+  expect(
+    (
+      await rpc(
+        'finance.voidPayment',
+        { id, expectedVersion: 0 },
+        { cookie: admin },
+      )
+    ).status,
+  ).toBe(200);
   expect((await payment(c.id, { ...input, receivedAmount: 999 })).status).toBe(
     409,
   );
 });
-it('exports genuine XLSX with five safe columns, exact return amount and an inclusive date range', async () => {
+it('exports genuine XLSX with simple ledger columns, exact return amount and an inclusive date range', async () => {
   const c = await createCase();
   await payment(c.id, { receivedDate: '2026-09-12' });
   await payment(c.id, { receivedDate: '2026-09-13' });
@@ -299,10 +287,19 @@ it('exports genuine XLSX with five safe columns, exact return amount and an incl
   const zip = unzipSync(new Uint8Array(await response.arrayBuffer()));
   expect(Object.keys(zip)).toContain('xl/workbook.xml');
   const sheet = strFromU8(zip['xl/worksheets/sheet1.xml']);
-  for (const column of ['日期', '代理/代號', '客戶', '金額', '類型'])
+  for (const column of [
+    '日期',
+    '代理',
+    '會員名稱',
+    '實際收款',
+    '應回帳',
+    '已回帳',
+    '備註',
+  ])
     expect(sheet).toContain(column);
   expect(sheet).toContain('<v>7500</v>');
-  expect(sheet).not.toContain('2026/09/13');
+  expect(sheet).not.toContain('2026-09-13');
+  expect(sheet).not.toMatch(/傭金|commission/);
   expect(sheet).not.toContain(c.id);
   expect(sheet).not.toContain('<f>');
   expect(
@@ -316,7 +313,7 @@ it('exports genuine XLSX with five safe columns, exact return amount and an incl
   ).toBe(403);
 });
 it('snapshots stay unchanged after name/code/region and historical collector corrections', async () => {
-  const c = await createCase();
+  const c = await createCase({}, false);
   const a = await rpc(
     'collectors.create',
     {
@@ -355,6 +352,7 @@ it('snapshots stay unchanged after name/code/region and historical collector cor
       )
     ).status,
   ).toBe(200);
+  await configureFinanceFixture(collectorA);
   const receipt = await payment(c.id);
   expect(receipt.status).toBe(200);
   const prior = await env.DB.prepare(
@@ -537,6 +535,11 @@ it('manual case and private SHA media are atomic, warnings expose only date and 
 });
 it('region schema and database reject free text; unassigned summaries and combined filters use active assignments', async () => {
   const c = await createCase({ region: '台中市' });
+  await env.DB.prepare(
+    'UPDATE assignments SET unassigned_at=? WHERE case_id=? AND unassigned_at IS NULL',
+  )
+    .bind(Date.now(), c.id)
+    .run();
   expect(
     (
       await rpc(
@@ -619,69 +622,44 @@ it('collector cannot bypass installment confirmation or record receipts against 
   expect((await payment(c.id, {}, ordinary)).status).toBe(404);
 });
 
-it('voiding a receipt after cancellation preserves the cancelled forecast and original amounts', async () => {
-  const c = await createCase();
-  const plan = await rpc(
-    'installments.create',
-    {
-      caseId: c.id,
-      planType: 'weekly',
-      weekday: 3,
-      totalAmount: 10000,
-      perPaymentAmount: 5000,
-    },
-    { cookie: admin },
-  );
-  expect(plan.status).toBe(200);
-  let detail = (await rpc('installments.list', { id: c.id }, { cookie: admin }))
-    .body as {
-    plans: { id: string; version: number }[];
-    schedules: { id: string }[];
-  };
-  const scheduleId = detail.schedules[0].id;
-  const receipt = await payment(c.id, {
-    receivedAmount: 5000,
-    installmentScheduleId: scheduleId,
-  });
-  expect(receipt.status).toBe(200);
-  detail = (await rpc('installments.list', { id: c.id }, { cookie: admin }))
-    .body as typeof detail;
-  expect(
-    (
-      await rpc(
-        'installments.cancel',
-        { id: detail.plans[0].id, expectedVersion: detail.plans[0].version },
-        { cookie: admin },
-      )
-    ).status,
-  ).toBe(200);
+it('voiding actual payment leaves cancelled historical schedules unchanged', async () => {
+  const c = await createCase(),
+    legacy = await historicalInstallmentFixture(c.id, 'cancelled');
+  const before = await env.DB.prepare(
+    'SELECT * FROM installment_schedules WHERE id=?',
+  )
+    .bind(legacy.scheduleId)
+    .first();
+  const p = await payment(c.id, { receivedAmount: 5000 });
+  expect(p.status).toBe(200);
   expect(
     (
       await rpc(
         'finance.voidPayment',
-        { id: (receipt.body as { id: string }).id, expectedVersion: 0 },
+        { id: (p.body as { id: string }).id, expectedVersion: 0 },
         { cookie: admin },
       )
     ).status,
   ).toBe(200);
   expect(
-    await env.DB.prepare(
-      'SELECT status,expected_amount,paid_amount FROM installment_schedules WHERE id=?',
-    )
-      .bind(scheduleId)
+    await env.DB.prepare('SELECT * FROM installment_schedules WHERE id=?')
+      .bind(legacy.scheduleId)
       .first(),
-  ).toMatchObject({
-    status: 'cancelled',
-    expected_amount: 5000,
-    paid_amount: 0,
-  });
+  ).toEqual(before);
 });
-it('commission configuration is snapshotted per receipt and manual API warning also requires explicit override', async () => {
+it('collector return split is snapshotted per receipt and manual API warning also requires explicit override', async () => {
   const c = await createCase(),
     settings = env as unknown as { COMMISSION_RATE?: string };
   const old = settings.COMMISSION_RATE;
   try {
     settings.COMMISSION_RATE = '0.25';
+    const assigned = await env.DB.prepare(
+      'SELECT collector_id FROM assignments WHERE case_id=? AND unassigned_at IS NULL',
+    )
+      .bind(c.id)
+      .first<{ collector_id: string }>();
+    if (!assigned) throw Error('Fixture assignment missing');
+    await configureFinanceFixture(assigned.collector_id, 0.75, 0);
     const receipt = await payment(c.id);
     expect(receipt.status).toBe(200);
     settings.COMMISSION_RATE = '0.50';
@@ -720,4 +698,46 @@ it('commission configuration is snapshotted per receipt and manual API warning a
         .first()
     )?.n,
   ).toBe(1);
+});
+
+it('future historical schedules create no payments; partial and excess actual payments remain fully unapplied', async () => {
+  const c = await createCase({ amountDue: 0 }),
+    legacy = await historicalInstallmentFixture(c.id);
+  expect(
+    await env.DB.prepare('SELECT count(*) n FROM payments WHERE case_id=?')
+      .bind(c.id)
+      .first(),
+  ).toEqual({ n: 0 });
+  expect((await payment(c.id, { receivedAmount: 3000 })).status).toBe(200);
+  const p = await payment(c.id, { receivedAmount: 8000 });
+  expect(p.status).toBe(200);
+  expect(
+    (await rpc('installments.list', { id: c.id }, { cookie: admin })).body,
+  ).toMatchObject({
+    actualReceived: 11000,
+    unappliedAmount: 11000,
+    plans: [{ remainingPlannedAmount: 5000 }],
+    schedules: [{ paidAmount: 0 }],
+  });
+  expect(
+    (
+      await rpc(
+        'finance.voidPayment',
+        { id: (p.body as { id: string }).id, expectedVersion: 0 },
+        { cookie: admin },
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    (await rpc('installments.list', { id: c.id }, { cookie: admin })).body,
+  ).toMatchObject({
+    actualReceived: 3000,
+    unappliedAmount: 3000,
+    schedules: [{ paidAmount: 0 }],
+  });
+  expect(
+    await env.DB.prepare('SELECT id FROM installment_schedules WHERE id=?')
+      .bind(legacy.scheduleId)
+      .first(),
+  ).toMatchObject({ id: legacy.scheduleId });
 });

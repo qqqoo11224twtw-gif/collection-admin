@@ -45,6 +45,8 @@ export const PERMISSIONS = [
   'settlement.mark_returned',
   'settlement.mark_pending',
   'finance.export',
+  'finance.settings.manage',
+  'finance.return_rate.manage',
   'assignment.correct',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -80,6 +82,7 @@ export const ROLE_POLICIES: Record<string, Policy> = {
       'installment.create',
       'payment.view',
       'payment.create',
+      'settlement.view',
     ],
     scope: 'assigned',
   },
@@ -106,6 +109,8 @@ export const ROLE_POLICIES: Record<string, Policy> = {
       'settlement.mark_returned',
       'settlement.mark_pending',
       'finance.export',
+      'finance.return_rate.manage',
+      'report.view',
       'installment.view',
     ],
     scope: 'all',
@@ -126,7 +131,23 @@ export function permissionPolicy(
   else if (effective.has('case.view')) effective.add('case.view_own');
   if (effective.has('audit_log.view')) effective.add('audit.view');
   if (effective.has('audit.view')) effective.add('audit_log.view');
+  if (effective.has('finance.settings.manage')) {
+    effective.add('finance.return_rate.manage');
+  }
   for (const key of deny) effective.delete(key);
+  if (deny.includes('finance.settings.manage')) {
+    effective.delete('finance.return_rate.manage');
+  }
+  if (context.user.role === 'finance' || context.user.role === 'user') {
+    effective.delete('finance.settings.manage');
+  }
+  if (context.user.role === 'user')
+    for (const key of [
+      'finance.return_rate.manage',
+      'settlement.mark_returned',
+      'settlement.mark_pending',
+    ] as const)
+      effective.delete(key);
   if (deny.includes('audit.view')) effective.delete('audit_log.view');
   if (deny.includes('audit_log.view')) effective.delete('audit.view');
   if (effective.has('case.view_all') || effective.has('case.view_own'))

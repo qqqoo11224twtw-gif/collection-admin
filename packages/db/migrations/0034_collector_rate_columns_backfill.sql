@@ -1,0 +1,6 @@
+-- Only maps the settings versions introduced in 0032; does not touch financial ledgers or import global rates.
+UPDATE collector_finance_settings SET return_rate=CASE WHEN kind='return' THEN rate ELSE NULL END,commission_rate=CASE WHEN kind='commission' THEN rate ELSE NULL END;
+--> statement-breakpoint
+CREATE TRIGGER collector_rate_columns_insert BEFORE INSERT ON collector_finance_settings WHEN NOT ((NEW.kind='return' AND NEW.return_rate IS NOT NULL AND NEW.commission_rate IS NULL AND NEW.return_rate BETWEEN 0 AND 1 AND NEW.rate=NEW.return_rate) OR (NEW.kind='commission' AND NEW.commission_rate IS NOT NULL AND NEW.return_rate IS NULL AND NEW.commission_rate BETWEEN 0 AND 1 AND NEW.rate=NEW.commission_rate)) BEGIN SELECT RAISE(ABORT,'COLLECTOR_RATE_COLUMNS_INVALID'); END;
+--> statement-breakpoint
+CREATE TRIGGER collector_rate_columns_update BEFORE UPDATE ON collector_finance_settings WHEN NOT ((NEW.kind='return' AND NEW.return_rate IS NOT NULL AND NEW.commission_rate IS NULL AND NEW.return_rate BETWEEN 0 AND 1 AND NEW.rate=NEW.return_rate) OR (NEW.kind='commission' AND NEW.commission_rate IS NOT NULL AND NEW.return_rate IS NULL AND NEW.commission_rate BETWEEN 0 AND 1 AND NEW.rate=NEW.commission_rate)) BEGIN SELECT RAISE(ABORT,'COLLECTOR_RATE_COLUMNS_INVALID'); END;

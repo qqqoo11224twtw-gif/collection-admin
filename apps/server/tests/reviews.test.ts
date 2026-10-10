@@ -135,6 +135,24 @@ beforeAll(async () => {
   reviewer = await signIn('scoped-reviewer@example.test');
 });
 describe('Unified manual review', () => {
+  it('a later approved normal status clears the prior direct-payment display marker', async () => {
+    const c = await createCase();
+    await env.DB.prepare(
+      "UPDATE cases SET status='settled',current_status='direct_to_principal' WHERE id=?",
+    )
+      .bind(c)
+      .run();
+    const report = await createReport(c);
+    expect((await caseDetail(c)).status).toBe('direct_to_principal');
+    const id = await manualReportReview(c, report);
+    expect((await resolve(id, c)).status).toBe(200);
+    expect((await caseDetail(c)).status).toBe('settled');
+    expect(
+      await env.DB.prepare('SELECT current_status FROM cases WHERE id=?')
+        .bind(c)
+        .first(),
+    ).toMatchObject({ current_status: null });
+  });
   it('needs_review enqueues immutable original data without changing status or revisit summary', async () => {
     const c = await createCase();
     const report = await createReport(c);

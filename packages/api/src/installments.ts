@@ -5,6 +5,7 @@ import { atomicCaseWrite } from './audit';
 import { requireCaseAccess } from './case-access';
 import { caseIdSchema } from './case-contract';
 import type { Context } from './context';
+import { customerPaymentSummary } from './customer-payments';
 import { financeAudit } from './finance-audit';
 import {
   businessToday,
@@ -77,7 +78,9 @@ export async function createInstallmentPlan(
       record.id,
       input.planType,
       input.totalAmount,
-      input.planType === 'deadline' ? null : input.perPaymentAmount,
+      input.planType === 'deadline' || input.planType === 'custom'
+        ? null
+        : input.perPaymentAmount,
       input.planType === 'weekly' ? input.weekday : null,
       input.planType === 'monthly' ? input.dayOfMonth : null,
       input.planType === 'deadline' ? input.deadlineDate : null,
@@ -151,8 +154,30 @@ export const installmentsApi = {
         new Date(),
         context.env.BUSINESS_TIMEZONE ?? 'Asia/Taipei',
       );
+      const actual = await customerPaymentSummary(context, input.id);
       return {
-        plans: plans.map(({ writeToken: _token, ...plan }) => plan),
+        actualReceived: actual.actualReceived,
+        unappliedAmount: actual.unappliedAmount,
+        plans: plans.map(({ writeToken: _token, ...plan }) => {
+          const rows = schedules.filter((s) => s.planId === plan.id),
+            allocated = rows.reduce((sum, s) => sum + s.paidAmount, 0),
+            pending = rows.filter(
+              (s) =>
+                s.status !== 'cancelled' && s.paidAmount < s.expectedAmount,
+            ),
+            next = pending[0];
+          return {
+            ...plan,
+            allocatedAmount: allocated,
+            remainingPlannedAmount: Math.max(
+              0,
+              rows.reduce((sum, s) => sum + s.expectedAmount - s.paidAmount, 0),
+            ),
+            remainingInstallmentCount: pending.length,
+            nextDueDate: next?.dueDate ?? null,
+            nextDueAmount: next ? next.expectedAmount - next.paidAmount : 0,
+          };
+        }),
         schedules: schedules.map((s) => ({
           ...s,
           status:
@@ -168,7 +193,10 @@ export const installmentsApi = {
     .input(planCreateSchema)
     .handler(({ context, input }) => {
       requirePermission(context, 'installment.manage');
-      return createInstallmentPlan(context, input);
+      void input;
+      throw new ORPCError('BAD_REQUEST', {
+        message: '分期計畫已退役，請使用分期客追蹤。',
+      });
     }),
   cancel: protectedProcedure
     .input(ledgerVersionSchema)
@@ -179,26 +207,8 @@ export const installmentsApi = {
         .where(eq(installmentPlans.id, input.id));
       if (!plan) throw new ORPCError('NOT_FOUND');
       await requireCaseAccess(context, plan.caseId, 'installment.cancel');
-      const token = crypto.randomUUID(),
-        now = Date.now();
-      await atomicCaseWrite(context, [
-        context.env.DB.prepare(
-          "UPDATE installment_plans SET status='cancelled',version=version+1,updated_at=?,write_token=? WHERE id=? AND version=? AND status='active'",
-        ).bind(now, token, plan.id, input.expectedVersion),
-        context.env.DB.prepare(
-          "UPDATE installment_schedules SET status='cancelled',updated_at=? WHERE plan_id=? AND status<>'paid' AND EXISTS(SELECT 1 FROM installment_plans WHERE id=? AND write_token=?)",
-        ).bind(now, plan.id, plan.id, token),
-        financeAudit(
-          context,
-          plan.caseId,
-          'installment.plan_cancelled',
-          plan.id,
-          {
-            sql: 'EXISTS(SELECT 1 FROM installment_plans WHERE id=? AND write_token=?)',
-            values: [plan.id, token],
-          },
-        ),
-      ]);
-      return { id: plan.id };
+      throw new ORPCError('BAD_REQUEST', {
+        message: '歷史分期計畫為唯讀，請更新案件追蹤狀態。',
+      });
     }),
 };

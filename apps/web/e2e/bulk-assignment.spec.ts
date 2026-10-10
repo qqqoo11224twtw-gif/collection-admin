@@ -64,7 +64,7 @@ test.describe('Bulk regional assignment', () => {
     await expect(
       page.getByRole('heading', { name: '案件管理', exact: true }),
     ).toBeVisible();
-    const { prefix, collector, cases } = await fixtures(page, 12);
+    const { prefix, collector, cases } = await fixtures(page, 22);
     await page.goto('/cases/regions');
     await page
       .locator('article')
@@ -76,8 +76,8 @@ test.describe('Bulk regional assignment', () => {
     await expect(page.getByLabel('地區')).toHaveValue('桃園市');
     await expect(page.getByLabel('委外狀態')).toHaveValue('unassigned');
     await page.getByLabel('搜尋案件').fill(prefix);
-    await expect(page.locator('tbody tr')).toHaveCount(10);
-    await expect(page.getByText(/12 筆案件 · 第 1 ／ 2/)).toBeVisible();
+    await expect(page.locator('tbody tr')).toHaveCount(20);
+    await expect(page.getByText(/22 筆案件 · 第 1 ／ 2/)).toBeVisible();
     const rows = page.locator('tbody tr');
     await rows.nth(0).getByRole('checkbox').check();
     await rows.nth(1).getByRole('checkbox').check();
@@ -88,7 +88,7 @@ test.describe('Bulk regional assignment', () => {
       .getByRole('checkbox', { name: '全選目前頁面', exact: true })
       .check();
     await expect(page.getByRole('status', { name: '已選案件' })).toContainText(
-      '已選取 10 筆案件',
+      '已選取 20 筆案件',
     );
     const pageIds = await rows
       .locator('a')
@@ -99,20 +99,20 @@ test.describe('Bulk regional assignment', () => {
             .filter(Boolean),
         ),
       ]);
-    expect(pageIds).toHaveLength(10);
+    expect(pageIds).toHaveLength(20);
     await page.getByRole('button', { name: '下一頁' }).click();
     await expect(page.getByRole('status', { name: '已選案件' })).toContainText(
       '已選取 0 筆案件',
     );
     await expect(page.locator('tbody tr')).toHaveCount(2);
     await page.getByRole('button', { name: '上一頁' }).click();
-    await expect(page.locator('tbody tr')).toHaveCount(10);
+    await expect(page.locator('tbody tr')).toHaveCount(20);
     await page
       .getByRole('checkbox', { name: '全選目前頁面', exact: true })
       .check();
     await page.getByRole('button', { name: '批量委外', exact: true }).click();
     const dialog = page.getByRole('dialog');
-    await expect(dialog).toContainText('已選擇： 10 筆案件');
+    await expect(dialog).toContainText('已選擇： 20 筆案件');
     await dialog
       .getByLabel('外收人員', { exact: true })
       .selectOption(collector.id);
@@ -145,15 +145,15 @@ test.describe('Bulk regional assignment', () => {
     await expect(
       dialog.getByRole('heading', { name: '批量委外完成' }),
     ).toBeVisible();
-    await expect(dialog.getByText('成功： 9', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('成功： 19', { exact: true })).toBeVisible();
     await expect(dialog.getByText('略過： 1', { exact: true })).toBeVisible();
     await expect(dialog.getByText('已由其他管理員派單')).toBeVisible();
     await expect(
       dialog.getByRole('list', { name: '各案件派單結果' }).locator('li'),
-    ).toHaveCount(10);
+    ).toHaveCount(20);
     const assigned = output.items.filter((item) => item.status === 'assigned');
-    expect(new Set(assigned.map((i) => i.assignmentId)).size).toBe(9);
-    expect(new Set(assigned.map((i) => i.outboundJobId)).size).toBe(9);
+    expect(new Set(assigned.map((i) => i.assignmentId)).size).toBe(19);
+    expect(new Set(assigned.map((i) => i.outboundJobId)).size).toBe(19);
     for (const item of assigned) {
       const assignments = await rpc<
         { id: string; unassignedAt: string | null }[]
@@ -161,10 +161,12 @@ test.describe('Bulk regional assignment', () => {
       expect(assignments.filter((a) => !a.unassignedAt)).toHaveLength(1);
       expect(assignments[0].id).toBe(item.assignmentId);
     }
-    await rpc(page, 'telegram.process');
-    await expect(
-      dialog.getByText('Telegram 已傳送： 9', { exact: true }),
-    ).toBeVisible();
+    await expect(async () => {
+      await rpc(page, 'telegram.process');
+      await expect(
+        dialog.getByText('Telegram 已傳送： 19', { exact: true }),
+      ).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 30000 });
     await dialog.getByRole('button', { name: '完成', exact: true }).click();
     await expect(page.locator('tbody tr')).toHaveCount(2);
   });

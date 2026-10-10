@@ -26,6 +26,7 @@
     "@aws-sdk/client-s3": "^3.956.0",
     "@aws-sdk/s3-request-presigner": "^3.956.0",
     "@better-auth/api-key": "catalog:",
+    "@noble/hashes": "2.2.0",
     "@orpc/server": "catalog:",
     "@saasflare-dev/db": "workspace:*",
     "better-auth": "catalog:",

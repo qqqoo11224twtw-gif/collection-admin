@@ -33,6 +33,40 @@ describe('Telegram Bot API in the Workers runtime', () => {
       '127',
     ]);
   });
+  it('copies a single original with its formal caption in one Telegram request', async () => {
+    expect(
+      await client.copyReportMedia({
+        chatId: '-1001234567890',
+        topicId: 2,
+        sourceChatId: '-1009876543210',
+        messageIds: [11],
+        caption:
+          '代號：T001\n客戶姓名：虛構姓名\n回報內容：虛構內容\n日期：2026/10/09',
+      }),
+    ).toEqual(['128']);
+  });
+  it('keeps an original album together and edits its first picture caption idempotently', async () => {
+    const ids = await client.copyReportMedia({
+      chatId: '-1001234567890',
+      topicId: 2,
+      sourceChatId: '-1009876543210',
+      messageIds: [11, 12],
+      caption: '代號：T001',
+    });
+    expect(ids).toEqual(['129', '130']);
+    await client.editReportCaption({
+      chatId: '-1001234567890',
+      messageId: ids[0],
+      caption: '代號：T001',
+    });
+    await expect(
+      client.editReportCaption({
+        chatId: '-1001234567890',
+        messageId: ids[0],
+        caption: 'unchanged-caption',
+      }),
+    ).resolves.toBeUndefined();
+  });
   it.each([
     'invalid-json',
     'null-json',

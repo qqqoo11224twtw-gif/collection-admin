@@ -101,6 +101,10 @@ export const telegramApi = {
         input.routeType in typeMap
           ? typeMap[input.routeType as keyof typeof typeMap]
           : input.routeType;
+      if (routeType === 'intake' && (!input.id || input.isActive))
+        throw new ORPCError('FORBIDDEN', {
+          message: 'TELEGRAM_INTAKE_DISABLED',
+        });
       input = { ...input, routeType };
       if (input.collectorId) {
         const [c] = await context.DB.select()
@@ -174,6 +178,10 @@ export const telegramApi = {
       const [route] = await context.DB.select()
         .from(telegramRoutes)
         .where(eq(telegramRoutes.id, input.id));
+      if (route && ['intake', 'intake_source'].includes(route.routeType))
+        throw new ORPCError('FORBIDDEN', {
+          message: 'TELEGRAM_INTAKE_DISABLED',
+        });
       if (!route?.isActive)
         throw new ORPCError('BAD_REQUEST', { message: '請先啟用路由。' });
       try {

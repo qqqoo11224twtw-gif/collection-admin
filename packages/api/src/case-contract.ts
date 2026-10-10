@@ -23,13 +23,15 @@ export const caseInputSchema = z.object({
 export const caseListSchema = z.object({
   voided: z.boolean().default(false),
   page: z.number().int().min(1).max(100000).default(1),
-  pageSize: z.number().int().min(1).max(50).default(10),
+  pageSize: z
+    .union([z.literal(20), z.literal(50), z.literal(200), z.literal(500)])
+    .default(20),
   query: z.string().trim().max(120).default(''),
   region: z.enum(REGIONS).optional(),
   regionMissing: z.boolean().optional(),
   collectorId: z.string().min(1).max(128).optional(),
   assignmentStatus: z.enum(['assigned', 'unassigned']).optional(),
-  status: z.enum(CASE_STATUSES).optional(),
+  status: z.enum([...CASE_STATUSES, 'direct_to_principal']).optional(),
 });
 export const caseIdSchema = z.object({ id: z.string().min(1).max(128) });
 export const caseMediaInputSchema = z.object({

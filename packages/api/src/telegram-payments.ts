@@ -1,3 +1,4 @@
+import { ORPCError } from '@orpc/server';
 import type { telegramRoutes } from '@saasflare-dev/db';
 import type { Context } from './context';
 import { createPayment } from './finance';
@@ -14,14 +15,15 @@ export async function processTelegramPayment(
   client: TelegramClient,
 ) {
   const rows = await base.env.DB.prepare(
-    "SELECT id,case_id,assignment_id,callback_token FROM reports WHERE callback_route_id=? AND workflow_status='awaiting_status' AND selected_status='settled' ORDER BY created_at LIMIT 2",
+    "SELECT id,case_id,assignment_id,callback_token,created_at FROM reports WHERE callback_route_id=? AND workflow_status='awaiting_status' AND selected_status='settled' AND NOT EXISTS(SELECT 1 FROM telegram_report_conversations conv WHERE conv.report_id=reports.id AND (conv.stage<>'status' OR conv.expires_at<=?)) ORDER BY created_at LIMIT 2",
   )
-    .bind(route.id)
+    .bind(route.id, Date.now())
     .all<{
       id: string;
       case_id: string;
       assignment_id: string;
       callback_token: string;
+      created_at: number;
     }>();
   if (!rows.results.length) return null;
   if (rows.results.length !== 1) {
@@ -54,22 +56,35 @@ export async function processTelegramPayment(
     );
     return { code: 'PAYMENT_INVALID', reportId: row.id };
   }
-  await createPayment(
-    context,
-    {
-      caseId: row.case_id,
-      receivedAmount: amount,
-      receivedDate: businessToday(
-        new Date(
-          (update.message?.date ?? Math.floor(Date.now() / 1000)) * 1000,
+  try {
+    await createPayment(
+      context,
+      {
+        caseId: row.case_id,
+        receivedAmount: amount,
+        receivedDate: businessToday(
+          new Date(row.created_at),
+          base.env.BUSINESS_TIMEZONE ?? 'Asia/Taipei',
         ),
-        base.env.BUSINESS_TIMEZONE ?? 'Asia/Taipei',
-      ),
-      installmentScheduleId: null,
-      idempotencyKey: row.id,
-    },
-    { reportId: row.id, assignmentId: row.assignment_id, routeId: route.id },
-  );
+        installmentScheduleId: null,
+        idempotencyKey: row.id,
+      },
+      { reportId: row.id, assignmentId: row.assignment_id, routeId: route.id },
+    );
+  } catch (error) {
+    if (error instanceof ORPCError && error.code === 'BAD_REQUEST') {
+      await queueTelegramMessage(
+        context,
+        route,
+        `payment-rejected:${update.update_id}`,
+        error.message,
+        row.id,
+        { commandReply: true },
+      );
+      return { code: 'PAYMENT_REJECTED', reportId: row.id };
+    }
+    throw error;
+  }
   return processReportStatusCallback(
     base,
     {

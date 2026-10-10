@@ -18,6 +18,7 @@ import {
   intakeResolveSchema,
 } from './intake-contract';
 import { processIntake, promoteIntake, resolveIntake } from './intake-resolver';
+import { rejectRetiredIntake } from './intake-retirement';
 import {
   intakeMatching,
   intakeVisibility,
@@ -36,6 +37,7 @@ export const intakeApi = {
   extractImages: protectedProcedure
     .input(idSchema)
     .handler(async ({ context, input }) => {
+      rejectRetiredIntake();
       requirePermission(context, 'intake.resolve');
       requirePermission(context, 'media.view');
       try {
@@ -51,16 +53,26 @@ export const intakeApi = {
     }),
   receive: protectedProcedure
     .input(intakeReceiveSchema)
-    .handler(({ context, input }) => receiveIntake(context, input)),
+    .handler(({ context, input }) => {
+      rejectRetiredIntake();
+      return receiveIntake(context, input);
+    }),
   resolve: protectedProcedure
     .input(intakeResolveSchema)
-    .handler(({ context, input }) => resolveIntake(context, input)),
+    .handler(({ context, input }) => {
+      rejectRetiredIntake();
+      return resolveIntake(context, input);
+    }),
   process: protectedProcedure
     .input(idSchema.extend({ expectedVersion: z.number().int().min(0) }))
-    .handler(({ context, input }) => processIntake(context, input)),
-  promote: protectedProcedure
-    .input(idSchema)
-    .handler(({ context, input }) => promoteIntake(context, input.id)),
+    .handler(({ context, input }) => {
+      rejectRetiredIntake();
+      return processIntake(context, input);
+    }),
+  promote: protectedProcedure.input(idSchema).handler(({ context, input }) => {
+    rejectRetiredIntake();
+    return promoteIntake(context, input.id);
+  }),
   detail: protectedProcedure
     .input(idSchema)
     .handler(async ({ context, input }) => {

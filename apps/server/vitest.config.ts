@@ -57,6 +57,7 @@ export default defineConfig(async () => {
             BETTER_AUTH_SECRET: 'test-secret',
             // Messy on purpose: the whitelist must trim + lowercase entries.
             ADMIN_EMAILS: ' Boss@Test.dev ',
+            ACCOUNT_AUTH_MODE: 'legacy-test',
             RESEND_API_KEY: '',
             EMAIL_FROM: '',
             CASE_STORAGE_MODE: 'demo',

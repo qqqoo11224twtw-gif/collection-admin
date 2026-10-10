@@ -27,10 +27,13 @@ import { Route as CasesTelegramRouteImport } from './routes/cases/telegram'
 import { Route as CasesSystemLogsRouteImport } from './routes/cases/system-logs'
 import { Route as CasesReviewsRouteImport } from './routes/cases/reviews'
 import { Route as CasesRegionsRouteImport } from './routes/cases/regions'
+import { Route as CasesProfileRouteImport } from './routes/cases/profile'
 import { Route as CasesIntegrationsRouteImport } from './routes/cases/integrations'
 import { Route as CasesIntakeRouteImport } from './routes/cases/intake'
+import { Route as CasesInstallmentsRouteImport } from './routes/cases/installments'
 import { Route as CasesFinanceRouteImport } from './routes/cases/finance'
 import { Route as CasesCollectorsRouteImport } from './routes/cases/collectors'
+import { Route as CasesBulkCreateRouteImport } from './routes/cases/bulk-create'
 import { Route as CasesCaseIdRouteImport } from './routes/cases/$caseId'
 import { Route as CasesReviewsIndexRouteImport } from './routes/cases/reviews/index'
 import { Route as CasesIntakeIndexRouteImport } from './routes/cases/intake/index'
@@ -130,6 +133,11 @@ const CasesRegionsRoute = CasesRegionsRouteImport.update({
   path: '/regions',
   getParentRoute: () => CasesRoute,
 } as any)
+const CasesProfileRoute = CasesProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => CasesRoute,
+} as any)
 const CasesIntegrationsRoute = CasesIntegrationsRouteImport.update({
   id: '/integrations',
   path: '/integrations',
@@ -140,6 +148,11 @@ const CasesIntakeRoute = CasesIntakeRouteImport.update({
   path: '/intake',
   getParentRoute: () => CasesRoute,
 } as any)
+const CasesInstallmentsRoute = CasesInstallmentsRouteImport.update({
+  id: '/installments',
+  path: '/installments',
+  getParentRoute: () => CasesRoute,
+} as any)
 const CasesFinanceRoute = CasesFinanceRouteImport.update({
   id: '/finance',
   path: '/finance',
@@ -148,6 +161,11 @@ const CasesFinanceRoute = CasesFinanceRouteImport.update({
 const CasesCollectorsRoute = CasesCollectorsRouteImport.update({
   id: '/collectors',
   path: '/collectors',
+  getParentRoute: () => CasesRoute,
+} as any)
+const CasesBulkCreateRoute = CasesBulkCreateRouteImport.update({
+  id: '/bulk-create',
+  path: '/bulk-create',
   getParentRoute: () => CasesRoute,
 } as any)
 const CasesCaseIdRoute = CasesCaseIdRouteImport.update({
@@ -200,10 +218,13 @@ export interface FileRoutesByFullPath {
   '/examples': typeof ExamplesRouteWithChildren
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
+  '/cases/bulk-create': typeof CasesBulkCreateRoute
   '/cases/collectors': typeof CasesCollectorsRoute
   '/cases/finance': typeof CasesFinanceRoute
+  '/cases/installments': typeof CasesInstallmentsRoute
   '/cases/intake': typeof CasesIntakeRouteWithChildren
   '/cases/integrations': typeof CasesIntegrationsRoute
+  '/cases/profile': typeof CasesProfileRoute
   '/cases/regions': typeof CasesRegionsRoute
   '/cases/reviews': typeof CasesReviewsRouteWithChildren
   '/cases/system-logs': typeof CasesSystemLogsRoute
@@ -230,9 +251,12 @@ export interface FileRoutesByTo {
   '/examples': typeof ExamplesRouteWithChildren
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
+  '/cases/bulk-create': typeof CasesBulkCreateRoute
   '/cases/collectors': typeof CasesCollectorsRoute
   '/cases/finance': typeof CasesFinanceRoute
+  '/cases/installments': typeof CasesInstallmentsRoute
   '/cases/integrations': typeof CasesIntegrationsRoute
+  '/cases/profile': typeof CasesProfileRoute
   '/cases/regions': typeof CasesRegionsRoute
   '/cases/system-logs': typeof CasesSystemLogsRoute
   '/cases/telegram': typeof CasesTelegramRoute
@@ -261,10 +285,13 @@ export interface FileRoutesById {
   '/examples': typeof ExamplesRouteWithChildren
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
+  '/cases/bulk-create': typeof CasesBulkCreateRoute
   '/cases/collectors': typeof CasesCollectorsRoute
   '/cases/finance': typeof CasesFinanceRoute
+  '/cases/installments': typeof CasesInstallmentsRoute
   '/cases/intake': typeof CasesIntakeRouteWithChildren
   '/cases/integrations': typeof CasesIntegrationsRoute
+  '/cases/profile': typeof CasesProfileRoute
   '/cases/regions': typeof CasesRegionsRoute
   '/cases/reviews': typeof CasesReviewsRouteWithChildren
   '/cases/system-logs': typeof CasesSystemLogsRoute
@@ -295,10 +322,13 @@ export interface FileRouteTypes {
     | '/examples'
     | '/login'
     | '/cases/$caseId'
+    | '/cases/bulk-create'
     | '/cases/collectors'
     | '/cases/finance'
+    | '/cases/installments'
     | '/cases/intake'
     | '/cases/integrations'
+    | '/cases/profile'
     | '/cases/regions'
     | '/cases/reviews'
     | '/cases/system-logs'
@@ -325,9 +355,12 @@ export interface FileRouteTypes {
     | '/examples'
     | '/login'
     | '/cases/$caseId'
+    | '/cases/bulk-create'
     | '/cases/collectors'
     | '/cases/finance'
+    | '/cases/installments'
     | '/cases/integrations'
+    | '/cases/profile'
     | '/cases/regions'
     | '/cases/system-logs'
     | '/cases/telegram'
@@ -355,10 +388,13 @@ export interface FileRouteTypes {
     | '/examples'
     | '/login'
     | '/cases/$caseId'
+    | '/cases/bulk-create'
     | '/cases/collectors'
     | '/cases/finance'
+    | '/cases/installments'
     | '/cases/intake'
     | '/cases/integrations'
+    | '/cases/profile'
     | '/cases/regions'
     | '/cases/reviews'
     | '/cases/system-logs'
@@ -517,6 +553,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CasesRegionsRouteImport
       parentRoute: typeof CasesRoute
     }
+    '/cases/profile': {
+      id: '/cases/profile'
+      path: '/profile'
+      fullPath: '/cases/profile'
+      preLoaderRoute: typeof CasesProfileRouteImport
+      parentRoute: typeof CasesRoute
+    }
     '/cases/integrations': {
       id: '/cases/integrations'
       path: '/integrations'
@@ -531,6 +574,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CasesIntakeRouteImport
       parentRoute: typeof CasesRoute
     }
+    '/cases/installments': {
+      id: '/cases/installments'
+      path: '/installments'
+      fullPath: '/cases/installments'
+      preLoaderRoute: typeof CasesInstallmentsRouteImport
+      parentRoute: typeof CasesRoute
+    }
     '/cases/finance': {
       id: '/cases/finance'
       path: '/finance'
@@ -543,6 +593,13 @@ declare module '@tanstack/react-router' {
       path: '/collectors'
       fullPath: '/cases/collectors'
       preLoaderRoute: typeof CasesCollectorsRouteImport
+      parentRoute: typeof CasesRoute
+    }
+    '/cases/bulk-create': {
+      id: '/cases/bulk-create'
+      path: '/bulk-create'
+      fullPath: '/cases/bulk-create'
+      preLoaderRoute: typeof CasesBulkCreateRouteImport
       parentRoute: typeof CasesRoute
     }
     '/cases/$caseId': {
@@ -634,10 +691,13 @@ const CasesReviewsRouteWithChildren = CasesReviewsRoute._addFileChildren(
 
 interface CasesRouteChildren {
   CasesCaseIdRoute: typeof CasesCaseIdRoute
+  CasesBulkCreateRoute: typeof CasesBulkCreateRoute
   CasesCollectorsRoute: typeof CasesCollectorsRoute
   CasesFinanceRoute: typeof CasesFinanceRoute
+  CasesInstallmentsRoute: typeof CasesInstallmentsRoute
   CasesIntakeRoute: typeof CasesIntakeRouteWithChildren
   CasesIntegrationsRoute: typeof CasesIntegrationsRoute
+  CasesProfileRoute: typeof CasesProfileRoute
   CasesRegionsRoute: typeof CasesRegionsRoute
   CasesReviewsRoute: typeof CasesReviewsRouteWithChildren
   CasesSystemLogsRoute: typeof CasesSystemLogsRoute
@@ -648,10 +708,13 @@ interface CasesRouteChildren {
 
 const CasesRouteChildren: CasesRouteChildren = {
   CasesCaseIdRoute: CasesCaseIdRoute,
+  CasesBulkCreateRoute: CasesBulkCreateRoute,
   CasesCollectorsRoute: CasesCollectorsRoute,
   CasesFinanceRoute: CasesFinanceRoute,
+  CasesInstallmentsRoute: CasesInstallmentsRoute,
   CasesIntakeRoute: CasesIntakeRouteWithChildren,
   CasesIntegrationsRoute: CasesIntegrationsRoute,
+  CasesProfileRoute: CasesProfileRoute,
   CasesRegionsRoute: CasesRegionsRoute,
   CasesReviewsRoute: CasesReviewsRouteWithChildren,
   CasesSystemLogsRoute: CasesSystemLogsRoute,

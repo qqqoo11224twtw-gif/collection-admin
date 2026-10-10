@@ -28,6 +28,16 @@ export function telegramExceptionKind(error: unknown) {
   return 'other';
 }
 export interface TelegramClient {
+  editReportPrompt?(
+    input: TelegramMessagePayload,
+    messageId: string,
+  ): Promise<void>;
+  copyReportMedia?(input: TelegramMediaReferencePayload): Promise<string[]>;
+  editReportCaption?(input: {
+    chatId: string;
+    messageId: string;
+    caption: string;
+  }): Promise<void>;
   getMe?(): Promise<{ id: number; username: string; first_name: string }>;
   sendPhoto?(input: TelegramPhotoPayload): Promise<string>;
   sendMediaGroup?(input: TelegramPhotoPayload[]): Promise<string[]>;
@@ -36,6 +46,13 @@ export interface TelegramClient {
   downloadFile(
     fileId: string,
   ): Promise<{ bytes: ArrayBuffer; mediaType: string }>;
+}
+export interface TelegramMediaReferencePayload {
+  chatId: string;
+  topicId: number | null;
+  sourceChatId: string;
+  messageIds: number[];
+  caption?: string;
 }
 export interface TelegramPhotoPayload {
   chatId: string;
@@ -46,6 +63,38 @@ export interface TelegramPhotoPayload {
   filename: string;
 }
 export class FakeTelegramClient implements TelegramClient {
+  readonly editedPrompts: {
+    input: TelegramMessagePayload;
+    messageId: string;
+  }[] = [];
+  async editReportPrompt(input: TelegramMessagePayload, messageId: string) {
+    this.editedPrompts.push({ input, messageId });
+  }
+  readonly copiedMedia: TelegramMediaReferencePayload[] = [];
+  readonly editedCaptions: {
+    chatId: string;
+    messageId: string;
+    caption: string;
+  }[] = [];
+  captionFailures = 0;
+  async editReportCaption(input: {
+    chatId: string;
+    messageId: string;
+    caption: string;
+  }) {
+    if (this.captionFailures-- > 0)
+      throw new TelegramFailure('RATE_LIMIT', true);
+    this.editedCaptions.push(input);
+  }
+  mediaFailures = 0;
+  uncertainMedia = false;
+  async copyReportMedia(input: TelegramMediaReferencePayload) {
+    if (this.mediaFailures-- > 0) throw new TelegramFailure('RATE_LIMIT', true);
+    this.copiedMedia.push(input);
+    if (this.uncertainMedia)
+      throw new TelegramFailure('DELIVERY_UNKNOWN', false, true);
+    return input.messageIds.map((id) => String(id));
+  }
   readonly photos: TelegramPhotoPayload[] = [];
   readonly albums: TelegramPhotoPayload[][] = [];
   async sendPhoto(input: TelegramPhotoPayload) {
@@ -106,6 +155,13 @@ export class FakeTelegramClient implements TelegramClient {
 }
 export class BotApiTelegramClient implements TelegramClient {
   constructor(private readonly token: string) {}
+  async isChatAdmin(chatId: string, userId: number) {
+    const member = (await this.call('getChatMember', {
+      chat_id: chatId,
+      user_id: userId,
+    })) as { status?: string };
+    return member.status === 'creator' || member.status === 'administrator';
+  }
   async getMe() {
     const result = (await this.call('getMe', {})) as {
       id?: number;
@@ -182,6 +238,7 @@ export class BotApiTelegramClient implements TelegramClient {
       ok?: boolean;
       result?: unknown;
       error_code?: number;
+      description?: string;
       parameters?: { retry_after?: number };
     };
     try {
@@ -203,6 +260,12 @@ export class BotApiTelegramClient implements TelegramClient {
     }
     if (!body.ok) {
       const code = body.error_code ?? response.status;
+      if (
+        method === 'editMessageCaption' &&
+        code === 400 &&
+        body.description?.includes('message is not modified')
+      )
+        throw new TelegramFailure('MESSAGE_NOT_MODIFIED', false);
       console.warn('telegram.diagnostic', {
         stage: 'api_non_ok',
         method,
@@ -269,6 +332,14 @@ export class BotApiTelegramClient implements TelegramClient {
       throw new TelegramFailure('DELIVERY_UNKNOWN', false, true);
     return result.map((v) => String(v.message_id));
   }
+  async editReportPrompt(input: TelegramMessagePayload, messageId: string) {
+    await this.call('editMessageText', {
+      chat_id: input.chatId,
+      message_id: Number(messageId),
+      text: input.text,
+      reply_markup: input.replyMarkup,
+    });
+  }
   async sendMessage(raw: TelegramMessagePayload) {
     const input = outboundPayloadSchema.parse(raw);
     const r = (await this.call(
@@ -289,6 +360,83 @@ export class BotApiTelegramClient implements TelegramClient {
       throw new TelegramFailure('DELIVERY_UNKNOWN', false, true);
     }
     return String(r.message_id);
+  }
+  async copyReportMedia(input: TelegramMediaReferencePayload) {
+    if (
+      !input.messageIds.length ||
+      input.messageIds.length > 10 ||
+      input.messageIds.some(
+        (id, i) =>
+          !Number.isSafeInteger(id) ||
+          id <= 0 ||
+          (i > 0 && id <= input.messageIds[i - 1]),
+      )
+    )
+      throw new TelegramFailure('INVALID_MEDIA_GROUP', false);
+    if (input.caption !== undefined && input.messageIds.length === 1) {
+      const result = (await this.call(
+        'copyMessage',
+        {
+          chat_id: input.chatId,
+          message_thread_id: input.topicId ?? undefined,
+          from_chat_id: input.sourceChatId,
+          message_id: input.messageIds[0],
+          caption: input.caption,
+        },
+        true,
+      )) as { message_id?: number };
+      if (!Number.isSafeInteger(result?.message_id))
+        throw new TelegramFailure('DELIVERY_UNKNOWN', false, true);
+      return [String(result.message_id)];
+    }
+    const result = (await this.call(
+      'copyMessages',
+      {
+        chat_id: input.chatId,
+        message_thread_id: input.topicId ?? undefined,
+        from_chat_id: input.sourceChatId,
+        message_ids: input.messageIds,
+        remove_caption: true,
+      },
+      true,
+    )) as { message_id?: number }[];
+    // Telegram may skip unavailable messages. A partial response cannot safely
+    // identify the omitted source and must never be blindly replayed.
+    if (
+      !Array.isArray(result) ||
+      result.length !== input.messageIds.length ||
+      result.some((r) => !Number.isSafeInteger(r?.message_id))
+    )
+      throw new TelegramFailure('DELIVERY_UNKNOWN', false, true);
+    return result.map((r) => String(r.message_id));
+  }
+  async editReportCaption(input: {
+    chatId: string;
+    messageId: string;
+    caption: string;
+  }) {
+    try {
+      const result = (await this.call('editMessageCaption', {
+        chat_id: input.chatId,
+        message_id: Number(input.messageId),
+        caption: input.caption,
+      })) as { message_id?: number } | true | null;
+      if (
+        result !== true &&
+        (!Number.isSafeInteger(result?.message_id) ||
+          result?.message_id !== Number(input.messageId))
+      )
+        throw new TelegramFailure('INVALID_API_RESPONSE', true);
+    } catch (error: unknown) {
+      // Editing to the same caption is an idempotent success after an uncertain edit response.
+      if (
+        !(
+          error instanceof TelegramFailure &&
+          error.code === 'MESSAGE_NOT_MODIFIED'
+        )
+      )
+        throw error;
+    }
   }
   async downloadFile(fileId: string) {
     const file = (await this.call('getFile', { file_id: fileId })) as {

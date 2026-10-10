@@ -238,19 +238,8 @@ export class FakeImageExtractionProvider implements ExtractionRuntime {
   }
 }
 export function imageExtractionProvider(
-  settings: OpenAISettings,
+  _settings: OpenAISettings,
 ): ExtractionRuntime | null {
-  if (
-    settings.IMAGE_EXTRACTION_MODE === 'fake' &&
-    /^http:\/\/localhost(?::\d+)?\/?$/.test(settings.SERVER_URL ?? '')
-  )
-    return new FakeImageExtractionProvider();
-  if (settings.IMAGE_EXTRACTION_MODE === 'openai')
-    return new OpenAIImageExtractionProvider(settings);
-  if (
-    !settings.IMAGE_EXTRACTION_MODE ||
-    settings.IMAGE_EXTRACTION_MODE === 'disabled'
-  )
-    return null;
-  throw new ImageExtractionFailure('INVALID_AI_SETTINGS', false);
+  // Provider implementations remain archived; formal runtime never enables AI.
+  return null;
 }

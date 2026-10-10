@@ -27,10 +27,89 @@ let admin: string;
 let agent: string;
 let agentId: string;
 const input = { page: 1, pageSize: 50, query: '' };
+it('server pagination accepts only 20/50/200/500 and maintains filtered totals, ordering and collector scope', async () => {
+  for (const pageSize of [20, 50, 200, 500]) {
+    const response = await rpc(
+      'cases.list',
+      { page: 1, pageSize, query: 'DEMO-' },
+      { cookie: admin },
+    );
+    expect(response.status).toBe(200);
+    expect((response.body as Page).total).toBe(18);
+    expect((response.body as Page).items).toHaveLength(18);
+    const own = await rpc('cases.list', { pageSize }, { cookie: agent });
+    expect(own.status).toBe(200);
+    expect((own.body as Page).total).toBeLessThan(18);
+  }
+  for (const pageSize of [1, 10, 10000, 999999]) {
+    expect(
+      (await rpc('cases.list', { pageSize }, { cookie: admin })).status,
+    ).toBe(400);
+  }
+});
 interface Page {
   items: { id: string; customerName: string; status: string; source: string }[];
   total: number;
 }
+it('500-row D1 pages retrieve only the requested page and count the filtered 510 cases', async () => {
+  const prefix = `PAGINATION-${crypto.randomUUID()}-`,
+    now = Date.now();
+  const statements = Array.from({ length: 510 }, (_, i) =>
+    env.DB.prepare(
+      "INSERT INTO cases(id,case_no,code,customer_name,address,amount_due,region,status,created_at,updated_at) VALUES(?,?,?,?,?,100,'桃園市','pending',?,?)",
+    ).bind(
+      `${prefix}${i}`,
+      `${prefix}${i}`,
+      `${prefix}${i}`,
+      '虛構分頁案件',
+      '虛構地址',
+      now,
+      now,
+    ),
+  );
+  for (let i = 0; i < statements.length; i += 100)
+    await env.DB.batch(statements.slice(i, i + 100));
+  for (const pageSize of [20, 50, 200, 500]) {
+    const started = performance.now();
+    const first = await rpc(
+      'cases.list',
+      {
+        pageSize,
+        query: prefix,
+        region: '桃園市',
+        status: 'pending',
+        assignmentStatus: 'unassigned',
+      },
+      { cookie: admin },
+    );
+    expect(first.status).toBe(200);
+    expect((first.body as Page).total).toBe(510);
+    expect((first.body as Page).items).toHaveLength(pageSize);
+    if (pageSize === 500)
+      console.info(
+        JSON.stringify({
+          event: 'CASE_PAGE_500_LOCAL',
+          duration_ms: Math.round(performance.now() - started),
+          returned_rows: 500,
+        }),
+      );
+  }
+  const second = await rpc(
+    'cases.list',
+    { page: 2, pageSize: 500, query: prefix },
+    { cookie: admin },
+  );
+  expect((second.body as Page).items).toHaveLength(10);
+  const own = await rpc(
+    'cases.list',
+    { pageSize: 500, query: prefix },
+    { cookie: agent },
+  );
+  expect((own.body as Page).total).toBe(0);
+  await env.DB.prepare('DELETE FROM cases WHERE code LIKE ?')
+    .bind(`${prefix}%`)
+    .run();
+});
 function imageRequest(caseId: string, mediaId: string, cookie?: string) {
   return app.fetch(
     new Request(`http://localhost/api/cases/${caseId}/media/${mediaId}/image`, {
@@ -231,20 +310,20 @@ describe('Cases API and search', () => {
   it('paginates with stable ordering and no duplicate records', async () => {
     const first = await rpc(
       'cases.list',
-      { ...input, pageSize: 10 },
+      { ...input, pageSize: 20 },
       { cookie: admin },
     );
     const second = await rpc(
       'cases.list',
-      { ...input, pageSize: 10, page: 2 },
+      { ...input, pageSize: 20, page: 2 },
       { cookie: admin },
     );
     expect(first.status).toBe(200);
     const a = first.body as Page;
     const b = second.body as Page;
     expect(a.total).toBe(18);
-    expect(a.items.length).toBe(10);
-    expect(b.items.length).toBe(8);
+    expect(a.items.length).toBe(18);
+    expect(b.items.length).toBe(0);
     expect(
       new Set([...a.items, ...b.items].map((record) => record.id)).size,
     ).toBe(18);

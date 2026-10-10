@@ -131,6 +131,7 @@ export function backoff(attempt: number) {
 export const TELEGRAM_REPORT_STATUSES = [
   'settled',
   'installment',
+  'direct_to_principal',
   'unresolved',
   'follow_up',
 ] as const;
@@ -138,6 +139,7 @@ export type TelegramReportStatus = (typeof TELEGRAM_REPORT_STATUSES)[number];
 export const telegramReportLabels = {
   settled: '結清',
   installment: '分期',
+  direct_to_principal: '後結',
   unresolved: '無解',
   follow_up: '安排二訪',
 } as const;
@@ -145,8 +147,8 @@ export function reportStatusKeyboard(token: string): InlineKeyboard {
   return inlineKeyboardSchema.parse({
     inline_keyboard: TELEGRAM_REPORT_STATUSES.map((s, i) => [
       {
-        text: ['✅ 結清', '💰 分期', '❌ 無解', '🔁 安排二訪'][i],
-        callback_data: `report_status:${token}:${s}`,
+        text: ['✅ 結清', '💰 分期', '🏦 後結', '❌ 無解', '🔁 安排二訪'][i],
+        callback_data: `report_status:${token}:${s === 'direct_to_principal' ? 'offset' : s}`,
       },
     ]),
   });

@@ -9,12 +9,14 @@ import {
 } from './case-media-management';
 import { privateCaseStorage } from './case-storage';
 import type { Context } from './context';
+import { rejectRetiredIntake } from './intake-retirement';
 import { intakeAudit, requireIntake } from './intake-service';
 export async function uploadIntakeImages(
   context: Context,
   intakeId: string,
   request: Request,
 ) {
+  rejectRetiredIntake();
   const row = await requireIntake(context, intakeId, 'intake.create');
   if (
     !['received', 'processing', 'needs_review', 'failed'].includes(row.status)

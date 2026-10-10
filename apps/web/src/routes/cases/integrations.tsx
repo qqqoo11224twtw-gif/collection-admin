@@ -32,7 +32,6 @@ function IntegrationsPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           {[
             { label: 'Telegram 相容憑證', configured: result.data.telegram },
-            { label: 'OpenAI 圖片辨識', configured: result.data.openai },
             { label: 'Email 寄信', configured: result.data.email },
             { label: '私人 R2 binding', configured: result.data.r2 },
             { label: 'Bot Token 加密', configured: result.data.botEncryption },

@@ -19,18 +19,18 @@ import {
 export function Dashboard() {
   const permissions = useCasePermissions();
   const all = useQuery({
-    ...orpc.cases.list.queryOptions({ input: { pageSize: 5 } }),
+    ...orpc.cases.list.queryOptions({ input: { pageSize: 20 } }),
     enabled: permissions.can('case.view'),
   });
   const settled = useQuery({
     ...orpc.cases.list.queryOptions({
-      input: { status: 'settled', pageSize: 1 },
+      input: { status: 'settled', pageSize: 20 },
     }),
     enabled: permissions.can('case.view'),
   });
   const unassigned = useQuery({
     ...orpc.cases.list.queryOptions({
-      input: { assignmentStatus: 'unassigned', pageSize: 1 },
+      input: { assignmentStatus: 'unassigned', pageSize: 20 },
     }),
     enabled: permissions.can('case.view'),
   });
@@ -112,7 +112,7 @@ export function Dashboard() {
             <p className="p-8 text-sm text-muted-foreground">目前沒有資料</p>
           ) : (
             <div className="divide-y">
-              {all.data.items.map((record) => (
+              {all.data.items.slice(0, 5).map((record) => (
                 <Link
                   key={record.id}
                   to="/cases/$caseId"
