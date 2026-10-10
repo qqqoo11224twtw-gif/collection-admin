@@ -17,6 +17,10 @@ import {
   queueTelegramMessage,
 } from './telegram-outbound';
 import { expireReportConversations } from './telegram-report-expiry';
+import {
+  notifyExpiredReportCallback,
+  REPORT_EXPIRED_TEXT,
+} from './telegram-report-feedback';
 import { reportMediaReady } from './telegram-report-media';
 import { reportRoutePrincipal } from './telegram-report-principal';
 export async function processReportStatusCallback(
@@ -42,7 +46,9 @@ export async function processReportStatusCallback(
         values: [String(update.update_id)],
       },
     ).run();
-    if (query) await client.answerCallbackQuery(query.id, text);
+    if (text === REPORT_EXPIRED_TEXT)
+      await notifyExpiredReportCallback(base, update, route, client);
+    else if (query) await client.answerCallbackQuery(query.id, text);
     return { code: 'CALLBACK_DENIED', reportId: null };
   };
   if (!query || !match || !query.message) return deny();
@@ -63,7 +69,7 @@ export async function processReportStatusCallback(
     (!['status', 'completed'].includes(conversation.stage) ||
       conversation.expires_at <= Date.now())
   )
-    return deny('回報已逾時失敗，請重新輸入 /回報。');
+    return deny(REPORT_EXPIRED_TEXT);
   if (
     route.id !== report.callbackRouteId ||
     route.collectorId !== report.collectorId

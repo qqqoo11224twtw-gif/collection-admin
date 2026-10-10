@@ -38,6 +38,7 @@ export type Context = Awaited<ReturnType<typeof createContext>> & {
   // Only set by telegramPrincipal, scoped to one claimed update/request.
   telegramPrincipalRecord?: typeof import('@saasflare-dev/db').user['$inferSelect'];
   telegramReply?: (key: string) => Promise<void>;
+  telegramCallbackAcknowledged?: boolean;
   telegramTiming?: {
     webhook_received_at: number;
     route_lookup_ms: number;

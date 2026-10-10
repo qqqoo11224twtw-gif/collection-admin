@@ -285,6 +285,159 @@ async function conversation(route: typeof telegramRoutes.$inferSelect) {
     .first<{ id: string; stage: string; case_id: string; report_id: string }>();
 }
 
+describe('visible report expiry feedback', () => {
+  const expiredText = '回報已逾時失敗，請重新輸入 /回報。';
+  async function expire(route: typeof telegramRoutes.$inferSelect) {
+    const conv = await conversation(route);
+    const created = Date.now() - 120001;
+    await env.DB.prepare(
+      'UPDATE telegram_report_conversations SET created_at=?,expires_at=? WHERE id=?',
+    )
+      .bind(created, created + 120000, conv?.id)
+      .run();
+    return conv;
+  }
+  it.each([
+    'installment',
+    'unresolved',
+    'follow_up',
+    'settled',
+    'offset',
+  ])('%s expiry sends one visible reply after fast ACK and callback replay never posts again', async (status) => {
+    const s = await setup(),
+      client = new FakeTelegramClient();
+    await immediate(message(s.route, `/回報 ${s.name} 逾時回報測試`), client);
+    const conv = await expire(s.route);
+    const report = await env.DB.prepare(
+      'SELECT callback_token FROM reports WHERE id=?',
+    )
+      .bind(conv?.report_id)
+      .first<{ callback_token: string }>();
+    const update = callback(
+      s.route,
+      `report_status:${report?.callback_token}:${status}`,
+    );
+    expect((await immediate(update, client)).status).toBe(200);
+    expect(
+      client.answered.filter((a) => a.id === update.callback_query?.id),
+    ).toEqual([{ id: update.callback_query?.id, text: '' }]);
+    expect(client.sent.filter((m) => m.text === expiredText)).toHaveLength(1);
+    expect(client.sent.at(-1)).toMatchObject({
+      chatId: s.route.chatId,
+      topicId: s.route.topicId,
+    });
+    await immediate(update, client);
+    await immediate({ ...update, update_id: ++sequence }, client);
+    expect(client.sent.filter((m) => m.text === expiredText)).toHaveLength(1);
+    expect(
+      await env.DB.prepare('SELECT id FROM payments WHERE case_id=?')
+        .bind(s.cases[0].id)
+        .first(),
+    ).toBeNull();
+    expect(
+      await env.DB.prepare('SELECT status FROM cases WHERE id=?')
+        .bind(s.cases[0].id)
+        .first(),
+    ).toEqual({ status: 'pending' });
+  });
+  it('expired same-name selection replies visibly without selecting a case', async () => {
+    const s = await setup(2),
+      client = new FakeTelegramClient();
+    await immediate(message(s.route, `/回報 ${s.name}`), client);
+    const data =
+      client.sent.at(-1)?.replyMarkup?.inline_keyboard[0][0].callback_data;
+    await expire(s.route);
+    const update = callback(s.route, data ?? '');
+    await immediate(update, client);
+    await immediate(update, client);
+    expect(client.sent.filter((m) => m.text === expiredText)).toHaveLength(1);
+    expect(await conversation(s.route)).toMatchObject({
+      stage: 'expired',
+      case_id: null,
+    });
+  });
+  it.each([
+    'settled',
+    'offset',
+  ])('expired %s amount input replies immediately and creates no financial event', async (status) => {
+    const s = await setup(),
+      client = new FakeTelegramClient();
+    await immediate(message(s.route, `/回報 ${s.name} 金額逾時測試`), client);
+    const conv = await conversation(s.route);
+    const report = await env.DB.prepare(
+      'SELECT callback_token FROM reports WHERE id=?',
+    )
+      .bind(conv?.report_id)
+      .first<{ callback_token: string }>();
+    await immediate(
+      callback(s.route, `report_status:${report?.callback_token}:${status}`),
+      client,
+    );
+    expect(client.sent.at(-1)?.text).toContain('金額');
+    await expire(s.route);
+    const update = message(s.route, '5000');
+    await immediate(update, client);
+    await immediate(update, client);
+    expect(client.sent.filter((m) => m.text === expiredText)).toHaveLength(1);
+    expect(
+      await env.DB.prepare('SELECT id FROM payments WHERE idempotency_key=?')
+        .bind(conv?.report_id)
+        .first(),
+    ).toBeNull();
+    expect(await conversation(s.route)).toMatchObject({ stage: 'expired' });
+    await immediate(message(s.route, '補充回報文字'), client);
+    expect(client.sent.at(-1)?.text).toBe(expiredText);
+  });
+  it('cron-style scans never retry failed DELIVERY_UNKNOWN even when next_attempt_at is overdue', async () => {
+    const s = await setup(),
+      client = new FakeTelegramClient(),
+      key = `uncertain-expiry-test:${crypto.randomUUID()}`;
+    await queueTelegramMessage(base, s.route, key, key);
+    await env.DB.prepare(
+      "UPDATE telegram_outbound_jobs SET status='failed',last_error_code='DELIVERY_UNKNOWN',attempts=1,next_attempt_at=?,lease_until=NULL WHERE dedupe_key=?",
+    )
+      .bind(Date.now() - 60000, key)
+      .run();
+    const snapshot = () =>
+      env.DB.prepare(
+        'SELECT status,last_error_code,attempts,telegram_message_id,sent_at FROM telegram_outbound_jobs WHERE dedupe_key=?',
+      )
+        .bind(key)
+        .first();
+    const before = await snapshot();
+    await processOutbound(base, client);
+    await processOutbound(base, client, Date.now() + 3600000);
+    expect(await snapshot()).toEqual(before);
+    expect(client.sent.some((message) => message.text === key)).toBe(false);
+    expect(
+      await env.DB.prepare('SELECT unassigned_at FROM assignments WHERE id=?')
+        .bind(s.cases[0].assignment)
+        .first(),
+    ).toEqual({ unassigned_at: null });
+  });
+  it('an expired Telegram callback query does not suppress the durable visible hint', async () => {
+    class OldCallbackClient extends FakeTelegramClient {
+      override async answerCallbackQuery() {
+        throw new Error('query expired');
+      }
+    }
+    const s = await setup(),
+      client = new OldCallbackClient();
+    await immediate(message(s.route, `/回報 ${s.name} 舊按鈕測試`), client);
+    const conv = await expire(s.route);
+    const report = await env.DB.prepare(
+      'SELECT callback_token FROM reports WHERE id=?',
+    )
+      .bind(conv?.report_id)
+      .first<{ callback_token: string }>();
+    await immediate(
+      callback(s.route, `report_status:${report?.callback_token}:unresolved`),
+      client,
+    );
+    expect(client.sent.filter((m) => m.text === expiredText)).toHaveLength(1);
+  });
+});
+
 describe('Simplified manual report states', () => {
   it('fixed two-minute lifetime survives case selection and content; expiry audits once and blocks every status', async () => {
     const s = await setup(2),

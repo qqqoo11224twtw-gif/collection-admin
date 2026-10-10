@@ -14,6 +14,10 @@ import {
   queueTelegramMessage,
 } from './telegram-outbound';
 import { expireReportConversations } from './telegram-report-expiry';
+import {
+  notifyExpiredReportCallback,
+  REPORT_EXPIRED_TEXT,
+} from './telegram-report-feedback';
 import { bindReportMedia } from './telegram-report-media';
 import { reportRoutePrincipal } from './telegram-report-principal';
 
@@ -111,7 +115,7 @@ const buttonLabel = (c: Candidate) =>
     c.customer_name.slice(0, 22),
     (c.region || '未設定地區').slice(0, 18),
   ].join('｜');
-const expiredText = '回報已逾時失敗，請重新輸入 /回報。';
+const expiredText = REPORT_EXPIRED_TEXT;
 async function principal(base: Context, route: Route, update: TelegramUpdate) {
   const ctx = await reportRoutePrincipal(base, route, update);
   requirePermission(ctx, 'case.view');
@@ -409,7 +413,7 @@ export async function processReportCaseCallback(
   const query = update.callback_query,
     match = /^(rc|rp):([a-f0-9]{32}):(\d{1,5})$/.exec(query?.data ?? '');
   const deny = async () => {
-    if (query) await client.answerCallbackQuery(query.id, expiredText);
+    await notifyExpiredReportCallback(base, update, route, client);
     return { code: 'CALLBACK_DENIED', reportId: null };
   };
   if (!match || !query) return deny();

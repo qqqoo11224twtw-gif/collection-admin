@@ -459,6 +459,7 @@ export async function processTelegramUpdates(
         if (update.callback_query) {
           try {
             await routeClient.answerCallbackQuery(update.callback_query.id, '');
+            actor.telegramCallbackAcknowledged = true;
           } catch {
             /* Callback acknowledgement must not abort a valid business transition. */
           }
