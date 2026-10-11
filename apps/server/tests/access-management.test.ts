@@ -61,6 +61,24 @@ beforeEach(async () => {
   service = new AccessManagementService(env.DB, fixture, groupId, actor.id);
   await service.sync(false);
 });
+it('reads joined audit history with an unambiguous operation timestamp', async () => {
+  const history = await service.history();
+  expect(history).toHaveLength(1);
+  expect(history[0]).toMatchObject({ action: 'sync', status: 'reconciled' });
+});
+it('limits Access writes per operator without changing provider state or leaving a lock', async () => {
+  for (let index = 0; index < 9; index++) await service.sync(false);
+  await expect(change('limited@example.test', 'add')).rejects.toMatchObject({
+    code: 'TOO_MANY_REQUESTS',
+    data: { code: 'ACCESS_RATE_LIMITED' },
+  });
+  expect(fixture.writes).toBe(0);
+  expect((await service.list()).busy).toBe(false);
+  await env.DB.prepare(
+    'UPDATE access_operations SET created_at=created_at-60001',
+  ).run();
+  expect((await change('limited@example.test', 'add')).success).toBe(true);
+});
 async function change(
   email: string,
   action: 'add' | 'enable' | 'disable' | 'remove',
@@ -408,5 +426,41 @@ describe('official Cloudflare request shape and safe errors', () => {
       transport,
     );
     await expect(client.getGroup()).rejects.toThrow('ACCESS_PROVIDER_FAILED');
+  });
+  it('does not call a Worker transport with the client as receiver', async () => {
+    const receivers: unknown[] = [];
+    const transport = async function (this: unknown, _url, options) {
+      receivers.push(this);
+      if (this !== undefined) throw new TypeError('Illegal invocation');
+      expect(options?.redirect).toBe('manual');
+      return Response.json({ success: true, result: fixture.group });
+    } as typeof fetch;
+    const client = new CloudflareAccessClient(
+      'a'.repeat(32),
+      groupId,
+      'fixture-only',
+      transport,
+    );
+    await expect(client.getGroup()).resolves.toMatchObject({ id: groupId });
+    expect(receivers).toEqual([undefined]);
+  });
+  it('rejects redirects without forwarding provider credentials', async () => {
+    let calls = 0;
+    const transport = (async (_url, options) => {
+      calls++;
+      expect(options?.redirect).toBe('manual');
+      return Response.json(
+        { success: true, result: fixture.group },
+        { status: 302 },
+      );
+    }) as typeof fetch;
+    const client = new CloudflareAccessClient(
+      'a'.repeat(32),
+      groupId,
+      'fixture-only',
+      transport,
+    );
+    await expect(client.getGroup()).rejects.toThrow('ACCESS_PROVIDER_FAILED');
+    expect(calls).toBe(1);
   });
 });

@@ -26,6 +26,9 @@
     "CASE_STORAGE_MODE": "r2",
     "TELEGRAM_MODE": "live",
     "BUSINESS_TIMEZONE": "Asia/Taipei",
+    "ACCESS_ACCOUNT_ID": "b40151c62acbc2316d833cb980dac6f5",
+    "ACCESS_GROUP_ID": "59d5d10d-2cf7-4eb9-a9e2-15496ae0a5b4",
+    "ACCESS_HOSTNAME": "admin.kpirich.bid",
     "IMAGE_EXTRACTION_MODE": "disabled"
   },
   "d1_databases": [

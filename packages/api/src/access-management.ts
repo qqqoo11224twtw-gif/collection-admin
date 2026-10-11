@@ -42,12 +42,15 @@ const messages: Record<string, string> = {
   ACCESS_CONFIRM_REQUIRED:
     '請確認撤銷此信箱在整個 Cloudflare 帳號下所有 Access 應用的 Session。',
   ACCESS_NOT_FOUND: '找不到授權信箱。',
+  ACCESS_RATE_LIMITED: '授權信箱操作過於頻繁，請稍候一分鐘再試。',
 };
 function error(code: string): never {
   throw new ORPCError(
-    code === 'ACCESS_CONFLICT' || code === 'ACCESS_BUSY'
-      ? 'CONFLICT'
-      : 'BAD_REQUEST',
+    code === 'ACCESS_RATE_LIMITED'
+      ? 'TOO_MANY_REQUESTS'
+      : code === 'ACCESS_CONFLICT' || code === 'ACCESS_BUSY'
+        ? 'CONFLICT'
+        : 'BAD_REQUEST',
     {
       message: messages[code] ?? 'Access 同步未完成，請重新核對。',
       data: { code },
@@ -138,15 +141,27 @@ export class AccessManagementService {
     const result = await this.db.batch([
       this.db
         .prepare(
-          "INSERT INTO access_operations(id,group_id,email,action,status,expected_revision,user_id,created_at) VALUES(?,?,?,?,'pending',?,?,?)",
+          "INSERT INTO access_operations(id,group_id,email,action,status,expected_revision,user_id,created_at) SELECT ?,?,?,?,'pending',?,?,? WHERE (SELECT count(*) FROM access_operations WHERE group_id=? AND user_id=? AND created_at>?)<10",
         )
-        .bind(id, this.groupId, email, action, revision, this.actor, now),
+        .bind(
+          id,
+          this.groupId,
+          email,
+          action,
+          revision,
+          this.actor,
+          now,
+          this.groupId,
+          this.actor,
+          now - 60000,
+        ),
       this.db
         .prepare(
-          'INSERT OR IGNORE INTO access_group_locks(group_id,operation_id,created_at) VALUES(?,?,?)',
+          'INSERT OR IGNORE INTO access_group_locks(group_id,operation_id,created_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM access_operations WHERE id=?)',
         )
-        .bind(this.groupId, id, now),
+        .bind(this.groupId, id, now, id),
     ]);
+    if (!result[0].meta.changes) error('ACCESS_RATE_LIMITED');
     if (!result[1].meta.changes) {
       await this.db
         .prepare(
@@ -427,7 +442,7 @@ export class AccessManagementService {
     return (
       await this.db
         .prepare(
-          'SELECT o.id,o.email,o.action,o.status,o.error_code,o.created_at,o.finished_at,u.name AS operator FROM access_operations o JOIN user u ON u.id=o.user_id WHERE group_id=? ORDER BY created_at DESC LIMIT 100',
+          'SELECT o.id,o.email,o.action,o.status,o.error_code,o.created_at,o.finished_at,u.name AS operator FROM access_operations o JOIN user u ON u.id=o.user_id WHERE o.group_id=? ORDER BY o.created_at DESC LIMIT 100',
         )
         .bind(this.groupId)
         .all()

@@ -65,7 +65,8 @@ export class CloudflareAccessClient implements AccessProvider {
     accountId: string,
     private readonly groupId: string,
     private readonly token: string,
-    private readonly request: typeof fetch = fetch,
+    private readonly request: typeof fetch = (input, init) =>
+      fetch(input, init),
   ) {
     if (
       !/^[a-f0-9]{32}$/.test(accountId) ||
@@ -81,9 +82,12 @@ export class CloudflareAccessClient implements AccessProvider {
     body?: unknown,
   ): Promise<unknown> {
     try {
-      const response = await this.request(`${this.root}/${path}`, {
+      // Worker native fetch must not receive this client as its receiver.
+      const request = this.request;
+      const response = await request(`${this.root}/${path}`, {
         method,
-        redirect: 'error',
+        // Workers supports manual mode; never forward this token on redirects.
+        redirect: 'manual',
         signal: AbortSignal.timeout(10000),
         headers: {
           Authorization: `Bearer ${this.token}`,

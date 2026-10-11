@@ -60,6 +60,10 @@ Audit/history includes operator, timestamp, operation id, email, before/after ac
 
 ## Acceptance and rollback
 
+Access writes and ordinary resync are limited to 10 journaled operations per operator and Group per minute, atomically in D1; reads remain available. The runtime API accepts only the configured Account/Group and fixed email actions, never arbitrary provider URLs or Application/Policy management commands. Account-scoped Cloudflare permissions can nevertheless modify other resources in that Account if the token is compromised; fixed resource IDs constrain our backend, not Cloudflare's token scope.
+
+If using the explicitly authorized long-lived Token with Apps and Policies Edit, retain only the two Access permission categories and the specific Account scope. Rotate by installing a newly verified independent production token as the Worker Secret, confirming Group readback, then revoking the old token in Dashboard. Never revoke a working token before its replacement is verified. For suspected exposure: use Dashboard recovery, revoke/rotate the token immediately, inspect all Account Access apps/policies/groups for unauthorized changes against backups, and preserve audit evidence. Do not use Everyone or account-wide Access disablement for recovery. Provisioning and rollback tools remain operator-only and are not backend endpoints.
+
 Staging: CRUD, duplicate/invalid, concurrent writes, external edit conflict, unsafe Group, final-email guard, permissions, provider failure, partial revoke recovery. Then real authorized OTP, unauthorized denial, old-session revoke, new-session denial, username/password/TOTP, same-profile admin/collector switching, authorized private media/unauthorized denial, webhook/Cron and Telegram native photo/album smoke. Use fictional data only.
 
 Production entry activation requires two human-confirmed OTP addresses and Dashboard rollback readiness. Preserve the two-layer login test before enabling real entry traffic. Do not falsely mark real OTP, 30-day continuity or session denial PASS without evidence.
