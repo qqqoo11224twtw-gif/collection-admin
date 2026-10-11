@@ -4,6 +4,7 @@ import type { Context } from './context';
 import { systemLog } from './system-log';
 
 export const PERMISSIONS = [
+  'access.manage',
   'case.view',
   'case.view_own',
   'case.view_all',
@@ -64,6 +65,7 @@ export const ROLE_POLICIES: Record<string, Policy> = {
           'collector.manage',
           'user_permission.manage',
           'telegram_bot.manage',
+          'access.manage',
         ].includes(permission),
     ),
     scope: 'all',

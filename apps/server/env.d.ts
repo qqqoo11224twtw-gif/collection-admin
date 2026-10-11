@@ -4,6 +4,11 @@
 import type { server } from './alchemy.run.ts';
 
 export type ServerEnv = typeof server.Env & {
+  ACCESS_ACCOUNT_ID?: string;
+  ACCESS_GROUP_ID?: string;
+  ACCESS_API_TOKEN?: string;
+  ACCESS_APPLICATION_ID?: string;
+  ACCESS_HOSTNAME?: string;
   ACCOUNT_AUTH_MODE?: string;
   ACCOUNT_TOTP_ENCRYPTION_KEY?: string;
   ACCOUNT_TOTP_KEY_VERSION?: string;

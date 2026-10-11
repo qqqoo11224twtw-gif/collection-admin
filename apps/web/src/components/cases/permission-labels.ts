@@ -1,4 +1,5 @@
 export const permissionLabels: Record<string, string> = {
+  'access.manage': '管理 Access 授權信箱（獨立入口白名單）',
   'finance.return_rate.manage': '管理外收回帳比例',
   'case.view': '查看案件（相容）',
   'case.view_own': '查看自己案件',

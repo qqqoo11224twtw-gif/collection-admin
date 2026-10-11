@@ -94,6 +94,11 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
       visible: permissions.can('user_permission.manage'),
     },
     {
+      label: 'Access 授權信箱',
+      to: '/cases/access',
+      visible: permissions.can('access.manage'),
+    },
+    {
       label: '系統整合狀態',
       to: '/cases/integrations',
       visible: permissions.can('system_log.view'),
@@ -154,6 +159,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                 paths: ['/cases/installments', '/cases/finance'],
               },
               { title: 'Telegram', paths: ['/cases/telegram'] },
+              { title: '設定', paths: ['/cases/access'] },
               {
                 title: '系統管理',
                 paths: [

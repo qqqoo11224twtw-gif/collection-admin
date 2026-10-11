@@ -34,6 +34,7 @@ import { Route as CasesInstallmentsRouteImport } from './routes/cases/installmen
 import { Route as CasesFinanceRouteImport } from './routes/cases/finance'
 import { Route as CasesCollectorsRouteImport } from './routes/cases/collectors'
 import { Route as CasesBulkCreateRouteImport } from './routes/cases/bulk-create'
+import { Route as CasesAccessRouteImport } from './routes/cases/access'
 import { Route as CasesCaseIdRouteImport } from './routes/cases/$caseId'
 import { Route as CasesReviewsIndexRouteImport } from './routes/cases/reviews/index'
 import { Route as CasesIntakeIndexRouteImport } from './routes/cases/intake/index'
@@ -168,6 +169,11 @@ const CasesBulkCreateRoute = CasesBulkCreateRouteImport.update({
   path: '/bulk-create',
   getParentRoute: () => CasesRoute,
 } as any)
+const CasesAccessRoute = CasesAccessRouteImport.update({
+  id: '/access',
+  path: '/access',
+  getParentRoute: () => CasesRoute,
+} as any)
 const CasesCaseIdRoute = CasesCaseIdRouteImport.update({
   id: '/$caseId',
   path: '/$caseId',
@@ -218,6 +224,7 @@ export interface FileRoutesByFullPath {
   '/examples': typeof ExamplesRouteWithChildren
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
+  '/cases/access': typeof CasesAccessRoute
   '/cases/bulk-create': typeof CasesBulkCreateRoute
   '/cases/collectors': typeof CasesCollectorsRoute
   '/cases/finance': typeof CasesFinanceRoute
@@ -251,6 +258,7 @@ export interface FileRoutesByTo {
   '/examples': typeof ExamplesRouteWithChildren
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
+  '/cases/access': typeof CasesAccessRoute
   '/cases/bulk-create': typeof CasesBulkCreateRoute
   '/cases/collectors': typeof CasesCollectorsRoute
   '/cases/finance': typeof CasesFinanceRoute
@@ -285,6 +293,7 @@ export interface FileRoutesById {
   '/examples': typeof ExamplesRouteWithChildren
   '/login': typeof LoginRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
+  '/cases/access': typeof CasesAccessRoute
   '/cases/bulk-create': typeof CasesBulkCreateRoute
   '/cases/collectors': typeof CasesCollectorsRoute
   '/cases/finance': typeof CasesFinanceRoute
@@ -322,6 +331,7 @@ export interface FileRouteTypes {
     | '/examples'
     | '/login'
     | '/cases/$caseId'
+    | '/cases/access'
     | '/cases/bulk-create'
     | '/cases/collectors'
     | '/cases/finance'
@@ -355,6 +365,7 @@ export interface FileRouteTypes {
     | '/examples'
     | '/login'
     | '/cases/$caseId'
+    | '/cases/access'
     | '/cases/bulk-create'
     | '/cases/collectors'
     | '/cases/finance'
@@ -388,6 +399,7 @@ export interface FileRouteTypes {
     | '/examples'
     | '/login'
     | '/cases/$caseId'
+    | '/cases/access'
     | '/cases/bulk-create'
     | '/cases/collectors'
     | '/cases/finance'
@@ -602,6 +614,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CasesBulkCreateRouteImport
       parentRoute: typeof CasesRoute
     }
+    '/cases/access': {
+      id: '/cases/access'
+      path: '/access'
+      fullPath: '/cases/access'
+      preLoaderRoute: typeof CasesAccessRouteImport
+      parentRoute: typeof CasesRoute
+    }
     '/cases/$caseId': {
       id: '/cases/$caseId'
       path: '/$caseId'
@@ -691,6 +710,7 @@ const CasesReviewsRouteWithChildren = CasesReviewsRoute._addFileChildren(
 
 interface CasesRouteChildren {
   CasesCaseIdRoute: typeof CasesCaseIdRoute
+  CasesAccessRoute: typeof CasesAccessRoute
   CasesBulkCreateRoute: typeof CasesBulkCreateRoute
   CasesCollectorsRoute: typeof CasesCollectorsRoute
   CasesFinanceRoute: typeof CasesFinanceRoute
@@ -708,6 +728,7 @@ interface CasesRouteChildren {
 
 const CasesRouteChildren: CasesRouteChildren = {
   CasesCaseIdRoute: CasesCaseIdRoute,
+  CasesAccessRoute: CasesAccessRoute,
   CasesBulkCreateRoute: CasesBulkCreateRoute,
   CasesCollectorsRoute: CasesCollectorsRoute,
   CasesFinanceRoute: CasesFinanceRoute,

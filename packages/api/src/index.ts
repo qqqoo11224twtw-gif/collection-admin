@@ -1,4 +1,5 @@
 import type { RouterClient } from '@orpc/server';
+import { accessApi } from './access-management';
 import { accountsApi } from './accounts';
 import { apiKeysApi } from './api-keys';
 import { bulkAssignmentApi } from './bulk-assignment';
@@ -28,6 +29,7 @@ import { todosApi } from './todos';
 import { usersApi } from './user-management';
 
 export const appRouter = {
+  access: accessApi,
   accounts: accountsApi,
   users: usersApi,
   systemLogs: systemLogsApi,

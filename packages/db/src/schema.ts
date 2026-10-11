@@ -9,6 +9,52 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
+// Access identities are independent of application users; only the operator references user.
+export const accessEmails = sqliteTable(
+  'access_emails',
+  {
+    id: text('id').primaryKey(),
+    groupId: text('group_id').notNull(),
+    email: text('email').notNull(),
+    active: integer('active', { mode: 'boolean' }).notNull().default(false),
+    syncStatus: text('sync_status').notNull().default('synced'),
+    deletedAt: integer('deleted_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    updatedBy: text('updated_by').references(() => user.id),
+  },
+  (table) => [
+    uniqueIndex('access_emails_group_email').on(table.groupId, table.email),
+  ],
+);
+export const accessOperations = sqliteTable(
+  'access_operations',
+  {
+    id: text('id').primaryKey(),
+    groupId: text('group_id').notNull(),
+    email: text('email').notNull(),
+    action: text('action').notNull(),
+    status: text('status').notNull(),
+    expectedRevision: text('expected_revision').notNull(),
+    errorCode: text('error_code'),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id),
+    createdAt: integer('created_at').notNull(),
+    finishedAt: integer('finished_at'),
+  },
+  (table) => [
+    index('access_operations_group_created').on(table.groupId, table.createdAt),
+  ],
+);
+export const accessGroupLocks = sqliteTable('access_group_locks', {
+  groupId: text('group_id').primaryKey(),
+  operationId: text('operation_id')
+    .notNull()
+    .references(() => accessOperations.id),
+  createdAt: integer('created_at').notNull(),
+});
+
 // ─── better-auth tables (passwordless email-OTP + admin plugin) ───
 // Hand-written (not CLI-generated). text id + timestamp_ms, matching the
 // proven `tasks`/`affiliate` setup. The `admin` plugin adds role/banned/

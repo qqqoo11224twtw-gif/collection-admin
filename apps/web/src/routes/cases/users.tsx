@@ -21,7 +21,10 @@ const groups = [
   ['收款與分期', ['payment.', 'installment.']],
   ['財務交收', ['settlement.', 'finance.']],
   ['Telegram 管理', ['telegram_']],
-  ['系統管理', ['user_permission.', 'system_log.', 'audit.', 'audit_log.']],
+  [
+    '系統管理',
+    ['user_permission.', 'system_log.', 'audit.', 'audit_log.', 'access.'],
+  ],
 ] as const;
 function AccountsPage() {
   const permissions = useCasePermissions(),

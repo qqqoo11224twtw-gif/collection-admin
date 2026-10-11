@@ -295,6 +295,13 @@
       "when": 1791626387166,
       "tag": "0041_session_idle_activity",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1791700000000,
+      "tag": "0042_access_email_management",
+      "breakpoints": true
     }
   ]
 }
