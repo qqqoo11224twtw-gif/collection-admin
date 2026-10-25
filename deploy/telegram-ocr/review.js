@@ -1,8 +1,11 @@
+export function initializeOcr(root = document) {
+const document = { getElementById: (id) => root.getElementById(id), querySelectorAll: (selector) => root.querySelectorAll(selector), createElement: (tag) => root.ownerDocument ? root.ownerDocument.createElement(tag) : root.createElement(tag) };
 const API = 'https://api.kpirich.bid/api/telegram-ocr';
 const notice = document.getElementById('notice'),
   jobs = document.getElementById('jobs'),
   routes = document.getElementById('routes'),
   form = document.getElementById('routeForm');
+let disposed = false;
 let busy = false,
   refreshTimer;
 const images = new Set();
@@ -110,6 +113,7 @@ async function confirm(row, job) {
   });
 }
 async function refresh() {
+  if (disposed) return;
   if (busy) return;
   busy = true;
   try {
@@ -310,8 +314,13 @@ document.getElementById('createAll').onclick = async () => {
   for (const button of document.querySelectorAll('button'))
     button.disabled = false;
 };
-window.addEventListener('beforeunload', () => {
+const cleanup = () => {
+  disposed = true;
   clearTimeout(refreshTimer);
   for (const url of images) URL.revokeObjectURL(url);
-});
+};
+window.addEventListener('beforeunload', cleanup, { once: true });
 options().then(refresh).catch(display);
+return () => { cleanup(); window.removeEventListener('beforeunload', cleanup); };
+}
+if (document.getElementById('routeForm')) initializeOcr();

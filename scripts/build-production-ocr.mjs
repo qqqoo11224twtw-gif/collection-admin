@@ -134,8 +134,8 @@ await build({
     {
       name: 'review-text',
       setup(builder) {
-        builder.onResolve({ filter: /review\.js\.txt$/ }, () => ({
-          path: resolve(root, 'deploy/telegram-ocr/review.js'),
+        builder.onResolve({ filter: /(review|entry)\.js\.txt$/ }, (args) => ({
+          path: resolve(root, 'deploy/telegram-ocr', args.path.endsWith('entry.js.txt') ? 'entry.js' : 'review.js'),
           namespace: 'review-text',
         }));
         builder.onLoad(

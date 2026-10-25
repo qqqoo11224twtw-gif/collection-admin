@@ -1,6 +1,7 @@
 import legacy from './legacy-web.js';
 import html from './review.html';
 import script from './review.js.txt';
+import entryScript from './entry.js.txt';
 
 const headers = {
   'Cache-Control': 'no-store',
@@ -23,19 +24,10 @@ export default {
           'Content-Type': 'text/javascript; charset=utf-8',
         },
       });
-    if (path === '/_telegram-ocr-entry.js')
-      return new Response(
-        `(() => { const add = () => { if (document.querySelector('[data-telegram-ocr-entry]')) return; const target = document.querySelector('a[href="/cases/bulk-create"]'); if (!target || !target.parentElement) return; const link = document.createElement('a'); link.href='/cases/bulk-create/telegram'; link.textContent='AI 圖片收件與待確認建檔'; link.className=target.className; link.setAttribute('data-telegram-ocr-entry',''); target.parentElement.append(link); }; const start=()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{add();new MutationObserver(add).observe(document.body,{childList:true,subtree:true});})); if(document.readyState==='complete') start(); else window.addEventListener('load',start,{once:true}); })();`,
-        {
-          headers: {
-            ...headers,
-            'Content-Type': 'text/javascript; charset=utf-8',
-          },
-        },
-      );
+    if (path === '/_telegram-ocr-panel.html') return new Response(html, {headers:{...headers,'Content-Type':'text/html; charset=utf-8'}});
+    if (path === '/_telegram-ocr-entry.js') return new Response(entryScript, {headers:{...headers,'Content-Type':'text/javascript; charset=utf-8'}});
     const response = await legacy.fetch(request, env, execution);
     if (
-      ['/cases/bulk-create', '/cases/telegram'].includes(path) &&
       response.status === 200 &&
       response.headers.get('Content-Type')?.includes('text/html')
     ) {
@@ -43,7 +35,7 @@ export default {
         .on('body', {
           element(element) {
             element.append(
-              '<script src="/_telegram-ocr-entry.js" defer></script>',
+              '<script type="module" src="/_telegram-ocr-entry.js"></script>',
               { html: true },
             );
           },
