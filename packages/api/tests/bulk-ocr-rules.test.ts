@@ -309,3 +309,13 @@ test('caption order is independent of a separate signed payment amount', () => {
 test('household-only or generic region evidence cannot authorize residential region',()=>{
  for(const source of ['household','region_label'] as const) { const r=raw();r.region.source=source;assert.equal(resolveOcrFields(r,'莊佩璇 菲菲 ATM 彰化縣').region.value,''); }
 });
+
+test('explicit Miaoli City residential address normalizes to parent county without household evidence',()=>{
+ const r=raw();r.region=field('苗栗市','current_address');
+ const resolved=resolveOcrFields(r,'莊佩璇 菲菲 ATM 現居地址苗栗市');
+ assert.equal(resolved.region.value,'苗栗縣');
+ assert.equal(normalizeCounty('新竹市'),'新竹市');
+ assert.equal(normalizeCounty('嘉義市'),'嘉義市');
+ assert.equal(normalizeCounty('不存在市'),'');
+ r.region.source='household';assert.equal(resolveOcrFields(r,'莊佩璇 菲菲 ATM 苗栗市').region.value,'');
+});

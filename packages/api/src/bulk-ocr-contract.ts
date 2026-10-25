@@ -45,6 +45,9 @@ export const ocrReviewSchema = z.strictObject({
 });
 export function normalizeCounty(value: string): string {
   const normalized = value.trim().replaceAll('臺', '台');
+  // Miaoli City is a county-administered city under Miaoli County.
+  // Official jurisdiction: https://www.mlc.moj.gov.tw/295524/295525/295529/407548/
+  if (normalized === '苗栗市') return '苗栗縣';
   if (REGIONS.includes(normalized as (typeof REGIONS)[number]))
     return normalized;
   const matches = REGIONS.filter((r) => r.slice(0, -1) === normalized);
