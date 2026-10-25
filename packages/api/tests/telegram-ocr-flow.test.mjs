@@ -471,3 +471,26 @@ test('two separately confirmed images with the same name and code cannot create 
     f.sqlite.close();
   }
 });
+test('opt-in automatic creation preserves replay protection and abstains on uncertain fields', async () => {
+ const f=fixture(); env.TELEGRAM_OCR_AUTO_CREATE='true';
+ try { await providers(async()=>{
+   await handleTelegramOcr(update(901),env,f.execution,f.runtime);
+   await processTelegramOcrJobs(env,f.execution,f.runtime);
+   assert.equal(f.sqlite.prepare('SELECT status FROM telegram_ocr_jobs').get().status,'creating');
+   await processTelegramOcrJobs(env,f.execution,f.runtime);
+   await processTelegramOcrJobs(env,f.execution,f.runtime);
+   assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM cases').get().n,1);
+   const normal=globalThis.fetch;
+   globalThis.fetch=async(...args)=>{
+     const response=await normal(...args);
+     if(String(args[0]).includes('api.openai.com')){
+       const body=await response.json();const raw=JSON.parse(body.output[0].content[0].text);
+       raw.code.ambiguous=true;body.output[0].content[0].text=JSON.stringify(raw);return Response.json(body);
+     } return response;
+   };
+   await handleTelegramOcr(update(902),env,f.execution,f.runtime);
+   await processTelegramOcrJobs(env,f.execution,f.runtime);
+   assert.equal(f.sqlite.prepare('SELECT status FROM telegram_ocr_jobs ORDER BY message_id DESC LIMIT 1').get().status,'ready');
+   assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM cases').get().n,1);
+ }); } finally { delete env.TELEGRAM_OCR_AUTO_CREATE; f.sqlite.close(); }
+});

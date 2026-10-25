@@ -91,7 +91,7 @@ export async function handleTelegramOcrAdmin(
       const routes = await env.DB.prepare(
         "SELECT id,name,bot_id,chat_id,topic_id,is_active FROM telegram_routes WHERE route_type IN ('intake','intake_source') ORDER BY created_at DESC",
       ).all();
-      return reply({ bots: bots.results, routes: routes.results });
+      return reply({ bots: bots.results, routes: routes.results, autoCreate: env.TELEGRAM_OCR_AUTO_CREATE === 'true' });
     }
     if (request.method === 'POST' && path === '/routes') {
       const parsed = routeSchema.safeParse(await body(request));

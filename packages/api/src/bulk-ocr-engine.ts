@@ -78,6 +78,7 @@ export async function recognizeOcrBytes(
   bytes: Uint8Array,
   mediaType: string,
   send: typeof fetch = fetch,
+  inspect?: (summary: unknown) => void,
 ) {
   const content = bytesBase64(bytes);
   async function providerTask<T>(stage: string, task: () => Promise<T>): Promise<T> {
@@ -175,6 +176,11 @@ export async function recognizeOcrBytes(
   return raw;
     }),
   ]);
+  const compact = (text: string) => text.normalize('NFC').replace(/\s/g,'');
+  inspect?.({quality:raw.quality,fields:Object.fromEntries(['code','customerName','region'].map(key=>{
+    const field=raw[key as 'code'|'customerName'|'region'];
+    return [key,{value:field.value,source:field.source,legible:field.legible,ambiguous:field.ambiguous,evidenceInGoogle:!!field.evidence && compact(annotation.fullTextAnnotation.text).includes(compact(field.evidence)),valueInGoogle:!!field.value && compact(annotation.fullTextAnnotation.text).includes(compact(field.value))}];
+  }))});
   const fields = resolveOcrFields(
     raw,
     annotation.fullTextAnnotation.text,

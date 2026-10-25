@@ -6,6 +6,11 @@ const notice = document.getElementById('notice'),
   routes = document.getElementById('routes'),
   form = document.getElementById('routeForm');
 let disposed = false;
+let automatic = false;
+function scheduleRefresh() { clearTimeout(refreshTimer); if(!disposed) refreshTimer=setTimeout(()=>{
+  const editing=[...jobs.querySelectorAll('input')].some(input=>input.dataset.edited === 'true' || input === root.activeElement);
+  if(!editing && !busy && !globalThis.document.hidden) refresh(); else scheduleRefresh();
+},5000); }
 let busy = false,
   refreshTimer;
 const images = new Set();
@@ -50,6 +55,9 @@ function display(error) {
 }
 async function options() {
   const value = await request('/options');
+  automatic = value.autoCreate === true;
+  document.getElementById('modeNote').textContent = automatic ? '自動建檔已啟用：三欄通過雙引擎核對、驗證與去重後建立；不確定資料保留待處理。' : '目前為人工確認模式，辨識結果不會直接建立案件。';
+  document.getElementById('reviewHelp').textContent = '清單每 5 秒自動更新。正在編輯時暫停更新，避免覆蓋輸入內容。待處理資料可修正後確認建立；重複或驗證失敗不會強制寫入。原圖預覽權限與暫存資料最長保留 24 小時。';
   form.elements.botId.replaceChildren();
   for (const bot of value.bots) {
     const option = el('option', '@' + bot.username);
@@ -121,6 +129,7 @@ async function refresh() {
     for (const url of images) URL.revokeObjectURL(url);
     images.clear();
     jobs.replaceChildren();
+    jobs.oninput = (event) => { if(event.target instanceof HTMLInputElement) event.target.dataset.edited = 'true'; };
     for (const job of value.jobs) {
       const row = el('tr');
       row.dataset.id = job.id;
@@ -251,12 +260,13 @@ async function refresh() {
       row.append(actions);
       jobs.append(row);
     }
-    notice.textContent = `已載入 ${value.jobs.length} 筆。未經人工確認不會建檔。`;
+    notice.textContent = `已載入 ${value.jobs.length} 筆。${automatic ? '核對一致的圖片將自動建檔；其他資料待處理。' : '未經人工確認不會建檔。'} 每 5 秒自動更新。`;
     document.getElementById('content').hidden = false;
   } catch (error) {
     display(error);
   } finally {
     busy = false;
+    scheduleRefresh();
   }
 }
 async function refreshAfter() {

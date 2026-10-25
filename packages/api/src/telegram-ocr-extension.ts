@@ -432,10 +432,12 @@ export async function processTelegramOcrJobs(
               field.value,
             ]),
           );
+          const autoCreate = env.TELEGRAM_OCR_AUTO_CREATE === 'true' && output.quality === 'readable' && ['code','customerName','region'].every(key => output.fields[key as keyof typeof output.fields].status === 'cross_checked') && confirmedOcrFields(values).success;
           await env.DB.prepare(
-            "UPDATE telegram_ocr_jobs SET status='ready',image_hash=?,fields_json=?,evidence_json=?,lease_token=NULL,lease_until=NULL,version=version+1,notified_version=-1,updated_at=? WHERE id=? AND status='recognizing' AND lease_token=?",
+            "UPDATE telegram_ocr_jobs SET status=?,image_hash=?,fields_json=?,evidence_json=?,lease_token=NULL,lease_until=NULL,version=version+1,notified_version=-1,updated_at=? WHERE id=? AND status='recognizing' AND lease_token=?",
           )
             .bind(
+              autoCreate ? 'creating' : 'ready',
               output.imageHash,
               JSON.stringify(values),
               JSON.stringify(output.fields),
