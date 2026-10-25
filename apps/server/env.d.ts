@@ -5,6 +5,9 @@ import type { server } from './alchemy.run.ts';
 
 export type ServerEnv = typeof server.Env & {
   TELEGRAM_OCR_ENABLED?: string;
+    TELEGRAM_OCR_REVIEW_MODE?: string;
+    TELEGRAM_OCR_RELEASE_PROBE_SECRET?: string;
+    TELEGRAM_OCR_RELEASE_ID?: string;
   BULK_OCR_ENABLED?: string;
   BULK_OCR_PRIVACY_APPROVED?: string;
   BULK_OCR_MODEL?: string;

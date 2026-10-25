@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   copyFileSync,
+  cpSync,
   mkdirSync,
   readFileSync,
   realpathSync,
@@ -87,6 +88,7 @@ const config = {
 };
 // OCR remains off in the generated configuration until production preflight succeeds.
 config.vars.TELEGRAM_OCR_ENABLED = 'false';
+config.vars.TELEGRAM_OCR_REVIEW_MODE = 'backend';
 writeFileSync(
   resolve(destination, 'wrangler.jsonc'),
   JSON.stringify(config, null, 2),
@@ -112,3 +114,57 @@ writeFileSync(
   JSON.stringify(manifest, null, 2),
 );
 console.log(JSON.stringify(manifest, null, 2));
+
+const webSource = resolve(backup, 'collection-admin-production-web/modules');
+const webDestination = resolve(destination, 'web');
+cpSync(webSource, webDestination, { recursive: true });
+copyFileSync(
+  resolve(webDestination, 'index.js'),
+  resolve(webDestination, 'legacy-web.js'),
+);
+await build({
+  entryPoints: [resolve(root, 'deploy/telegram-ocr/web-worker.ts')],
+  bundle: true,
+  platform: 'browser',
+  format: 'esm',
+  target: 'es2022',
+  outfile: resolve(webDestination, 'index.js'),
+  external: ['./legacy-web.js'],
+  plugins: [
+    {
+      name: 'review-text',
+      setup(builder) {
+        builder.onResolve({ filter: /review\.js\.txt$/ }, () => ({
+          path: resolve(root, 'deploy/telegram-ocr/review.js'),
+          namespace: 'review-text',
+        }));
+        builder.onLoad(
+          { filter: /.*/, namespace: 'review-text' },
+          ({ path }) => ({
+            contents: readFileSync(path, 'utf8'),
+            loader: 'text',
+          }),
+        );
+      },
+    },
+  ],
+  loader: { '.html': 'text' },
+  logLevel: 'silent',
+});
+const webConfig = {
+  name: 'collection-admin-production-web',
+  account_id: config.account_id,
+  main: 'web/index.js',
+  no_bundle: true,
+  find_additional_modules: true,
+  rules: config.rules,
+  keep_vars: true,
+  compatibility_date: '2026-04-01',
+  compatibility_flags: ['nodejs_compat'],
+  workers_dev: false,
+  preview_urls: false,
+};
+writeFileSync(
+  resolve(destination, 'wrangler-web.jsonc'),
+  JSON.stringify(webConfig, null, 2),
+);

@@ -15,7 +15,12 @@ export interface ProductionOcrRuntime {
   actor(base: Context, userId: string): Promise<Context>;
   requirePermission(
     context: Context,
-    permission: 'case.create' | 'media.upload' | 'media.view',
+    permission:
+      | 'case.create'
+      | 'media.upload'
+      | 'media.view'
+      | 'telegram_route.manage'
+      | 'case.view_all',
   ): unknown;
   client(context: Context, botId: string | null): Promise<TelegramClient>;
   create(
@@ -93,6 +98,16 @@ async function verifiedActor(
   userId: string,
   sender: string,
 ) {
+  if (base.env.TELEGRAM_OCR_REVIEW_MODE === 'backend') {
+    const actor = await runtime.actor(base, userId);
+    for (const permission of [
+      'case.create',
+      'media.upload',
+      'media.view',
+    ] as const)
+      runtime.requirePermission(actor, permission);
+    return actor;
+  }
   const identity = await base.env.DB.prepare(
     'SELECT user_id FROM telegram_identities WHERE telegram_user_id=? AND is_active=1 AND user_id=?',
   )
@@ -115,6 +130,14 @@ async function notify(
   job: TelegramOcrJob,
 ) {
   const client = await runtime.client(context, route.bot_id);
+  if (context.env.TELEGRAM_OCR_REVIEW_MODE === 'backend') {
+    await context.env.DB.prepare(
+      'UPDATE telegram_ocr_jobs SET notified_version=? WHERE id=? AND version=?',
+    )
+      .bind(job.version, job.id, job.version)
+      .run();
+    return;
+  }
   const fields: unknown = JSON.parse(job.fields_json ?? '{}');
   const valid = confirmedOcrFields(fields);
   const values = z
@@ -200,11 +223,16 @@ export async function handleTelegramOcr(
       ? Response.json({ error: 'SOURCE_DENIED' }, { status: 403 })
       : null;
   const base = await runtime.base(env, execution);
-  const identity = await env.DB.prepare(
-    'SELECT user_id FROM telegram_identities WHERE telegram_user_id=? AND is_active=1 AND user_id IS NOT NULL',
-  )
-    .bind(sender)
-    .first<{ user_id: string }>();
+  if (env.TELEGRAM_OCR_REVIEW_MODE === 'backend' && ours)
+    return Response.json({ ok: true, code: 'REVIEW_IN_ADMIN' });
+  const identity =
+    env.TELEGRAM_OCR_REVIEW_MODE === 'backend'
+      ? { user_id: route.managed_by_user_id }
+      : await env.DB.prepare(
+          'SELECT user_id FROM telegram_identities WHERE telegram_user_id=? AND is_active=1 AND user_id IS NOT NULL',
+        )
+          .bind(sender)
+          .first<{ user_id: string }>();
   if (!identity)
     return Response.json({ ok: true, code: 'OCR_SENDER_NOT_PROVISIONED' });
   let actor: Context;
@@ -334,6 +362,11 @@ export async function processTelegramOcrJobs(
     now = Date.now();
   await env.DB.prepare(
     "UPDATE telegram_ocr_jobs SET status='failed',lease_token=NULL,lease_until=NULL,version=version+1,notified_version=-1 WHERE status='recognizing' AND lease_until<?",
+  )
+    .bind(now)
+    .run();
+  await env.DB.prepare(
+    'UPDATE telegram_ocr_jobs SET file_id=NULL,evidence_json=NULL WHERE expires_at<?',
   )
     .bind(now)
     .run();
