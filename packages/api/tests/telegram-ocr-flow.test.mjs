@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import {
   createBulkCases,
+  uploadCaseImages,
   createContext,
   requirePermission,
   telegramPrincipal,
@@ -511,4 +512,27 @@ test('batch receipt and completion report go only to the source route and comple
   assert.equal((await result.json()).jobs.length,0);
   assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM cases').get().n,1);
  });}finally{delete env.TELEGRAM_OCR_AUTO_CREATE;delete env.TELEGRAM_OCR_BATCH_REPORTS;f.sqlite.close()}
+});
+
+test('case is complete only after private original image upload; retry cannot duplicate case or media',async()=>{
+ const f=fixture();env.TELEGRAM_OCR_AUTO_CREATE='true';env.TELEGRAM_OCR_ATTACH_IMAGES='true';env.CASE_STORAGE_MODE='r2';
+ const objects=new Map();env.CASE_BUCKET={put:async(key,bytes)=>{objects.set(key,bytes);return {}},delete:async key=>objects.delete(key)};
+ let fail=true;
+ f.runtime.attach=async(context,caseId,key,bytes,type)=>{
+  if(fail)throw Error('fixture storage failure');
+  const record=f.sqlite.prepare('SELECT version FROM cases WHERE id=?').get(caseId);
+  const form=new FormData();form.append('files',new Blob([bytes],{type}),'telegram.png');form.append('uploadKey',key);form.append('expectedVersion',String(record.version));
+  return uploadCaseImages(context,caseId,new Request('https://api.kpirich.bid/upload',{method:'POST',headers:{Origin:'https://admin.kpirich.bid'},body:form}));
+ };
+ try {await providers(async()=>{
+  await handleTelegramOcr(update(1101),env,f.execution,f.runtime);await processTelegramOcrJobs(env,f.execution,f.runtime);await processTelegramOcrJobs(env,f.execution,f.runtime);
+  assert.equal(f.sqlite.prepare('SELECT status FROM telegram_ocr_jobs').get().status,'creating');
+  assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM cases').get().n,1);
+  assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM case_media').get().n,0);
+  fail=false;f.sqlite.exec('UPDATE telegram_ocr_jobs SET lease_until=0');
+  await processTelegramOcrJobs(env,f.execution,f.runtime);await processTelegramOcrJobs(env,f.execution,f.runtime);
+  assert.equal(f.sqlite.prepare('SELECT status FROM telegram_ocr_jobs').get().status,'created');
+  assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM cases').get().n,1);
+  assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM case_media').get().n,1);assert.equal(objects.size,1);
+ });}finally{delete env.TELEGRAM_OCR_AUTO_CREATE;delete env.TELEGRAM_OCR_ATTACH_IMAGES;delete env.CASE_STORAGE_MODE;delete env.CASE_BUCKET;f.sqlite.close()}
 });

@@ -22,7 +22,7 @@ const source = readFileSync(
 );
 const baselineHash = createHash('sha256').update(source).digest('hex');
 const suffix =
-  '\nexport { createContext, telegramPrincipal, requirePermission, botClientForRoute, telegramClient, createBulkCases };\n';
+  '\nexport { createContext, telegramPrincipal, requirePermission, botClientForRoute, telegramClient, createBulkCases, uploadCaseImages };\n';
 for (const symbol of [
   'createContext',
   'telegramPrincipal',
@@ -30,6 +30,7 @@ for (const symbol of [
   'botClientForRoute',
   'telegramClient',
   'createBulkCases',
+  'uploadCaseImages',
 ])
   if (!source.toString().includes(`function ${symbol}(`))
     throw Error('EXPECTED_PRODUCTION_EXPORT_MISSING');

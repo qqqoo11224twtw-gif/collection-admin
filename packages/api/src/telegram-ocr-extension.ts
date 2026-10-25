@@ -23,6 +23,7 @@ export interface ProductionOcrRuntime {
       | 'case.view_all',
   ): unknown;
   client(context: Context, botId: string | null): Promise<TelegramClient>;
+  attach?(context: Context, caseId: string, uploadKey: string, bytes: Uint8Array, mediaType: string): Promise<unknown>;
   create(
     context: Context,
     input: unknown,
@@ -183,6 +184,16 @@ async function notify(
   )
     .bind(job.version, job.id, job.version, job.status)
     .run();
+}
+async function attachJobImage(env: Env, actor: Context, runtime: ProductionOcrRuntime, route: OcrRoute, job: TelegramOcrJob, caseId: string) {
+  if(!job.file_id || !runtime.attach)throw Error('SOURCE_IMAGE_UNAVAILABLE');
+  const client=await runtime.client(actor,route.bot_id),downloaded=await client.downloadFile(job.file_id);
+  const bytes=new Uint8Array(downloaded.bytes);
+  const {detectedImageType,sha256}=await import('./case-media-management');
+  const type=detectedImageType(bytes);
+  if(!type || !bytes.length || bytes.length>5*1024*1024)throw Error('INVALID_IMAGE');
+  if(job.image_hash && await sha256(Uint8Array.from(bytes).buffer)!==job.image_hash)throw Error('SOURCE_IMAGE_CHANGED');
+  await runtime.attach(actor,caseId,job.batch_id,bytes,type);
 }
 async function attachReport(env: Env, route: OcrRoute, actorId: string, sender: string, jobKey: string, album: string | undefined) {
   const job = await env.DB.prepare('SELECT id FROM telegram_ocr_jobs WHERE update_key=?').bind(jobKey).first<{id:string}>();
@@ -511,7 +522,7 @@ export async function processTelegramOcrJobs(
         if (!won) continue;
         const fields = confirmedOcrFields(JSON.parse(job.fields_json ?? '{}'));
         if (!fields.success) throw Error('INVALID_CONFIRMED_FIELDS');
-        const result = await runtime.create(actor, {
+        const result = job.case_id ? {results:[{status:'created',caseId:job.case_id}]} : await runtime.create(actor, {
           batchId: job.batch_id,
           mode: 'new',
           formalDispatch: false,
@@ -526,6 +537,10 @@ export async function processTelegramOcrJobs(
           ],
         });
         const row = result.results[0];
+        if(row?.status==='created' && row.caseId && env.TELEGRAM_OCR_ATTACH_IMAGES==='true') {
+          await env.DB.prepare("UPDATE telegram_ocr_jobs SET case_id=? WHERE id=? AND status='creating' AND lease_token=?").bind(row.caseId,job.id,lease).run();
+          await attachJobImage(env,actor,runtime,route,job,row.caseId);
+        }
         await env.DB.prepare(
           "UPDATE telegram_ocr_jobs SET status=?,case_id=?,lease_token=NULL,lease_until=NULL,version=version+1,notified_version=-1,updated_at=? WHERE id=? AND status='creating' AND lease_token=?",
         )
@@ -555,6 +570,12 @@ export async function processTelegramOcrJobs(
       )
         .bind(Date.now(), job.id)
         .run();
+    }
+  }
+  if(env.TELEGRAM_OCR_ATTACH_IMAGES==='true') {
+    const missing=await env.DB.prepare("SELECT j.* FROM telegram_ocr_jobs j WHERE j.status='created' AND j.case_id IS NOT NULL AND j.file_id IS NOT NULL AND j.expires_at>? AND NOT EXISTS (SELECT 1 FROM audit_logs a WHERE a.entity_id=j.case_id AND a.action='media.uploaded' AND json_extract(a.metadata,'$.uploadKey')=j.batch_id) ORDER BY j.created_at LIMIT 5").bind(Date.now()).all<TelegramOcrJob>();
+    for(const job of missing.results) {
+      try {const route=await routeById(env,job.route_id);if(!route)continue;const actor=await verifiedActor(base,runtime,job.actor_user_id,job.sender_id);await attachJobImage(env,actor,runtime,route,job,job.case_id!);} catch { console.error('TELEGRAM_OCR_IMAGE_BACKFILL_PENDING'); }
     }
   }
   await reportFinishedBatches(env,execution,runtime);

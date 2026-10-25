@@ -9,6 +9,7 @@ import {
 import legacy, {
   botClientForRoute,
   createBulkCases,
+  uploadCaseImages,
   createContext,
   requirePermission,
   telegramClient,
@@ -26,6 +27,14 @@ const runtime: ProductionOcrRuntime = {
   client: (context, botId) =>
     botClientForRoute(context, botId, telegramClient(context.env)),
   create: createBulkCases,
+  attach: async (context, caseId, jobId, bytes, mediaType) => {
+    const record=await context.env.DB.prepare('SELECT version FROM cases WHERE id=?').bind(caseId).first<{version:number}>();
+    if(!record)throw Error('CASE_NOT_FOUND');
+    const form=new FormData();
+    form.append('files',new Blob([Uint8Array.from(bytes)],{type:mediaType}),'telegram-image.'+(mediaType==='image/jpeg'?'jpg':mediaType==='image/webp'?'webp':'png'));
+    form.append('expectedVersion',String(record.version));form.append('uploadKey',jobId);
+    return uploadCaseImages(context,caseId,new Request('https://api.kpirich.bid/api/cases/'+encodeURIComponent(caseId)+'/images',{method:'POST',headers:{Origin:'https://admin.kpirich.bid'},body:form}));
+  },
 };
 export default {
   async fetch(request: Request, env: Env, execution: ExecutionContext) {
