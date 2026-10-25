@@ -14,6 +14,22 @@ function scheduleRefresh() { clearTimeout(refreshTimer); if(!disposed) refreshTi
 let busy = false,
   refreshTimer;
 const images = new Set();
+const previews = new Map();
+const loadingPreviews = new Map();
+let visibleJobIds = new Set();
+let previewObserver;
+const previewLoads = new WeakMap();
+async function imageUrl(job) {
+ if(previews.has(job.id))return previews.get(job.id);
+ if(loadingPreviews.has(job.id))return loadingPreviews.get(job.id);
+ const pending=(async()=>{
+  const response=await fetch(`${API}/jobs/${job.id}/image`,{credentials:'include',cache:'no-store'});
+  if(!response.ok)throw Error('IMAGE_UNAVAILABLE');
+  const blob=await response.blob();if(disposed || !visibleJobIds.has(job.id))return null;
+  const url=URL.createObjectURL(blob);images.add(url);previews.set(job.id,url);return url;
+ })().finally(()=>loadingPreviews.delete(job.id));
+ loadingPreviews.set(job.id,pending);return pending;
+}
 const messages = {
   ROUTE_CONFLICT: '此群組／話題已有啟用中的路由，請選擇獨立收件位置。',
   STALE_REVIEW: '資料已更新，請重新核對最新結果。',
@@ -126,8 +142,12 @@ async function refresh() {
   busy = true;
   try {
     const value = await request('/jobs');
-    for (const url of images) URL.revokeObjectURL(url);
-    images.clear();
+    visibleJobIds = new Set(value.jobs.map(job=>job.id));
+    for(const [id,url] of previews) if(!visibleJobIds.has(id)){URL.revokeObjectURL(url);images.delete(url);previews.delete(id);}
+    previewObserver?.disconnect();
+    previewObserver = typeof IntersectionObserver === 'function' ? new IntersectionObserver(entries=>{
+      for(const entry of entries)if(entry.isIntersecting){previewObserver.unobserve(entry.target);previewLoads.get(entry.target)?.();}
+    },{rootMargin:'300px'}) : null;
     jobs.replaceChildren();
     jobs.oninput = (event) => { if(event.target instanceof HTMLInputElement) event.target.dataset.edited = 'true'; };
     for (const job of value.jobs) {
@@ -136,41 +156,30 @@ async function refresh() {
       row.job = job;
       const first = el(
         'td',
-        `圖片訊息 ${job.message_id} · ${states[job.status] || job.status}`,
+        `圖片訊息 ${job.message_id} · ${job.status==='failed' && job.existing_case_id ? '已有相同案件，未重複建立' : states[job.status] || job.status}`,
       );
-      if (job.status === 'failed') {
+      if (job.status === 'failed' && !job.existing_case_id) {
         let code;
         try { code = JSON.parse(job.evidence_json || '{}').diagnostic?.code; } catch {}
         const reasons = { GOOGLE_REQUEST_FAILED:'Google 辨識請求未能送出，請重新辨識', OPENAI_REQUEST_FAILED:'AI 辨識請求未能送出，請重新辨識', GOOGLE_RESPONSE_INVALID:'Google 回應格式不完整，請重新辨識', GOOGLE_NO_TEXT:'Google 未讀到清楚文字，請改傳清晰原圖', GOOGLE_IMAGE_REJECTED:'Google 無法處理這張圖片', OPENAI_INCOMPLETE:'AI 輸出未完成，請重新辨識', OPENAI_TIMEOUT:'AI 處理逾時，請稍後重試', GOOGLE_TIMEOUT:'Google 辨識逾時，請稍後重試', OPENAI_REFUSAL:'AI 無法處理此圖片，請人工核對', OPENAI_RESPONSE_INVALID:'AI 回傳格式不完整，請重試', TELEGRAM_DOWNLOAD_OR_PROCESSING_FAILED:'圖片下載或處理失敗，請確認機器人仍可存取原訊息', IMAGE_LIMIT:'圖片超過 5 MB，請縮小後重傳' };
         first.append(el('small', reasons[code] || (code && /^(GOOGLE|OPENAI)_HTTP_[0-9]{3}$/.test(code) ? '辨識服務回應錯誤：' + code : '此筆為先前失敗紀錄，請重新辨識以取得原因')));
       }
-      const preview = el('button', '查看原圖');
-      preview.type = 'button';
-      preview.onclick = async () => {
-        preview.disabled = true;
-        try {
-          const r = await fetch(`${API}/jobs/${job.id}/image`, {
-            credentials: 'include',
-            cache: 'no-store',
-          });
-          if (!r.ok) throw Error('OCR_REQUEST_FAILED');
-          const url = URL.createObjectURL(await r.blob());
-          images.add(url);
-          const details = el('details');
-          details.open = true;
-          details.append(el('summary', '原圖（請與本列欄位核對）'));
-          const image = el('img');
-          image.src = url;
-          image.alt = `圖片訊息 ${job.message_id} 原圖`;
-          details.append(image);
-          first.append(details);
-          preview.remove();
-        } catch (error) {
-          display(error);
-          preview.disabled = false;
-        }
+      if(job.existing_case_id && /^[a-f0-9-]{36}$/.test(job.existing_case_id)) {
+        const link=el('a','查看既有案件');link.href='/cases/'+job.existing_case_id;first.append(link);
+      }
+      const preview=el('div','正在載入原圖…');first.append(preview);
+      const load=async()=>{
+        try{
+          const url=await imageUrl(job);if(!url || disposed || !preview.isConnected)return;
+          const image=el('img');image.src=url;image.alt='圖片訊息 '+job.message_id+' 原圖';image.loading='lazy';image.width=220;
+          image.style.cssText='display:block;width:220px;max-width:100%;max-height:300px;object-fit:contain;cursor:zoom-in;margin-top:10px';
+          image.onclick=()=>{image.style.maxHeight=image.style.maxHeight==='300px'?'80vh':'300px';image.style.width=image.style.width==='220px'?'100%':'220px';};
+          preview.replaceChildren(image);
+        }catch{preview.replaceChildren(el('small','原圖暫時無法載入'));const retry=el('button','重試載入圖片');retry.onclick=load;preview.append(retry);}
       };
-      first.append(preview);
+      // Load after the row has entered the document, without requiring a click.
+      previewLoads.set(preview,load);
+      if(previewObserver)previewObserver.observe(preview);else setTimeout(load,0);
       row.append(first);
       let values = {};
       try {
@@ -212,7 +221,7 @@ async function refresh() {
         };
         actions.append(create);
       }
-      if (job.status === 'failed') {
+      if (job.status === 'failed' && !job.existing_case_id) {
         const retry = el('button', '重新辨識');
         retry.onclick = async () => {
           retry.disabled = true;
@@ -332,6 +341,8 @@ document.getElementById('createAll').onclick = async () => {
 };
 const cleanup = () => {
   disposed = true;
+  previewObserver?.disconnect();
+  previews.clear();
   clearTimeout(refreshTimer);
   for (const url of images) URL.revokeObjectURL(url);
 };

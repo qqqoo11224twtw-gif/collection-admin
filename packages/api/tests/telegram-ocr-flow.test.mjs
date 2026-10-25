@@ -536,3 +536,15 @@ test('case is complete only after private original image upload; retry cannot du
   assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM case_media').get().n,1);assert.equal(objects.size,1);
  });}finally{delete env.TELEGRAM_OCR_AUTO_CREATE;delete env.TELEGRAM_OCR_ATTACH_IMAGES;delete env.CASE_STORAGE_MODE;delete env.CASE_BUCKET;f.sqlite.close()}
 });
+test('duplicate failure exposes the existing case link instead of requesting paid OCR again',async()=>{
+ const f=fixture();env.TELEGRAM_OCR_AUTO_CREATE='true';
+ try {await providers(async()=>{
+  await handleTelegramOcr(update(1201),env,f.execution,f.runtime);await handleTelegramOcr(update(1202),env,f.execution,f.runtime);
+  for(let i=0;i<4;i++)await processTelegramOcrJobs(env,f.execution,f.runtime);
+  const context=await telegramPrincipal(await f.runtime.base(),'admin');
+  const result=await handleTelegramOcrAdmin(new Request('https://api.kpirich.bid/api/telegram-ocr/jobs'),context,f.execution,f.runtime);
+  const jobs=(await result.json()).jobs;
+  assert.equal(jobs.length,1);assert.equal(jobs[0].status,'failed');
+  assert.equal(jobs[0].existing_case_id,f.sqlite.prepare('SELECT id FROM cases').get().id);
+ });}finally{delete env.TELEGRAM_OCR_AUTO_CREATE;f.sqlite.close()}
+});
