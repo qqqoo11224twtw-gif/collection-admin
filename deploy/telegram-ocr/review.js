@@ -57,7 +57,7 @@ async function options() {
   const value = await request('/options');
   automatic = value.autoCreate === true;
   document.getElementById('modeNote').textContent = automatic ? '自動建檔已啟用：三欄通過雙引擎核對、驗證與去重後建立；不確定資料保留待處理。' : '目前為人工確認模式，辨識結果不會直接建立案件。';
-  document.getElementById('reviewHelp').textContent = '清單每 5 秒自動更新。正在編輯時暫停更新，避免覆蓋輸入內容。待處理資料可修正後確認建立；重複或驗證失敗不會強制寫入。原圖預覽權限與暫存資料最長保留 24 小時。';
+  document.getElementById('reviewHelp').textContent = '建檔成功會從此清單隱藏，案件與去重紀錄仍保留。清單每 5 秒自動更新。正在編輯時暫停更新，避免覆蓋輸入內容。待處理資料可修正後確認建立；重複或驗證失敗不會強制寫入。原圖預覽權限與暫存資料最長保留 24 小時。';
   form.elements.botId.replaceChildren();
   for (const bot of value.bots) {
     const option = el('option', '@' + bot.username);

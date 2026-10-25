@@ -184,6 +184,49 @@ async function notify(
     .bind(job.version, job.id, job.version, job.status)
     .run();
 }
+async function attachReport(env: Env, route: OcrRoute, actorId: string, sender: string, jobKey: string, album: string | undefined) {
+  const job = await env.DB.prepare('SELECT id FROM telegram_ocr_jobs WHERE update_key=?').bind(jobKey).first<{id:string}>();
+  if(!job || await env.DB.prepare('SELECT job_id FROM telegram_ocr_report_items WHERE job_id=?').bind(job.id).first()) return null;
+  const now=Date.now(), group=album ? 'album:'+album : 'loose', candidate=crypto.randomUUID();
+  const cutoff=album ? now-86400000 : now-30000;
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO telegram_ocr_report_batches(id,route_id,actor_user_id,sender_id,group_key,received_at) SELECT ?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM telegram_ocr_report_batches WHERE route_id=? AND sender_id=? AND group_key=? AND summary_state='pending' AND received_at>=?)").bind(candidate,route.id,actorId,sender,group,now,route.id,sender,group,cutoff),
+    env.DB.prepare("INSERT INTO telegram_ocr_report_items(job_id,report_id) SELECT ?,id FROM telegram_ocr_report_batches WHERE route_id=? AND sender_id=? AND group_key=? AND summary_state='pending' AND received_at>=? ORDER BY received_at DESC,id LIMIT 1 ON CONFLICT(job_id) DO NOTHING").bind(job.id,route.id,sender,group,cutoff),
+    env.DB.prepare('UPDATE telegram_ocr_report_batches SET received_at=? WHERE id=(SELECT report_id FROM telegram_ocr_report_items WHERE job_id=?)').bind(now,job.id),
+  ]);
+  return env.DB.prepare('SELECT report_id FROM telegram_ocr_report_items WHERE job_id=?').bind(job.id).first<{report_id:string}>();
+}
+async function sendReportMessage(env: Env, id: string, stage: 'ack_state'|'summary_state', client: TelegramClient, route: OcrRoute, text: string) {
+  const won=await env.DB.prepare(`UPDATE telegram_ocr_report_batches SET ${stage}='sending' WHERE id=? AND ${stage}='pending' RETURNING id`).bind(id).first();
+  if(!won)return;
+  try {
+    await client.sendMessage({chatId:route.chat_id,topicId:route.topic_id,text});
+    await env.DB.prepare(`UPDATE telegram_ocr_report_batches SET ${stage}='sent' WHERE id=? AND ${stage}='sending'`).bind(id).run();
+  } catch {
+    // Telegram cannot guarantee sendMessage idempotency after a lost response.
+    // Preserve an uncertain delivery for operator inspection instead of sending duplicates.
+    await env.DB.prepare(`UPDATE telegram_ocr_report_batches SET ${stage}='unknown' WHERE id=? AND ${stage}='sending'`).bind(id).run();
+  }
+}
+async function reportFinishedBatches(env: Env, execution: ExecutionContext, runtime: ProductionOcrRuntime) {
+  if(env.TELEGRAM_OCR_BATCH_REPORTS!=='true')return;
+  const batches=await env.DB.prepare("SELECT * FROM telegram_ocr_report_batches WHERE summary_state='pending' AND received_at<? ORDER BY received_at LIMIT 10").bind(Date.now()-30000).all<{id:string;route_id:string;actor_user_id:string;sender_id:string;ack_state:string}>();
+  for(const batch of batches.results){
+    const route=await routeById(env,batch.route_id);if(!route)continue;
+    const actor=await verifiedActor(await runtime.base(env,execution),runtime,batch.actor_user_id,batch.sender_id);
+    const client=await runtime.client(actor,route.bot_id);
+    if(batch.ack_state==='pending')await sendReportMessage(env,batch.id,'ack_state',client,route,'已收到案件，排入建檔');
+    const jobs=await env.DB.prepare('SELECT j.status,j.fields_json,j.case_id FROM telegram_ocr_jobs j JOIN telegram_ocr_report_items i ON i.job_id=j.id WHERE i.report_id=? ORDER BY j.message_id').bind(batch.id).all<{status:string;fields_json:string|null;case_id:string|null}>();
+    if(!jobs.results.length || jobs.results.some(job=>!['created','failed','cancelled'].includes(job.status)))continue;
+    const created=jobs.results.filter(job=>job.status==='created' && job.case_id);
+    const lines=created.map(job=>{const fields=confirmedOcrFields(JSON.parse(job.fields_json??'{}'));if(!fields.success)throw Error('INVALID_REPORT_FIELDS');return [fields.data.code,fields.data.customerName,fields.data.region.replace(/[縣市]$/,'')].join(' ');});
+    const failed=jobs.results.filter(job=>job.status==='failed').length;
+    const text=[...lines,`共 ${created.length} 件，已建檔`,...(failed?[`另有 ${failed} 件未完成，請至後台查看`]:[])].join('\n');
+    // Keep each Telegram message below its text limit; source rate limit bounds batch size.
+    await sendReportMessage(env,batch.id,'summary_state',client,route,text);
+  }
+  await env.DB.prepare('DELETE FROM telegram_ocr_report_batches WHERE received_at<?').bind(Date.now()-86400000).run();
+}
 export async function handleTelegramOcr(
   request: Request,
   env: Env,
@@ -350,6 +393,10 @@ export async function handleTelegramOcr(
       now + 86400000,
     )
     .run();
+  if(env.TELEGRAM_OCR_BATCH_REPORTS==='true') {
+    const report=await attachReport(env,route,identity.user_id,sender,`${route.bot_id ?? 'legacy'}:${update.update_id}`,message.media_group_id);
+    if(report) execution.waitUntil(sendReportMessage(env,report.report_id,'ack_state',client,route,'已收到案件，排入建檔'));
+  }
   return Response.json({ ok: true, code: 'OCR_QUEUED' });
 }
 export async function processTelegramOcrJobs(
@@ -510,6 +557,7 @@ export async function processTelegramOcrJobs(
         .run();
     }
   }
+  await reportFinishedBatches(env,execution,runtime);
   await env.DB.prepare(
     "DELETE FROM telegram_ocr_jobs WHERE expires_at<? AND status<>'creating'",
   )

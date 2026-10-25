@@ -70,6 +70,7 @@ export default {
             ].every((name) =>
               columns.results.some((column) => column.name === name),
             ),
+          batchReportsReady: (await env.DB.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name IN ('telegram_ocr_report_batches','telegram_ocr_report_items')").first<{n:number}>())?.n === 2,
           botReady: !!bot,
           enabled: env.TELEGRAM_OCR_ENABLED === 'true',
           reviewMode: env.TELEGRAM_OCR_REVIEW_MODE,

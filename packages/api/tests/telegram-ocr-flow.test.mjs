@@ -494,3 +494,21 @@ test('opt-in automatic creation preserves replay protection and abstains on unce
    assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM cases').get().n,1);
  }); } finally { delete env.TELEGRAM_OCR_AUTO_CREATE; f.sqlite.close(); }
 });
+test('batch receipt and completion report go only to the source route and completed jobs leave inbox', async()=>{
+ const f=fixture();env.TELEGRAM_OCR_AUTO_CREATE='true';env.TELEGRAM_OCR_BATCH_REPORTS='true';
+ const messages=[];const client=await f.runtime.client();f.runtime.client=async()=>({...client,sendMessage:async payload=>{messages.push(payload);return String(messages.length)}});
+ try {await providers(async()=>{
+  await handleTelegramOcr(update(1001),env,f.execution,f.runtime);await Promise.all(f.tasks);
+  await handleTelegramOcr(update(1001),env,f.execution,f.runtime);await Promise.all(f.tasks);
+  assert.equal(messages.length,1);assert.equal(messages[0].text,'已收到案件，排入建檔');assert.equal(messages[0].chatId,'-100123');
+  await processTelegramOcrJobs(env,f.execution,f.runtime);
+  f.sqlite.exec('UPDATE telegram_ocr_report_batches SET received_at=received_at-31000');
+  await processTelegramOcrJobs(env,f.execution,f.runtime);
+  await processTelegramOcrJobs(env,f.execution,f.runtime);
+  assert.equal(messages.length,2);assert.ok(messages[1].text.includes('菲菲 莊佩璇 彰化'));assert.ok(messages[1].text.includes('共 1 件，已建檔'));
+  const context=await telegramPrincipal(await f.runtime.base(),'admin');
+  const result=await handleTelegramOcrAdmin(new Request('https://api.kpirich.bid/api/telegram-ocr/jobs'),context,f.execution,f.runtime);
+  assert.equal((await result.json()).jobs.length,0);
+  assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM cases').get().n,1);
+ });}finally{delete env.TELEGRAM_OCR_AUTO_CREATE;delete env.TELEGRAM_OCR_BATCH_REPORTS;f.sqlite.close()}
+});

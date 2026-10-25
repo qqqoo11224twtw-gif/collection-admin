@@ -112,6 +112,7 @@ function metadata(settings, entry, enabled, apiWorker) {
   const replaced = new Set([
     'TELEGRAM_OCR_ENABLED',
     'TELEGRAM_OCR_AUTO_CREATE',
+    'TELEGRAM_OCR_BATCH_REPORTS',
     'TELEGRAM_OCR_REVIEW_MODE',
     'GOOGLE_VISION_API_KEY',
     'OPENAI_API_KEY',
@@ -130,6 +131,7 @@ function metadata(settings, entry, enabled, apiWorker) {
       ...Object.entries({
         TELEGRAM_OCR_ENABLED: enabled ? 'true' : 'false',
         TELEGRAM_OCR_AUTO_CREATE: 'true',
+        TELEGRAM_OCR_BATCH_REPORTS: 'true',
         TELEGRAM_OCR_REVIEW_MODE: 'backend',
         BULK_OCR_MODEL: vars.BULK_OCR_MODEL,
         BULK_OCR_PRIVACY_APPROVED: 'true',
@@ -253,6 +255,7 @@ async function readinessOnce(enabled) {
   if (
     value.releaseId !== releaseId ||
     !value.schemaReady ||
+    !value.batchReportsReady ||
     !value.botReady ||
     !value.providersConfigured ||
     value.reviewMode !== 'backend' ||

@@ -165,7 +165,7 @@ export async function handleTelegramOcrAdmin(
     }
     if (request.method === 'GET' && path === '/jobs') {
       const jobs = await env.DB.prepare(
-        "SELECT id,route_id,message_id,status,version,fields_json,evidence_json,case_id,created_at,expires_at FROM telegram_ocr_jobs WHERE expires_at>? OR status='creating' ORDER BY CASE status WHEN 'ready' THEN 0 WHEN 'failed' THEN 1 WHEN 'recognizing' THEN 2 WHEN 'pending' THEN 3 ELSE 4 END,created_at DESC LIMIT 100",
+        "SELECT id,route_id,message_id,status,version,fields_json,evidence_json,case_id,created_at,expires_at FROM telegram_ocr_jobs WHERE (expires_at>? OR status='creating') AND status NOT IN ('created','cancelled') ORDER BY CASE status WHEN 'ready' THEN 0 WHEN 'failed' THEN 1 WHEN 'recognizing' THEN 2 WHEN 'pending' THEN 3 ELSE 4 END,created_at DESC LIMIT 100",
       )
         .bind(Date.now())
         .all();

@@ -13,3 +13,14 @@ CREATE TABLE IF NOT EXISTS telegram_ocr_jobs (
 );
 CREATE INDEX IF NOT EXISTS telegram_ocr_jobs_pending ON telegram_ocr_jobs(status,created_at);
 CREATE INDEX IF NOT EXISTS telegram_ocr_jobs_expiry ON telegram_ocr_jobs(expires_at);
+CREATE TABLE IF NOT EXISTS telegram_ocr_report_batches (
+ id TEXT PRIMARY KEY, route_id TEXT NOT NULL REFERENCES telegram_routes(id),
+ actor_user_id TEXT NOT NULL, sender_id TEXT NOT NULL, group_key TEXT NOT NULL,
+ received_at INTEGER NOT NULL, ack_state TEXT NOT NULL DEFAULT 'pending',
+ summary_state TEXT NOT NULL DEFAULT 'pending'
+);
+CREATE INDEX IF NOT EXISTS telegram_ocr_report_open ON telegram_ocr_report_batches(route_id,sender_id,group_key,summary_state,received_at);
+CREATE TABLE IF NOT EXISTS telegram_ocr_report_items (
+ job_id TEXT PRIMARY KEY REFERENCES telegram_ocr_jobs(id) ON DELETE CASCADE,
+ report_id TEXT NOT NULL REFERENCES telegram_ocr_report_batches(id) ON DELETE CASCADE
+);
