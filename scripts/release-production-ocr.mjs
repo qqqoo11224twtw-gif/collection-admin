@@ -26,6 +26,17 @@ const privateDirectory = resolve(
   releaseId,
 );
 let phase = 'local-checks';
+let stopRequested = false,
+  recovering = false;
+process.on?.('SIGINT', () => {
+  stopRequested = true;
+  console.log('收到停止要求，將先完成必要的版本回復。');
+});
+process.on?.('message', (message) => {
+  if (message?.type === 'cancel-release') stopRequested = true;
+});
+
+process.channel?.unref();
 const state = {
   releaseId,
   phase,
@@ -44,6 +55,8 @@ function save() {
   );
 }
 function run(file, args = []) {
+  state.currentCheck = file;
+  save();
   const clean = { ...process.env };
   for (const key of Object.keys(clean))
     if (/^(CLOUDFLARE_|OPENAI_|GOOGLE_|TELEGRAM_)/.test(key)) delete clean[key];
@@ -53,9 +66,16 @@ function run(file, args = []) {
     stdio: 'inherit',
     windowsHide: true,
   });
-  if (result.status !== 0) throw Error('LOCAL_CHECK_FAILED');
+  if (result.status !== 0) {
+    state.failedCheck = file;
+    state.checkExitCode = result.status;
+    throw Error('LOCAL_CHECK_FAILED');
+  }
 }
 async function api(name, path, options = {}) {
+  if (stopRequested && !recovering) throw Error('RELEASE_CANCELLED');
+  state.operation = `${options.method ?? 'GET'} ${name}${path}`;
+  save();
   const response = await fetch(apiRoot + name + path, {
     ...options,
     headers: { Authorization: `Bearer ${token}`, ...options.headers },
@@ -198,6 +218,23 @@ async function deploy(kind, version, expected) {
   if ((await active(names[kind])) !== version)
     throw Error('DEPLOYMENT_NOT_ACTIVE');
 }
+async function verifyWebModules() {
+  state.operation='verify-deployed-web-modules';save();
+  const response=await fetch(apiRoot+names.web+'/content/v2',{headers:{Authorization:`Bearer ${token}`},redirect:'error',signal:AbortSignal.timeout(60000)});
+  if(!response.ok)throw Error(`WEB_CONTENT_HTTP_${response.status}`);
+  if(!response.headers.get('Content-Type')?.startsWith('multipart/form-data'))throw Error('WEB_CONTENT_FORMAT_UNEXPECTED');
+  const actual=await response.formData();
+  for(const file of files(resolve(output,'web'))) {
+    const part=actual.get(file.name);if(!part)throw Error('DEPLOYED_WEB_MODULE_MISSING');
+    const bytes=typeof part==='string'?Buffer.from(part):Buffer.from(await part.arrayBuffer());
+    if(createHash('sha256').update(bytes).digest('hex')!==createHash('sha256').update(file.bytes).digest('hex'))throw Error('DEPLOYED_WEB_MODULE_MISMATCH');
+  }
+  state.webModulesVerified=true;save();
+}
+function expectedAccessRedirect(response) {
+  if(![301,302,303,307,308].includes(response.status))return false;
+  try {const location=new URL(response.headers.get('Location'));return location.protocol==='https:'&&location.hostname==='falling-smoke-c05c.cloudflareaccess.com'&&location.pathname.startsWith('/cdn-cgi/access/login/admin.kpirich.bid');}catch{return false;}
+}
 async function readiness(enabled) {
   const response = await fetch(
     'https://api.kpirich.bid/api/telegram-ocr/release-check',
@@ -221,6 +258,8 @@ async function readiness(enabled) {
     throw Error('OCR_READINESS_FAILED');
 }
 async function rollback() {
+  recovering = true;
+  console.log('正在恢復發布前版本，請勿關閉視窗。');
   for (const kind of ['web', 'api'])
     if (state.deployed[kind]) {
       try {
@@ -314,23 +353,37 @@ try {
   );
   const web = await upload('web', settings.web, false);
   await deploy('web', web, state.original.web);
+  state.operation = 'review-page-check';
+  save();
   const page = await fetch(
     'https://admin.kpirich.bid/cases/bulk-create/telegram',
     {
       cache: 'no-store',
-      redirect: 'error',
+      redirect: 'manual',
       signal: AbortSignal.timeout(20000),
     },
   );
-  if (page.status !== 200 || !(await page.text()).includes('/_telegram-ocr.js'))
+  await verifyWebModules();
+  state.reviewPageStatus = page.status;
+  const accessProtected=expectedAccessRedirect(page);
+  state.accessProtectionVerified=accessProtected;
+  state.browserAcceptancePending=accessProtected;
+  if (!accessProtected) {
+  if (page.status !== 200) throw Error(`REVIEW_PAGE_HTTP_${page.status}`);
+  if (!(await page.text()).includes('/_telegram-ocr.js'))
     throw Error('REVIEW_PAGE_FAILED');
+  state.operation = 'review-script-check';
+  save();
   const script = await fetch('https://admin.kpirich.bid/_telegram-ocr.js', {
     cache: 'no-store',
-    redirect: 'error',
+    redirect: 'manual',
     signal: AbortSignal.timeout(20000),
   });
-  if (!script.ok || !(await script.text()).includes('/api/telegram-ocr'))
+  state.reviewScriptStatus = script.status;
+  if (!script.ok) throw Error(`REVIEW_SCRIPT_HTTP_${script.status}`);
+  if (!(await script.text()).includes('/api/telegram-ocr'))
     throw Error('REVIEW_SCRIPT_FAILED');
+  } else { console.log('Cloudflare Access 登入保護正常；已透過管理 API 核對全部前端部署檔案。'); }
   phase = 'enable-ocr';
   const live = await upload('api', settings.api, true);
   await deploy('api', live, candidate);
@@ -343,6 +396,7 @@ try {
     signal: AbortSignal.timeout(20000),
   });
   if (denied.status !== 401) throw Error('UNAUTHENTICATED_ACCESS_NOT_DENIED');
+  if (stopRequested) throw Error('RELEASE_CANCELLED');
   phase = 'complete';
   state.completed = true;
   state.entry = 'https://admin.kpirich.bid/cases/bulk-create/telegram';
@@ -353,6 +407,8 @@ try {
       {
         releaseId,
         completed: true,
+        browserAcceptancePending: state.browserAcceptancePending,
+        webModulesVerified: state.webModulesVerified,
         apiVersion: live,
         webVersion: web,
         entry: state.entry,
@@ -366,6 +422,8 @@ try {
   console.log(
     JSON.stringify({
       completed: true,
+      browserAcceptancePending: state.browserAcceptancePending,
+      webModulesVerified: state.webModulesVerified,
       entry: state.entry,
       existingWebhookChanged: false,
       realImageAccuracyVerified: false,
@@ -376,6 +434,22 @@ try {
     error instanceof Error && /^[A-Z_]+(?:_\d+)?$/.test(error.message)
       ? error.message
       : 'RELEASE_FAILED_CREDENTIALS_OMITTED';
+  state.error = code;
+  state.failedOperation = state.operation;
+  state.errorKind = [
+    'Error',
+    'TypeError',
+    'SyntaxError',
+    'TimeoutError',
+    'AbortError',
+  ].includes(error?.name)
+    ? error.name
+    : 'Other';
+  state.networkCode =
+    typeof error?.cause?.code === 'string' &&
+    /^[A-Z_]{1,60}$/.test(error.cause.code)
+      ? error.cause.code
+      : null;
   if (state.productionChanged) await rollback();
   save();
   console.error(
@@ -383,6 +457,11 @@ try {
       completed: false,
       phase,
       error: code,
+      failedOperation: state.failedOperation,
+      errorKind: state.errorKind,
+      networkCode: state.networkCode,
+      reviewPageStatus: state.reviewPageStatus,
+      reviewScriptStatus: state.reviewScriptStatus,
       productionChanged: state.productionChanged,
       rolledBack: state.rolledBack,
       credentialsPrinted: false,

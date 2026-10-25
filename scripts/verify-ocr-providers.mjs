@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { parseEnv } from 'node:util';
@@ -28,6 +28,19 @@ function chunk(type, bytes) {
   return Buffer.concat([length, name, bytes, hash]);
 }
 let stage = 'prepare';
+const diagnostics = {};
+function recordDiagnostic(value) {
+  mkdirSync(resolve(root, '.secrets'), { recursive: true });
+  writeFileSync(
+    resolve(root, '.secrets/ocr-provider-diagnostic.json'),
+    JSON.stringify(value, null, 2),
+  );
+}
+function safeCode(value) {
+  return typeof value === 'string' && /^[A-Za-z_]{1,70}$/.test(value)
+    ? value
+    : null;
+}
 try {
   const vars = parseEnv(
     readFileSync(resolve(root, 'apps/server/.dev.vars'), 'utf8'),
@@ -91,11 +104,39 @@ try {
       stage = String(url).startsWith('https://vision.googleapis.com/')
         ? 'google'
         : 'openai';
-      return fetch(url, init);
+      const response = await fetch(url, init);
+      const info = { httpStatus: response.status };
+      try {
+        const payload = await response.clone().json();
+        const error = payload.error ?? payload.responses?.[0]?.error;
+        if (error) {
+          info.errorCode =
+            typeof error.code === 'number' ? error.code : safeCode(error.code);
+          info.errorStatus = safeCode(error.status);
+          info.errorType = safeCode(error.type);
+          info.reasons = (Array.isArray(error.details) ? error.details : [])
+            .map((detail) => safeCode(detail.reason))
+            .filter(Boolean);
+        }
+        if (stage === 'google' && response.ok && !error)
+          info.hasRecognizedText = Boolean(
+            payload.responses?.[0]?.fullTextAnnotation?.text?.trim(),
+          );
+      } catch {
+        info.responseReadable = false;
+      }
+      diagnostics[stage] = info;
+      return response;
     },
   );
   if (Object.values(result.fields).some((field) => field.value))
     throw Error('SYNTHETIC_FALSE_POSITIVE');
+  recordDiagnostic({
+    passed: true,
+    diagnostics,
+    credentialsPrinted: false,
+    responseBodyPrinted: false,
+  });
   console.log(
     JSON.stringify({
       googleAndOpenAiLiveCheckPassed: true,
@@ -114,11 +155,20 @@ try {
   ].includes(error?.cause?.code)
     ? error.cause.code
     : null;
+  recordDiagnostic({
+    passed: false,
+    stage,
+    networkCode,
+    diagnostics,
+    credentialsPrinted: false,
+    responseBodyPrinted: false,
+  });
   console.error(
     JSON.stringify({
       error: 'OCR_PROVIDER_CHECK_FAILED',
       stage,
       networkCode,
+      diagnostics,
       credentialsPrinted: false,
       responseBodyPrinted: false,
     }),

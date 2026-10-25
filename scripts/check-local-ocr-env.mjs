@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { parseEnv } from 'node:util';
 
 const root = resolve(import.meta.dirname, '..');
@@ -24,12 +24,14 @@ const keys = [
 const result = Object.fromEntries(
   keys.map((key) => [key, values[key]?.trim() ? 'filled' : 'missing']),
 );
+const bundledGit = resolve(dirname(process.execPath), '../../native/git/cmd/git.exe');
+const git = existsSync(bundledGit) ? bundledGit : 'git';
 const ignored = spawnSync(
-  'git',
+  git,
   ['check-ignore', '-q', '--', 'apps/server/.dev.vars'],
   { cwd: root, windowsHide: true },
 );
-const tracked = spawnSync('git', ['ls-files', '-z'], {
+const tracked = spawnSync(git, ['ls-files', '-z'], {
   cwd: root,
   windowsHide: true,
   encoding: 'utf8',

@@ -12,12 +12,13 @@ const source = readFileSync(
 )
   .replace(/^import[\s\S]*?;\r?\n/gm, '')
   .replaceAll('import.meta.dirname', JSON.stringify(resolve(root, 'scripts')));
-async function scenario(lostWebResponse) {
+async function scenario(lostWebResponse, accessMode = false) {
   const logs = [],
     writes = new Map(),
     versions = new Map();
   let usedFault = false,
     counter = 0;
+  const uploadedForms = new Map();
   const original = {},
     current = {},
     settings = {};
@@ -62,6 +63,7 @@ async function scenario(lostWebResponse) {
             { versions: [{ version_id: current[kind], percentage: 100 }] },
           ],
         });
+      if (target.endsWith('/content/v2')) return new Response(uploadedForms.get(current.web));
       if (target.endsWith('/settings')) return cf(settings[kind]);
       if (target.endsWith('/versions')) {
         const meta = JSON.parse(await options.body.get('metadata').text());
@@ -81,6 +83,7 @@ async function scenario(lostWebResponse) {
         }
         const id = `fixture-${kind}-${++counter}`;
         versions.set(id, meta);
+        uploadedForms.set(id, options.body);
         return cf({ id });
       }
       if (target.endsWith('/deployments') && options.method === 'POST') {
@@ -113,6 +116,7 @@ async function scenario(lostWebResponse) {
         enabled: bindings.TELEGRAM_OCR_ENABLED === 'true',
       });
     }
+    if (target === 'https://admin.kpirich.bid/cases/bulk-create/telegram' && accessMode) return new Response(null,{status:302,headers:{Location: accessMode==='valid' ? 'https://falling-smoke-c05c.cloudflareaccess.com/cdn-cgi/access/login/admin.kpirich.bid?fixture=1' : 'https://untrusted.invalid/login'}});
     if (target === 'https://admin.kpirich.bid/cases/bulk-create/telegram')
       return new Response(
         readFileSync(resolve(root, 'deploy/telegram-ocr/review.html'), 'utf8'),
@@ -144,6 +148,8 @@ async function scenario(lostWebResponse) {
     AbortSignal,
     Blob,
     FormData,
+    Buffer,
+    URL,
     Date,
     console: {
       log: (value) => logs.push(String(value)),
@@ -154,7 +160,7 @@ async function scenario(lostWebResponse) {
   const state = JSON.parse(
     [...writes.entries()].find(([path]) => path.endsWith('state.json'))[1],
   );
-  if (lostWebResponse) {
+  if (lostWebResponse || accessMode==='invalid') {
     assert.equal(processStub.exitCode, 1);
     assert.equal(state.completed, false);
     assert.equal(current.api, original.api);
@@ -173,9 +179,14 @@ async function scenario(lostWebResponse) {
 }
 await scenario(false);
 await scenario(true);
+await scenario(false,'valid');
+await scenario(false,'invalid');
 console.log(
   JSON.stringify({
     releaseSuccessProtocolPassed: true,
+    expectedAccessRedirectVerified: true,
+    unexpectedRedirectRejected: true,
+    deployedModuleHashesVerified: true,
     lostDeploymentResponseRollbackPassed: true,
     bindingsAndAssetRetentionChecked: true,
     credentialsNotLogged: true,
