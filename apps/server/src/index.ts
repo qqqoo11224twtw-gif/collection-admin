@@ -5,6 +5,7 @@ import { RPCHandler } from '@orpc/server/fetch';
 // api routes
 import { appRouter } from '@saasflare-dev/api';
 import { authHandler, authMode, verifyApiKey } from '@saasflare-dev/api/auth';
+import { recognizeBulkImage } from '@saasflare-dev/api/bulk-ocr-service';
 import { caseImageResponse } from '@saasflare-dev/api/case-image';
 import { uploadCaseImages } from '@saasflare-dev/api/case-media-management';
 import { createContext } from '@saasflare-dev/api/context';
@@ -96,11 +97,30 @@ app.use(
       ? env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
       : [],
     allowMethods: ['GET', 'POST', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
+    allowHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-OCR-Consent',
+      'X-Image-Id',
+    ],
     // better-auth clients send credentialed requests (session cookie).
     credentials: true,
   }),
 );
+
+app.post('/api/cases/bulk-ocr', async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+  try {
+    return c.json(await recognizeBulkImage(await createContext(c), c.req.raw));
+  } catch (error: unknown) {
+    if (error instanceof ORPCError)
+      return c.json(
+        { message: error.message },
+        error.status as 400 | 401 | 403 | 413 | 429 | 500 | 502 | 503,
+      );
+    return c.json({ message: '圖片辨識失敗或逾時，請重試或人工填寫。' }, 502);
+  }
+});
 
 app.post('/api/cases/manual', async (c) => {
   try {

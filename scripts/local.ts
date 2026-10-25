@@ -9,10 +9,12 @@ const env: NodeJS.ProcessEnv = {
   LOCAL_ONLY: '1',
   NEXT_PUBLIC_SERVER_URL: 'http://localhost:4000',
   WRANGLER_SEND_METRICS: 'false',
+  WRANGLER_LOG_SANITIZE: 'true',
+  WRANGLER_LOG: 'warn',
 };
 for (const key of Object.keys(env)) {
   if (
-    /^(CLOUDFLARE_|ALCHEMY_|R2_|RESEND_|TELEGRAM_|OPENAI_|IMAGE_EXTRACTION_MODE)/.test(
+    /^(CLOUDFLARE_|ALCHEMY_|R2_|RESEND_|TELEGRAM_|OPENAI_|GOOGLE_|BULK_OCR_|IMAGE_EXTRACTION_MODE)/.test(
       key,
     )
   )

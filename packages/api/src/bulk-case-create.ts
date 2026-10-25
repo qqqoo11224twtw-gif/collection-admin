@@ -3,6 +3,8 @@ import { REGIONS } from '@saasflare-dev/db';
 import { z } from 'zod';
 import { queueAssignmentDispatch } from './assignment-outbound';
 import { auditStatement } from './audit';
+import { ocrReviewSchema } from './bulk-ocr-contract';
+import { verifyOcrReview } from './bulk-ocr-receipt';
 import { requireCaseAccess } from './case-access';
 import { generateCaseNumber } from './case-number';
 import type { Context } from './context';
@@ -11,6 +13,7 @@ import { permissionPolicy, requirePermission } from './permissions';
 import { normalizeReportName } from './telegram-name-index';
 
 const rowSchema = z.strictObject({
+  ocrReview: ocrReviewSchema.nullable().default(null),
   code: z.string().trim().max(60),
   customerName: z.string().trim().max(120),
   region: z.string().trim().max(30),
@@ -45,10 +48,26 @@ function authorize(context: Context, input: Input) {
 }
 async function validateRow(context: Context, input: Input, row: Row) {
   const reasons: string[] = [];
+  if (row.ocrReview && !(await verifyOcrReview(context, row.ocrReview)))
+    reasons.push('圖片辨識尚未人工確認或審核憑證已過期，請重新辨識並核對。');
+  if (
+    row.ocrReview &&
+    (/^ATM$/i.test(row.code) ||
+      row.code === row.customerName ||
+      !/^[\p{Script=Han}·・]{2,20}$/u.test(row.customerName))
+  )
+    reasons.push('辨識欄位無效，請檢查姓名與代號。');
   if (!row.code || !row.customerName || !row.region)
     reasons.push('缺少代號、客戶姓名或地區');
   if (row.region && !REGIONS.includes(row.region as (typeof REGIONS)[number]))
     reasons.push('地區無效');
+  if (
+    row.ocrReview &&
+    input.rows.filter(
+      (other) => other.ocrReview?.imageHash === row.ocrReview?.imageHash,
+    ).length > 1
+  )
+    reasons.push('同一圖片重複出現在本批次，請移除重複列。');
   let collector: Collector | null = null;
   if (row.collector) {
     const candidates = await context.env.DB.prepare(

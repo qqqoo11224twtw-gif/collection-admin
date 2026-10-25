@@ -18,6 +18,7 @@
     "destroy:dev": "bash scripts/deploy.sh pnpm run -r destroy:dev",
     "destroy:prod": "bash scripts/deploy.sh pnpm run -r destroy:prod",
     "destroy:pr": "bash scripts/deploy.sh pnpm run -r destroy:pr",
+    "test:ocr": "node scripts/test-bulk-ocr.mjs",
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @saasflare-dev/web run test:e2e",
     "typecheck": "pnpm -r typecheck",

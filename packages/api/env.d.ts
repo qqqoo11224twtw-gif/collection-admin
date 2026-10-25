@@ -4,6 +4,10 @@ import type { server } from '../../apps/server/alchemy.run';
 // @see https://alchemy.run/concepts/bindings/#type-safe-bindings
 
 export type CloudflareEnv = typeof server.Env & {
+  BULK_OCR_ENABLED?: string;
+  BULK_OCR_PRIVACY_APPROVED?: string;
+  BULK_OCR_MODEL?: string;
+  GOOGLE_VISION_API_KEY?: string;
   ACCESS_ACCOUNT_ID?: string;
   ACCESS_GROUP_ID?: string;
   ACCESS_API_TOKEN?: string;

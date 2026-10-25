@@ -8,6 +8,12 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import {
+  BulkOcrInput,
+  type OcrDraft,
+  OcrEvidence,
+  recognizeFile,
+} from '~/components/cases/bulk-ocr';
+import {
   BulkRowImages,
   type RowImage,
 } from '~/components/cases/bulk-row-images';
@@ -21,8 +27,9 @@ export const Route = createFileRoute('/cases/bulk-create')({
   component: BulkCreatePage,
 });
 type InputData = Parameters<AppRouterClient['cases']['bulkCreate']>[0];
-type Row = Required<InputData['rows'][number]>;
+type Row = Required<InputData['rows'][number]> & { ocr?: OcrDraft };
 const emptyRow = (): Row => ({
+  ocrReview: null,
   code: '',
   customerName: '',
   region: '',
@@ -39,6 +46,56 @@ function BulkCreatePage() {
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
   const [images, setImages] = useState<RowImage[][]>([[]]);
   const [uploading, setUploading] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  async function runOcr(drafts: OcrDraft[]) {
+    setOcrBusy(true);
+    for (const draft of drafts) {
+      const patch = (value: Partial<OcrDraft>) =>
+        setRows((old) =>
+          old.map((row) =>
+            row.ocr?.id === draft.id
+              ? {
+                  ...row,
+                  ocr: { ...row.ocr, ...value },
+                  ocrReview: row.ocrReview
+                    ? { ...row.ocrReview, confirmed: false }
+                    : null,
+                }
+              : row,
+          ),
+        );
+      patch({ state: 'processing', progress: 0, error: undefined });
+      try {
+        const result = await recognizeFile(draft, (progress) =>
+          patch({ progress }),
+        );
+        setRows((old) =>
+          old.map((row) =>
+            row.ocr?.id === draft.id
+              ? {
+                  ...row,
+                  code: result.fields.code.value,
+                  customerName: result.fields.customerName.value,
+                  region: result.fields.region.value,
+                  ocr: { ...row.ocr, state: 'ready', progress: 100, result },
+                  ocrReview: {
+                    receipt: result.receipt,
+                    imageHash: result.imageHash,
+                    confirmed: false,
+                  },
+                }
+              : row,
+          ),
+        );
+      } catch (error: unknown) {
+        patch({
+          state: 'failed',
+          error: error instanceof Error ? error.message : '辨識失敗，請重試。',
+        });
+      }
+    }
+    setOcrBusy(false);
+  }
   const [mediaResults, setMediaResults] = useState<Record<number, string>>({});
   const updateImageState = (
     index: number,
@@ -174,16 +231,30 @@ function BulkCreatePage() {
     batchId,
     mode: mode ?? 'new',
     formalDispatch,
-    rows: rows.map((row, index) => ({
+    rows: rows.map(({ ocr: _ocr, ...row }, index) => ({
       ...row,
       imageCount: images[index]?.length ?? 0,
     })),
   };
   const key = JSON.stringify(input);
-  const busy = preview.isPending || create.isPending || uploading;
+  const busy = preview.isPending || create.isPending || uploading || ocrBusy;
+  const reviewBlocked = rows.some(
+    (row) =>
+      row.ocr && (row.ocr.state !== 'ready' || !row.ocrReview?.confirmed),
+  );
   const update = (index: number, values: Partial<Row>) =>
     setRows((old) =>
-      old.map((row, i) => (i === index ? { ...row, ...values } : row)),
+      old.map((row, i) =>
+        i === index
+          ? {
+              ...row,
+              ...values,
+              ocrReview: row.ocrReview
+                ? { ...row.ocrReview, confirmed: false }
+                : null,
+            }
+          : row,
+      ),
     );
   const reset = () => {
     setRows([emptyRow()]);
@@ -234,6 +305,68 @@ function BulkCreatePage() {
       </div>
       {mode && (
         <>
+          {permissions.can('media.upload') && permissions.can('media.view') && (
+            <BulkOcrInput
+              disabled={busy || !!create.data}
+              onFiles={(files) => {
+                const base =
+                  rows.length === 1 &&
+                  !rows[0].ocr &&
+                  !rows[0].code &&
+                  !rows[0].customerName &&
+                  !rows[0].region &&
+                  !rows[0].address &&
+                  !rows[0].collector &&
+                  !images[0]?.length
+                    ? []
+                    : rows;
+                if (!files.length || base.length + files.length > 20) {
+                  setMessage('每批合計最多 20 筆，請分批辨識。');
+                  return;
+                }
+                const drafts: OcrDraft[] = files.map((file) => ({
+                  id: crypto.randomUUID(),
+                  file,
+                  state: 'processing',
+                  progress: 0,
+                }));
+                setRows([
+                  ...base,
+                  ...drafts.map((ocr) => ({ ...emptyRow(), ocr })),
+                ]);
+                setImages([
+                  ...(base.length ? images : []),
+                  ...drafts.map(() => []),
+                ]);
+                setPreviewKey('');
+                void runOcr(drafts);
+              }}
+            />
+          )}
+          {rows.some((row) => row.ocr) && (
+            <Button
+              variant="outline"
+              disabled={busy || !!create.data}
+              onClick={() =>
+                setRows((old) =>
+                  old.map((row) =>
+                    row.ocr?.state === 'ready' &&
+                    row.ocrReview &&
+                    row.code &&
+                    row.customerName &&
+                    REGIONS.includes(row.region as (typeof REGIONS)[number])
+                      ? {
+                          ...row,
+                          ocrReview: { ...row.ocrReview, confirmed: true },
+                        }
+                      : row,
+                  ),
+                )
+              }
+            >
+              全部確認（已逐筆核對原圖，僅確認完整列）
+            </Button>
+          )}
           <section className="space-y-3 rounded-xl border bg-card p-4">
             <label htmlFor="bulk-paste" className="block font-medium">
               貼上 Excel／Google Sheet 資料
@@ -273,6 +406,7 @@ function BulkCreatePage() {
                       address = '',
                       collector = '',
                     ]) => ({
+                      ocrReview: null,
                       code: code.trim(),
                       customerName: customerName.trim(),
                       region: region.trim(),
@@ -450,6 +584,28 @@ function BulkCreatePage() {
                       </label>
                     )}
                   </div>
+                  {row.ocr && (
+                    <OcrEvidence
+                      draft={row.ocr}
+                      confirmed={row.ocrReview?.confirmed ?? false}
+                      disabled={locked}
+                      onRetry={() => {
+                        if (row.ocr) void runOcr([row.ocr]);
+                      }}
+                      onConfirm={(confirmed) =>
+                        setRows((old) =>
+                          old.map((item, i) =>
+                            i === index && item.ocrReview
+                              ? {
+                                  ...item,
+                                  ocrReview: { ...item.ocrReview, confirmed },
+                                }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
+                  )}
                   {permissions.can('media.upload') && (
                     <BulkRowImages
                       row={index + 1}
@@ -613,6 +769,7 @@ function BulkCreatePage() {
             <Button
               disabled={
                 busy ||
+                reviewBlocked ||
                 previewKey !== key ||
                 !preview.data?.some((r) => r.status === 'ready')
               }
