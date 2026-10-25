@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { recognizeOcrBytes } from './bulk-ocr-engine';
+import { recognizeOcrBytes, OcrRecognitionError } from './bulk-ocr-engine';
 import type { Context } from './context';
 import { telegramFile } from './telegram-adapter';
 import type { TelegramClient } from './telegram-client';
@@ -444,11 +444,12 @@ export async function processTelegramOcrJobs(
               lease,
             )
             .run();
-        } catch {
+        } catch (error) {
+          const code = error instanceof OcrRecognitionError ? error.diagnosticCode : error instanceof Error && ['OCR_CONFIGURATION','IMAGE_LIMIT','INVALID_IMAGE'].includes(error.message) ? error.message : 'TELEGRAM_DOWNLOAD_OR_PROCESSING_FAILED';
           await env.DB.prepare(
-            "UPDATE telegram_ocr_jobs SET status='failed',lease_token=NULL,lease_until=NULL,version=version+1,notified_version=-1,updated_at=? WHERE id=? AND status='recognizing' AND lease_token=?",
+            "UPDATE telegram_ocr_jobs SET evidence_json=?,status='failed',lease_token=NULL,lease_until=NULL,version=version+1,notified_version=-1,updated_at=? WHERE id=? AND status='recognizing' AND lease_token=?",
           )
-            .bind(Date.now(), job.id, lease)
+            .bind(JSON.stringify({diagnostic:{code}}), Date.now(), job.id, lease)
             .run();
         }
       } else if (job.status === 'creating') {

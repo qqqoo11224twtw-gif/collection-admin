@@ -38,7 +38,7 @@ const print = (value) => {
 print('正在執行檢查與發布，請勿關閉視窗。進度會持續顯示。\n');
 const child = spawn(
   process.execPath,
-  [resolve(root, process.argv.includes('--interface') ? 'scripts/release-ocr-interface.mjs' : 'scripts/release-production-ocr.mjs'), '--deploy'],
+  [resolve(root, process.argv.includes('--recognition') ? 'scripts/release-ocr-recognition.mjs' : process.argv.includes('--interface') ? 'scripts/release-ocr-interface.mjs' : 'scripts/release-production-ocr.mjs'), '--deploy'],
   { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] },
 );
 child.stdout.on('data', (bytes) => print(bytes.toString()));

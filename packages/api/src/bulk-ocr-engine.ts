@@ -45,15 +45,11 @@ function bytesBase64(bytes: Uint8Array) {
     binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
   return btoa(binary);
 }
-async function boundedJson(response: Response) {
-  if (!response.ok)
-    throw new ORPCError('BAD_GATEWAY', {
-      status: 502,
-      message:
-        response.status === 429
-          ? '辨識服務忙碌，請稍後重試。'
-          : '辨識服務暫時無法使用。',
-    });
+export class OcrRecognitionError extends Error {
+  constructor(public readonly diagnosticCode: string) { super(diagnosticCode); }
+}
+async function boundedJson(response: Response, provider: string) {
+  if (!response.ok) throw new OcrRecognitionError(`${provider}_HTTP_${response.status}`);
   const reader = response.body?.getReader();
   if (!reader) throw new ORPCError('BAD_GATEWAY', { status: 502 });
   const chunks: Uint8Array[] = [];
@@ -83,6 +79,8 @@ export async function recognizeOcrBytes(
   mediaType: string,
   send: typeof fetch = fetch,
 ) {
+  let stage = 'GOOGLE';
+  try {
   const content = bytesBase64(bytes);
   // Sequential providers bound peak memory and avoid paying for vision if OCR fails.
   const google = googleSchema.parse(
@@ -104,16 +102,15 @@ export async function recognizeOcrBytes(
             },
           ],
         }),
-      }),
+      }), 'GOOGLE',
     ),
   );
   const annotation = google.responses[0];
-  if (annotation.error || !annotation.fullTextAnnotation?.text)
-    throw new ORPCError('BAD_REQUEST', {
-      message: '沒有清楚可辨識的文字，請重新拍攝。',
-    });
+  if(annotation.error) throw new OcrRecognitionError('GOOGLE_IMAGE_REJECTED');
+  if(!annotation.fullTextAnnotation?.text) throw new OcrRecognitionError('GOOGLE_NO_TEXT');
+  stage = 'OPENAI';
   // The visual reader independently reads the original, without seeing OCR guesses.
-  const visual = responseSchema.parse(
+  const visualResponse =
     await boundedJson(
       await send('https://api.openai.com/v1/responses', {
         method: 'POST',
@@ -147,16 +144,15 @@ export async function recognizeOcrBytes(
               schema: z.toJSONSchema(visualOcrSchema),
             },
           },
-          max_output_tokens: 1600,
+          max_output_tokens: 8192,
         }),
-      }),
-    ),
-  );
+      }), 'OPENAI',
+    );
+  if ((visualResponse as {status?: string}).status === 'incomplete') throw new OcrRecognitionError('OPENAI_INCOMPLETE');
+  const visual = responseSchema.parse(visualResponse);
   const output = visual.output.flatMap((entry) => entry.content ?? []);
   if (output.some((entry) => entry.type === 'refusal'))
-    throw new ORPCError('BAD_REQUEST', {
-      message: '無法辨識此圖片，請人工填寫。',
-    });
+    throw new OcrRecognitionError('OPENAI_REFUSAL');
   const raw = visualOcrSchema.parse(
     JSON.parse(
       output
@@ -183,4 +179,9 @@ export async function recognizeOcrBytes(
     (b) => b.toString(16).padStart(2, '0'),
   ).join('');
   return { fields, quality: raw.quality, imageHash };
+  } catch(error) {
+    if(error instanceof OcrRecognitionError) throw error;
+    const name = error instanceof Error ? error.name : '';
+    throw new OcrRecognitionError(stage + (name === 'TimeoutError' || name === 'AbortError' ? '_TIMEOUT' : name === 'ZodError' || name === 'SyntaxError' ? '_RESPONSE_INVALID' : '_REQUEST_FAILED'));
+  }
 }
