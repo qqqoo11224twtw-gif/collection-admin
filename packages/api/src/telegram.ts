@@ -46,6 +46,7 @@ export const telegramApi = {
         email: user.email,
       }).from(user),
       mode: context.env.TELEGRAM_MODE ?? 'disabled',
+      ocrEnabled: context.env.TELEGRAM_OCR_ENABLED === 'true',
     };
   }),
   routes: protectedProcedure.handler(async ({ context }) => {
@@ -101,7 +102,11 @@ export const telegramApi = {
         input.routeType in typeMap
           ? typeMap[input.routeType as keyof typeof typeMap]
           : input.routeType;
-      if (routeType === 'intake' && (!input.id || input.isActive))
+      if (
+        routeType === 'intake' &&
+        (!input.id || input.isActive) &&
+        context.env.TELEGRAM_OCR_ENABLED !== 'true'
+      )
         throw new ORPCError('FORBIDDEN', {
           message: 'TELEGRAM_INTAKE_DISABLED',
         });
@@ -178,7 +183,11 @@ export const telegramApi = {
       const [route] = await context.DB.select()
         .from(telegramRoutes)
         .where(eq(telegramRoutes.id, input.id));
-      if (route && ['intake', 'intake_source'].includes(route.routeType))
+      if (
+        route &&
+        ['intake', 'intake_source'].includes(route.routeType) &&
+        context.env.TELEGRAM_OCR_ENABLED !== 'true'
+      )
         throw new ORPCError('FORBIDDEN', {
           message: 'TELEGRAM_INTAKE_DISABLED',
         });

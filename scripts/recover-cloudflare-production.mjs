@@ -149,4 +149,3 @@ try {
   );
   process.exitCode = 1;
 }
-

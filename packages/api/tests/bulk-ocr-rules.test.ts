@@ -198,3 +198,101 @@ test('expired review receipt cannot authorize a write', async () => {
     false,
   );
 });
+
+test('Telegram corrections reject swaps, ATM, IDs, ambiguous counties and malformed commands', async () => {
+  const { parseOcrEdit, confirmedOcrFields } = await import(
+    '../src/telegram-ocr-contract'
+  );
+  const id = '11111111-1111-4111-8111-111111111111';
+  assert.equal(
+    parseOcrEdit(`/ocr_edit ${id} 菲菲|莊佩璇|彰化`)?.fields.region,
+    '彰化縣',
+  );
+  assert.equal(parseOcrEdit(`/ocr_edit ${id} 菲菲|莊佩璇|新竹`), null);
+  for (const code of ['ATM', 'A123456789', '0912345678', '莊佩璇'])
+    assert.equal(
+      confirmedOcrFields({ code, customerName: '莊佩璇', region: '彰化縣' })
+        .success,
+      false,
+    );
+  assert.equal(parseOcrEdit(`/ocr_edit ${id} 菲菲|莊佩璇|彰化|多餘資料`), null);
+});
+test('Telegram OCR requires the existing webhook secret', async () => {
+  const { isOcrWebhookAuthorized } = await import(
+    '../src/telegram-ocr-contract'
+  );
+  const env = { TELEGRAM_WEBHOOK_SECRET: 'local-test-secret' } as Env;
+  assert.equal(
+    await isOcrWebhookAuthorized(env, new Request('http://localhost/')),
+    false,
+  );
+  assert.equal(
+    await isOcrWebhookAuthorized(
+      env,
+      new Request('http://localhost/', {
+        headers: { 'X-Telegram-Bot-Api-Secret-Token': 'wrong' },
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    await isOcrWebhookAuthorized(
+      env,
+      new Request('http://localhost/', {
+        headers: { 'X-Telegram-Bot-Api-Secret-Token': 'local-test-secret' },
+      }),
+    ),
+    true,
+  );
+});
+test('OCR additive schema preserves existing tables and enforces update and batch uniqueness', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const db = new DatabaseSync(':memory:');
+  try {
+    db.exec('PRAGMA foreign_keys=ON');
+    for (const file of fs
+      .readdirSync('packages/db/migrations')
+      .filter((f) => f.endsWith('.sql'))
+      .sort())
+      db.exec(
+        fs.readFileSync(path.join('packages/db/migrations', file), 'utf8'),
+      );
+    const oldTables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+      .all()
+      .map((row) => row.name);
+    const ddl = fs.readFileSync('deploy/telegram-ocr/migration.sql', 'utf8');
+    db.exec(ddl);
+    db.exec(ddl);
+    const newTables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+      .all()
+      .map((row) => row.name);
+    assert.ok(oldTables.every((name) => newTables.includes(name)));
+    db.exec(
+      "INSERT INTO user(id,name,email,email_verified,role,created_at,updated_at) VALUES('ocr-actor','fictional','ocr@example.test',0,'admin',0,0)",
+    );
+    db.exec(
+      "INSERT INTO telegram_routes(id,chat_id,route_type,managed_by_user_id,created_at,updated_at) VALUES('ocr-route','-10001','intake','ocr-actor',0,0)",
+    );
+    const insert = db.prepare(
+      "INSERT INTO telegram_ocr_jobs(id,update_key,route_id,actor_user_id,sender_id,message_id,batch_id,status,created_at,updated_at,expires_at) VALUES(?,?,'ocr-route','ocr-actor','123',1,?,'pending',0,0,999)",
+    );
+    insert.run('job-a', 'update-a', 'batch-a');
+    assert.throws(() => insert.run('job-b', 'update-a', 'batch-b'), /UNIQUE/);
+    assert.throws(() => insert.run('job-c', 'update-c', 'batch-a'), /UNIQUE/);
+    assert.equal(
+      db.prepare('SELECT count(*) AS count FROM telegram_ocr_jobs').get()
+        ?.count,
+      1,
+    );
+    assert.throws(
+      () => db.exec("UPDATE telegram_ocr_jobs SET status='unknown'"),
+      /CHECK/,
+    );
+  } finally {
+    db.close();
+  }
+});

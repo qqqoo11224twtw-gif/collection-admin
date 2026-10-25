@@ -4,6 +4,7 @@ import type { server } from '../../apps/server/alchemy.run';
 // @see https://alchemy.run/concepts/bindings/#type-safe-bindings
 
 export type CloudflareEnv = typeof server.Env & {
+  TELEGRAM_OCR_ENABLED?: string;
   BULK_OCR_ENABLED?: string;
   BULK_OCR_PRIVACY_APPROVED?: string;
   BULK_OCR_MODEL?: string;
