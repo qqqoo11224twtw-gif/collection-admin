@@ -41,3 +41,16 @@ for(const primaryIdentityCount of [1,2]) {
  assert.equal(result.fields.customerName.value,primaryIdentityCount===1?'林小安':'');
 }
 console.log(JSON.stringify({supportingNamesAdjudicated:true,multiplePrimarySubjectsStillRejected:true}));
+
+{
+ const field=(value,source,evidence=value)=>({value,source,evidence,legible:true,ambiguous:false});
+ let calls=0;
+ const base={quality:'multiple_people',code:field('小青','caption','林小安 小青 ATM'),customerName:field('林小安','id_front'),region:field('苗栗市','current_address')};
+ const result=await recognizeOcrBytes(settings,new Uint8Array([1]),'image/png',async(url)=>{
+  if(String(url).includes('googleapis'))return Response.json({responses:[{fullTextAnnotation:{text:'林小安 小青 ATM 現居苗栗市 苗栗縣'}}]});
+  calls++;const raw=calls===1?base:{...base,quality:'readable',primaryIdentityCount:1,subjectNameConflict:false,region:field('苗栗縣','current_address')};
+  return Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(raw)}]}]});
+ });
+ assert.equal(result.fields.region.value,'苗栗縣');assert.equal(result.fields.code.value,'小青');
+}
+console.log(JSON.stringify({equivalentLocalityReviewPassed:true}));
