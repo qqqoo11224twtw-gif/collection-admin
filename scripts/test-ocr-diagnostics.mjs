@@ -27,3 +27,17 @@ const concurrent=recognizeOcrBytes(settings,new Uint8Array([1]),'image/png',asyn
 await assert.rejects(concurrent,e=>e.diagnosticCode==='OPENAI_INCOMPLETE');
 assert.equal(started,2);
 console.log(JSON.stringify({independentProvidersConcurrent:true}));
+for(const primaryIdentityCount of [1,2]) {
+ const field=(value,source,evidence=value)=>({value,source,evidence,legible:true,ambiguous:false});
+ const initial={quality:'multiple_people',code:field('小青','caption','林小安 小青 ATM'),customerName:field('林小安','id_front'),region:field('台中市','household')};
+ let visualCalls=0;
+ const result=await recognizeOcrBytes(settings,new Uint8Array([1]),'image/png',async(url)=>{
+  if(String(url).includes('googleapis'))return Response.json({responses:[{fullTextAnnotation:{text:'林小安 小青 ATM 台中市'}}]});
+  visualCalls++;
+  const raw=visualCalls===1?initial:{...initial,quality:'readable',primaryIdentityCount,subjectNameConflict:primaryIdentityCount!==1};
+  return Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(raw)}]}]});
+ });
+ assert.equal(visualCalls,2);
+ assert.equal(result.fields.customerName.value,primaryIdentityCount===1?'林小安':'');
+}
+console.log(JSON.stringify({supportingNamesAdjudicated:true,multiplePrimarySubjectsStillRejected:true}));

@@ -89,7 +89,66 @@ export async function recognizeOcrBytes(
     }
   }
   // Independent image reads run concurrently; neither receives the other's guesses.
-  const [annotation,raw] = await Promise.all([
+  const adjudicationSchema=visualOcrSchema.extend({primaryIdentityCount:z.number().int().min(0).max(20),subjectNameConflict:z.boolean()});
+  async function readVisual(instructions: string, adjudicate=false) {
+
+  // The visual reader independently reads the original, without seeing OCR guesses.
+  const visualResponse =
+    await boundedJson(
+      await send('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        redirect: 'manual',
+        signal: AbortSignal.timeout(45000),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${settings.OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: settings.BULK_OCR_MODEL,
+          store: false,
+          instructions,
+          input: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'input_image',
+                  image_url: `data:${mediaType};base64,${content}`,
+                  detail: 'high',
+                },
+              ],
+            },
+          ],
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'bulk_ocr',
+              strict: true,
+              schema: z.toJSONSchema(adjudicate ? adjudicationSchema : visualOcrSchema),
+            },
+          },
+          max_output_tokens: 8192,
+        }),
+      }), 'OPENAI',
+    );
+  if ((visualResponse as {status?: string}).status === 'incomplete') throw new OcrRecognitionError('OPENAI_INCOMPLETE');
+  const visual = responseSchema.parse(visualResponse);
+  const output = visual.output.flatMap((entry) => entry.content ?? []);
+  if (output.some((entry) => entry.type === 'refusal'))
+    throw new OcrRecognitionError('OPENAI_REFUSAL');
+  const raw = visualOcrSchema.parse(
+    JSON.parse(
+      output
+        .filter((entry) => entry.type === 'output_text')
+        .map((entry) => entry.text ?? '')
+        .join(''),
+    ),
+  );
+
+  const extra = adjudicate ? adjudicationSchema.parse(JSON.parse(output.filter(entry=>entry.type==='output_text').map(entry=>entry.text??'').join(''))) : null;
+  return {raw,extra};
+  }
+  const [annotation,visualRead] = await Promise.all([
     providerTask('GOOGLE', async () => {
   const google = googleSchema.parse(
     await boundedJson(
@@ -119,65 +178,19 @@ export async function recognizeOcrBytes(
 
   return annotation;
     }),
-    providerTask('OPENAI', async () => {
-  // The visual reader independently reads the original, without seeing OCR guesses.
-  const visualResponse =
-    await boundedJson(
-      await send('https://api.openai.com/v1/responses', {
-        method: 'POST',
-        redirect: 'manual',
-        signal: AbortSignal.timeout(45000),
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${settings.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: settings.BULK_OCR_MODEL,
-          store: false,
-          instructions: BULK_OCR_INSTRUCTIONS,
-          input: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'input_image',
-                  image_url: `data:${mediaType};base64,${content}`,
-                  detail: 'high',
-                },
-              ],
-            },
-          ],
-          text: {
-            format: {
-              type: 'json_schema',
-              name: 'bulk_ocr',
-              strict: true,
-              schema: z.toJSONSchema(visualOcrSchema),
-            },
-          },
-          max_output_tokens: 8192,
-        }),
-      }), 'OPENAI',
-    );
-  if ((visualResponse as {status?: string}).status === 'incomplete') throw new OcrRecognitionError('OPENAI_INCOMPLETE');
-  const visual = responseSchema.parse(visualResponse);
-  const output = visual.output.flatMap((entry) => entry.content ?? []);
-  if (output.some((entry) => entry.type === 'refusal'))
-    throw new OcrRecognitionError('OPENAI_REFUSAL');
-  const raw = visualOcrSchema.parse(
-    JSON.parse(
-      output
-        .filter((entry) => entry.type === 'output_text')
-        .map((entry) => entry.text ?? '')
-        .join(''),
-    ),
-  );
-
-  return raw;
-    }),
+    providerTask('OPENAI', () => readVisual(BULK_OCR_INSTRUCTIONS)),
   ]);
+  let raw=visualRead.raw;
+  let subjectRechecked=false;
+  if(raw.quality==='multiple_people') {
+    const checked=await providerTask('OPENAI',()=>readVisual(BULK_OCR_INSTRUCTIONS+' Review primary subject identity carefully. Count distinct PRIMARY identity-card subjects, not every named person. Parent, spouse, emergency contact, vehicle owner and an unrelated ticket are supporting roles and do not each define another primary subject. The same person holding the same identity card is one subject. If two distinct primary ID subjects or conflicting subject-name labels are visible, subjectNameConflict=true or primaryIdentityCount>1. Return primaryIdentityCount and subjectNameConflict as well as the field schema. Read from the original image independently; never infer obscured characters.',true));
+    if(checked.extra?.primaryIdentityCount===1 && !checked.extra.subjectNameConflict && checked.raw.quality==='readable' && ['code','customerName','region'].every(key=>{
+      const original=raw[key as 'code'|'customerName'|'region'],review=checked.raw[key as 'code'|'customerName'|'region'];
+      return original.value!==null && original.value===review.value && original.legible && review.legible && !original.ambiguous && !review.ambiguous;
+    })) { raw=checked.raw;subjectRechecked=true; }
+  }
   const compact = (text: string) => text.normalize('NFC').replace(/\s/g,'');
-  inspect?.({quality:raw.quality,fields:Object.fromEntries(['code','customerName','region'].map(key=>{
+  inspect?.({quality:raw.quality,subjectRechecked,fields:Object.fromEntries(['code','customerName','region'].map(key=>{
     const field=raw[key as 'code'|'customerName'|'region'];
     return [key,{value:field.value,source:field.source,legible:field.legible,ambiguous:field.ambiguous,evidenceInGoogle:!!field.evidence && compact(annotation.fullTextAnnotation.text).includes(compact(field.evidence)),valueInGoogle:!!field.value && compact(annotation.fullTextAnnotation.text).includes(compact(field.value))}];
   }))});
