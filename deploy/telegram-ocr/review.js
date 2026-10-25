@@ -132,7 +132,7 @@ async function refresh() {
       if (job.status === 'failed') {
         let code;
         try { code = JSON.parse(job.evidence_json || '{}').diagnostic?.code; } catch {}
-        const reasons = { GOOGLE_NO_TEXT:'Google 未讀到清楚文字，請改傳清晰原圖', GOOGLE_IMAGE_REJECTED:'Google 無法處理這張圖片', OPENAI_INCOMPLETE:'AI 輸出未完成，請重新辨識', OPENAI_TIMEOUT:'AI 處理逾時，請稍後重試', GOOGLE_TIMEOUT:'Google 辨識逾時，請稍後重試', OPENAI_REFUSAL:'AI 無法處理此圖片，請人工核對', OPENAI_RESPONSE_INVALID:'AI 回傳格式不完整，請重試', TELEGRAM_DOWNLOAD_OR_PROCESSING_FAILED:'圖片下載或處理失敗，請確認機器人仍可存取原訊息', IMAGE_LIMIT:'圖片超過 5 MB，請縮小後重傳' };
+        const reasons = { GOOGLE_REQUEST_FAILED:'Google 辨識請求未能送出，請重新辨識', OPENAI_REQUEST_FAILED:'AI 辨識請求未能送出，請重新辨識', GOOGLE_RESPONSE_INVALID:'Google 回應格式不完整，請重新辨識', GOOGLE_NO_TEXT:'Google 未讀到清楚文字，請改傳清晰原圖', GOOGLE_IMAGE_REJECTED:'Google 無法處理這張圖片', OPENAI_INCOMPLETE:'AI 輸出未完成，請重新辨識', OPENAI_TIMEOUT:'AI 處理逾時，請稍後重試', GOOGLE_TIMEOUT:'Google 辨識逾時，請稍後重試', OPENAI_REFUSAL:'AI 無法處理此圖片，請人工核對', OPENAI_RESPONSE_INVALID:'AI 回傳格式不完整，請重試', TELEGRAM_DOWNLOAD_OR_PROCESSING_FAILED:'圖片下載或處理失敗，請確認機器人仍可存取原訊息', IMAGE_LIMIT:'圖片超過 5 MB，請縮小後重傳' };
         first.append(el('small', reasons[code] || (code && /^(GOOGLE|OPENAI)_HTTP_[0-9]{3}$/.test(code) ? '辨識服務回應錯誤：' + code : '此筆為先前失敗紀錄，請重新辨識以取得原因')));
       }
       const preview = el('button', '查看原圖');

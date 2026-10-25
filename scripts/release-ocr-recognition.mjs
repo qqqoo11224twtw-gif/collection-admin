@@ -281,6 +281,7 @@ try {
   run('scripts/build-production-ocr.mjs');
   run('scripts/test-ocr-interface.mjs');
   run('scripts/test-ocr-diagnostics.mjs');
+  run('scripts/test-real-ocr-sample.mjs');
   run('scripts/test-bulk-ocr.mjs');
   run('scripts/test-telegram-ocr-flow.mjs');
   const receipt=JSON.parse(readFileSync(resolve(output,'deployment-result.json'),'utf8'));
