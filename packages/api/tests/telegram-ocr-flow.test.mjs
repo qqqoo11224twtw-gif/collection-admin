@@ -152,7 +152,7 @@ const visual = {
   region: {
     value: '彰化縣',
     evidence: '彰化縣',
-    source: 'household',
+    source: 'current_address',
     legible: true,
     ambiguous: false,
   },

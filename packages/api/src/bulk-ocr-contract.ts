@@ -8,6 +8,7 @@ export const ocrFieldSchema = z.object({
     'name_label',
     'caption',
     'household',
+    'current_address',
     'region_label',
     'unknown',
   ]),
@@ -99,7 +100,7 @@ export function resolveOcrFields(
         !/^\d{7,}$/.test(value);
     if (fieldKey === 'region') {
       valid &&=
-        ['household', 'region_label'].includes(field.source) &&
+        field.source === 'current_address' &&
         !!normalizeCounty(value);
       value = normalizeCounty(value);
     }

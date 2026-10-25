@@ -16,7 +16,7 @@ const raw = (caption = '莊佩璇 菲菲 ATM'): VisualOcr => ({
   quality: 'readable',
   code: field('菲菲', 'caption', caption),
   customerName: field('莊佩璇', 'id_front'),
-  region: field('彰化縣', 'household'),
+  region: field('彰化縣', 'current_address'),
 });
 for (const caption of [
   '莊佩璇 菲菲 ATM',
@@ -83,13 +83,14 @@ test('uncertain Chinese glyph and independent OCR disagreement abstain', () => {
     '',
   );
 });
-test('ID-only formal name, absent code and household vs current address', () => {
+test('current residential address overrides different household address', () => {
   const r = raw();
   r.code = field(null, 'unknown');
+  r.region = field('高雄市','current_address');
   const f = resolveOcrFields(r, '莊佩璇 戶籍彰化縣 現居高雄市');
   assert.equal(f.code.value, '');
   assert.equal(f.customerName.value, '莊佩璇');
-  assert.equal(f.region.value, '彰化縣');
+  assert.equal(f.region.value, '高雄市');
 });
 test('reject multiple code candidates, ATM, phone and ID', () => {
   assert.equal(captionCode('菲菲 小美 ATM', ''), '');
@@ -303,4 +304,8 @@ test('caption order is independent of a separate signed payment amount', () => {
     assert.equal(resolveOcrFields(raw(caption),'莊佩璇 彰化縣 '+caption).code.value,'菲菲');
   }
   assert.equal(captionCode('莊佩璇 菲菲 小美 ATM -50000','莊佩璇'),'');
+});
+
+test('household-only or generic region evidence cannot authorize residential region',()=>{
+ for(const source of ['household','region_label'] as const) { const r=raw();r.region.source=source;assert.equal(resolveOcrFields(r,'莊佩璇 菲菲 ATM 彰化縣').region.value,''); }
 });
