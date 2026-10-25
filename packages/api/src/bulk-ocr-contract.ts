@@ -52,7 +52,11 @@ export function normalizeCounty(value: string): string {
 const compact = (s: string) => s.normalize('NFC').replace(/\s/g, '');
 export function captionCode(caption: string, name: string): string {
   let rest = caption.replace(/\bATM\b/gi, ' ').replace(/代號\s*[:：]?/g, ' ');
-  if (name) rest = rest.replaceAll(name, ' ');
+  if (name) {
+    rest = rest.replaceAll(name, ' ');
+    // A signed amount on a separate caption token is payment metadata, never a nickname.
+    rest = rest.replace(/(^|\s)[+\-−]\d[\d,]*(?:\.\d{1,2})?(?=$|\s)/g, ' ');
+  }
   const candidates = rest
     .trim()
     .split(/[\s,，、|｜:：;；/]+/)

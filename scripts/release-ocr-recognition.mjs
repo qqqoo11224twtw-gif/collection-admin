@@ -203,7 +203,7 @@ async function deploy(kind, version, expected) {
   state.productionChanged = true;
   state.deployed[kind] = version;
   save();
-  await api(names[kind], '/deployments', {
+  await api(names[kind], recovering && version === state.original[kind] ? '/deployments?force=true' : '/deployments', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -235,7 +235,7 @@ function expectedAccessRedirect(response) {
   if(![301,302,303,307,308].includes(response.status))return false;
   try {const location=new URL(response.headers.get('Location'));return location.protocol==='https:'&&location.hostname==='falling-smoke-c05c.cloudflareaccess.com'&&location.pathname.startsWith('/cdn-cgi/access/login/admin.kpirich.bid');}catch{return false;}
 }
-async function readiness(enabled) {
+async function readinessOnce(enabled) {
   const response = await fetch(
     'https://api.kpirich.bid/api/telegram-ocr/release-check',
     {
@@ -245,7 +245,8 @@ async function readiness(enabled) {
       signal: AbortSignal.timeout(20000),
     },
   );
-  if (!response.ok) throw Error('READINESS_HTTP_FAILED');
+  state.readinessHttpStatus=response.status;save();
+  if (!response.ok) throw Error('READINESS_HTTP_'+response.status);
   const value = await response.json();
   if (
     value.releaseId !== releaseId ||
@@ -256,6 +257,15 @@ async function readiness(enabled) {
     value.enabled !== enabled
   )
     throw Error('OCR_READINESS_FAILED');
+}
+async function readiness(enabled) {
+  for(let attempt=0;attempt<8;attempt++) {
+    try { await readinessOnce(enabled); return; } catch(error) {
+      if(attempt===7) throw error;
+      console.log('Waiting for the deployed version to propagate before checking again.');
+      await new Promise(resolve=>setTimeout(resolve,3000));
+    }
+  }
 }
 async function rollback() {
   recovering = true;

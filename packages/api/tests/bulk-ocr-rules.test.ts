@@ -296,3 +296,11 @@ test('OCR additive schema preserves existing tables and enforces update and batc
     db.close();
   }
 });
+
+test('caption order is independent of a separate signed payment amount', () => {
+  for(const caption of ['莊佩璇 菲菲 ATM\n-50000','菲菲 莊佩璇 ATM\n-50000','莊佩璇 菲菲\n−50,000','菲菲 莊佩璇']) {
+    assert.equal(captionCode(caption,'莊佩璇'),'菲菲');
+    assert.equal(resolveOcrFields(raw(caption),'莊佩璇 彰化縣 '+caption).code.value,'菲菲');
+  }
+  assert.equal(captionCode('莊佩璇 菲菲 小美 ATM -50000','莊佩璇'),'');
+});
