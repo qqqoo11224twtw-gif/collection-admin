@@ -477,7 +477,7 @@ test('opt-in automatic creation preserves replay protection and abstains on unce
  try { await providers(async()=>{
    await handleTelegramOcr(update(901),env,f.execution,f.runtime);
    await processTelegramOcrJobs(env,f.execution,f.runtime);
-   assert.equal(f.sqlite.prepare('SELECT status FROM telegram_ocr_jobs').get().status,'creating');
+   assert.equal(f.sqlite.prepare('SELECT status FROM telegram_ocr_jobs').get().status,'created');
    await processTelegramOcrJobs(env,f.execution,f.runtime);
    await processTelegramOcrJobs(env,f.execution,f.runtime);
    assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM cases').get().n,1);
@@ -547,4 +547,20 @@ test('duplicate failure exposes the existing case link instead of requesting pai
   assert.equal(jobs.length,1);assert.equal(jobs[0].status,'failed');
   assert.equal(jobs[0].existing_case_id,f.sqlite.prepare('SELECT id FROM cases').get().id);
  });}finally{delete env.TELEGRAM_OCR_AUTO_CREATE;f.sqlite.close()}
+});
+test('fast intake starts recognition and creation without waiting for the scheduled trigger',async()=>{
+ const f=fixture();env.TELEGRAM_OCR_FAST_START='true';env.TELEGRAM_OCR_AUTO_CREATE='true';
+ try{await providers(async()=>{
+  await handleTelegramOcr(update(1301),env,f.execution,f.runtime);await Promise.all(f.tasks);
+  assert.equal(f.sqlite.prepare('SELECT status FROM telegram_ocr_jobs').get().status,'created');
+  assert.equal(f.sqlite.prepare('SELECT count(*) AS n FROM cases').get().n,1);
+ });}finally{delete env.TELEGRAM_OCR_FAST_START;delete env.TELEGRAM_OCR_AUTO_CREATE;f.sqlite.close()}
+});
+test('slow fast-start provider returns task to scheduled queue without consuming a retry',async()=>{
+ const f=fixture();env.TELEGRAM_OCR_FAST_START='true';
+ try{await providers(async()=>{
+  globalThis.fetch=async()=>{throw new DOMException('fixture timeout','TimeoutError')};
+  await handleTelegramOcr(update(1302),env,f.execution,f.runtime);await Promise.all(f.tasks);
+  const job=f.sqlite.prepare('SELECT status,attempts FROM telegram_ocr_jobs').get();assert.equal(job.status,'pending');assert.equal(job.attempts,0);
+ });}finally{delete env.TELEGRAM_OCR_FAST_START;f.sqlite.close()}
 });

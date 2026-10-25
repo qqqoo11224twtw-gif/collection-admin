@@ -185,6 +185,47 @@ async function notify(
     .bind(job.version, job.id, job.version, job.status)
     .run();
 }
+async function finishCreatingJob(env: Env,runtime: ProductionOcrRuntime,route: OcrRoute,job: TelegramOcrJob,actor: Context) {
+        const lease = crypto.randomUUID();
+        const won = await env.DB.prepare(
+          "UPDATE telegram_ocr_jobs SET lease_token=?,lease_until=? WHERE id=? AND status='creating' AND (lease_until IS NULL OR lease_until<?) RETURNING id",
+        )
+          .bind(lease, Date.now() + 60000, job.id, Date.now())
+          .first();
+        if (!won) return;
+        const fields = confirmedOcrFields(JSON.parse(job.fields_json ?? '{}'));
+        if (!fields.success) throw Error('INVALID_CONFIRMED_FIELDS');
+        const result = job.case_id ? {results:[{status:'created',caseId:job.case_id}]} : await runtime.create(actor, {
+          batchId: job.batch_id,
+          mode: 'new',
+          formalDispatch: false,
+          rows: [
+            {
+              ...fields.data,
+              address: '',
+              collector: '',
+              imageCount: 0,
+              duplicateOverride: false,
+            },
+          ],
+        });
+        const row = result.results[0];
+        if(row?.status==='created' && row.caseId && env.TELEGRAM_OCR_ATTACH_IMAGES==='true') {
+          await env.DB.prepare("UPDATE telegram_ocr_jobs SET case_id=? WHERE id=? AND status='creating' AND lease_token=?").bind(row.caseId,job.id,lease).run();
+          await attachJobImage(env,actor,runtime,route,job,row.caseId);
+        }
+        await env.DB.prepare(
+          "UPDATE telegram_ocr_jobs SET status=?,case_id=?,lease_token=NULL,lease_until=NULL,version=version+1,notified_version=-1,updated_at=? WHERE id=? AND status='creating' AND lease_token=?",
+        )
+          .bind(
+            row?.status === 'created' ? 'created' : 'failed',
+            row?.caseId ?? null,
+            Date.now(),
+            job.id,
+            lease,
+          )
+          .run();
+}
 async function attachJobImage(env: Env, actor: Context, runtime: ProductionOcrRuntime, route: OcrRoute, job: TelegramOcrJob, caseId: string) {
   if(!job.file_id || !runtime.attach)throw Error('SOURCE_IMAGE_UNAVAILABLE');
   const client=await runtime.client(actor,route.bot_id),downloaded=await client.downloadFile(job.file_id);
@@ -408,12 +449,14 @@ export async function handleTelegramOcr(
     const report=await attachReport(env,route,identity.user_id,sender,`${route.bot_id ?? 'legacy'}:${update.update_id}`,message.media_group_id);
     if(report) execution.waitUntil(sendReportMessage(env,report.report_id,'ack_state',client,route,'已收到案件，排入建檔'));
   }
+  if(env.TELEGRAM_OCR_FAST_START==='true') execution.waitUntil(processTelegramOcrJobs(env,execution,runtime,{jobId:id,deadline:Date.now()+20000}).catch(()=>{}));
   return Response.json({ ok: true, code: 'OCR_QUEUED' });
 }
 export async function processTelegramOcrJobs(
   env: Env,
   execution: ExecutionContext,
   runtime: ProductionOcrRuntime,
+  options: {jobId?: string;deadline?: number} = {},
 ) {
   if (env.TELEGRAM_OCR_ENABLED !== 'true') return;
   const base = await runtime.base(env, execution),
@@ -429,9 +472,9 @@ export async function processTelegramOcrJobs(
     .bind(now)
     .run();
   const jobs = await env.DB.prepare(
-    "SELECT * FROM telegram_ocr_jobs WHERE status IN ('pending','creating','ready','failed','created') AND (status='creating' OR expires_at>?) AND (status IN ('pending','creating') OR notified_version<>version) ORDER BY CASE status WHEN 'creating' THEN 0 ELSE 1 END,updated_at LIMIT 2",
+    "SELECT * FROM telegram_ocr_jobs WHERE status IN ('pending','creating','ready','failed','created') AND (status='creating' OR expires_at>?) AND (status IN ('pending','creating') OR notified_version<>version) AND (? IS NULL OR id=?) ORDER BY CASE status WHEN 'creating' THEN 0 ELSE 1 END,updated_at LIMIT 8",
   )
-    .bind(now)
+    .bind(now,options.jobId??null,options.jobId??null)
     .all<TelegramOcrJob>();
   for (const job of jobs.results) {
     const route = await routeById(env, job.route_id);
@@ -483,6 +526,9 @@ export async function processTelegramOcrJobs(
             },
             bytes,
             type,
+            fetch,
+            undefined,
+            options.deadline,
           );
           const values = Object.fromEntries(
             Object.entries(output.fields).map(([key, field]) => [
@@ -504,7 +550,12 @@ export async function processTelegramOcrJobs(
               lease,
             )
             .run();
+          if(autoCreate)await finishCreatingJob(env,runtime,route,{...job,status:'creating',image_hash:output.imageHash,fields_json:JSON.stringify(values)},actor);
         } catch (error) {
+          if(options.deadline && error instanceof OcrRecognitionError && error.diagnosticCode.endsWith('_TIMEOUT')) {
+            await env.DB.prepare("UPDATE telegram_ocr_jobs SET status='pending',attempts=MAX(0,attempts-1),lease_token=NULL,lease_until=NULL WHERE id=? AND status='recognizing' AND lease_token=?").bind(job.id,lease).run();
+            continue;
+          }
           const code = error instanceof OcrRecognitionError ? error.diagnosticCode : error instanceof Error && ['OCR_CONFIGURATION','IMAGE_LIMIT','INVALID_IMAGE'].includes(error.message) ? error.message : 'TELEGRAM_DOWNLOAD_OR_PROCESSING_FAILED';
           await env.DB.prepare(
             "UPDATE telegram_ocr_jobs SET evidence_json=?,status='failed',lease_token=NULL,lease_until=NULL,version=version+1,notified_version=-1,updated_at=? WHERE id=? AND status='recognizing' AND lease_token=?",
@@ -513,45 +564,7 @@ export async function processTelegramOcrJobs(
             .run();
         }
       } else if (job.status === 'creating') {
-        const lease = crypto.randomUUID();
-        const won = await env.DB.prepare(
-          "UPDATE telegram_ocr_jobs SET lease_token=?,lease_until=? WHERE id=? AND status='creating' AND (lease_until IS NULL OR lease_until<?) RETURNING id",
-        )
-          .bind(lease, Date.now() + 60000, job.id, Date.now())
-          .first();
-        if (!won) continue;
-        const fields = confirmedOcrFields(JSON.parse(job.fields_json ?? '{}'));
-        if (!fields.success) throw Error('INVALID_CONFIRMED_FIELDS');
-        const result = job.case_id ? {results:[{status:'created',caseId:job.case_id}]} : await runtime.create(actor, {
-          batchId: job.batch_id,
-          mode: 'new',
-          formalDispatch: false,
-          rows: [
-            {
-              ...fields.data,
-              address: '',
-              collector: '',
-              imageCount: 0,
-              duplicateOverride: false,
-            },
-          ],
-        });
-        const row = result.results[0];
-        if(row?.status==='created' && row.caseId && env.TELEGRAM_OCR_ATTACH_IMAGES==='true') {
-          await env.DB.prepare("UPDATE telegram_ocr_jobs SET case_id=? WHERE id=? AND status='creating' AND lease_token=?").bind(row.caseId,job.id,lease).run();
-          await attachJobImage(env,actor,runtime,route,job,row.caseId);
-        }
-        await env.DB.prepare(
-          "UPDATE telegram_ocr_jobs SET status=?,case_id=?,lease_token=NULL,lease_until=NULL,version=version+1,notified_version=-1,updated_at=? WHERE id=? AND status='creating' AND lease_token=?",
-        )
-          .bind(
-            row?.status === 'created' ? 'created' : 'failed',
-            row?.caseId ?? null,
-            Date.now(),
-            job.id,
-            lease,
-          )
-          .run();
+        await finishCreatingJob(env,runtime,route,job,actor);
       }
       const latest = await env.DB.prepare(
         'SELECT * FROM telegram_ocr_jobs WHERE id=?',
@@ -572,6 +585,7 @@ export async function processTelegramOcrJobs(
         .run();
     }
   }
+  if(options.jobId)return;
   if(env.TELEGRAM_OCR_ATTACH_IMAGES==='true') {
     const missing=await env.DB.prepare("SELECT j.* FROM telegram_ocr_jobs j WHERE j.status='created' AND j.case_id IS NOT NULL AND j.file_id IS NOT NULL AND j.expires_at>? AND NOT EXISTS (SELECT 1 FROM audit_logs a WHERE a.entity_id=j.case_id AND a.action='media.uploaded' AND json_extract(a.metadata,'$.uploadKey')=j.batch_id) ORDER BY j.created_at LIMIT 5").bind(Date.now()).all<TelegramOcrJob>();
     for(const job of missing.results) {

@@ -114,6 +114,7 @@ function metadata(settings, entry, enabled, apiWorker) {
     'TELEGRAM_OCR_AUTO_CREATE',
     'TELEGRAM_OCR_BATCH_REPORTS',
     'TELEGRAM_OCR_ATTACH_IMAGES',
+    'TELEGRAM_OCR_FAST_START',
     'TELEGRAM_OCR_REVIEW_MODE',
     'GOOGLE_VISION_API_KEY',
     'OPENAI_API_KEY',
@@ -134,6 +135,7 @@ function metadata(settings, entry, enabled, apiWorker) {
         TELEGRAM_OCR_AUTO_CREATE: 'true',
         TELEGRAM_OCR_BATCH_REPORTS: 'true',
         TELEGRAM_OCR_ATTACH_IMAGES: 'true',
+        TELEGRAM_OCR_FAST_START: 'true',
         TELEGRAM_OCR_REVIEW_MODE: 'backend',
         BULK_OCR_MODEL: vars.BULK_OCR_MODEL,
         BULK_OCR_PRIVACY_APPROVED: 'true',
@@ -297,6 +299,7 @@ try {
   run('scripts/check-local-ocr-env.mjs');
   run('scripts/build-production-ocr.mjs');
   run('scripts/test-ocr-interface.mjs');
+  run('scripts/test-ocr-row-updates.mjs');
   run('scripts/test-ocr-diagnostics.mjs');
   run('scripts/test-real-ocr-sample.mjs');
   run('scripts/test-bulk-ocr.mjs');

@@ -79,6 +79,7 @@ export async function recognizeOcrBytes(
   mediaType: string,
   send: typeof fetch = fetch,
   inspect?: (summary: unknown) => void,
+  deadline?: number,
 ) {
   const content = bytesBase64(bytes);
   async function providerTask<T>(stage: string, task: () => Promise<T>): Promise<T> {
@@ -98,7 +99,7 @@ export async function recognizeOcrBytes(
       await send('https://api.openai.com/v1/responses', {
         method: 'POST',
         redirect: 'manual',
-        signal: AbortSignal.timeout(45000),
+        signal: AbortSignal.timeout(Math.max(1,Math.min(45000,deadline ? deadline-Date.now() : 45000))),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${settings.OPENAI_API_KEY}`,
@@ -155,7 +156,7 @@ export async function recognizeOcrBytes(
       await send('https://vision.googleapis.com/v1/images:annotate', {
         method: 'POST',
         redirect: 'manual',
-        signal: AbortSignal.timeout(25000),
+        signal: AbortSignal.timeout(Math.max(1,Math.min(25000,deadline ? deadline-Date.now() : 25000))),
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': settings.GOOGLE_VISION_API_KEY,

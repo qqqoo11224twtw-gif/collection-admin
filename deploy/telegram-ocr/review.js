@@ -1,3 +1,13 @@
+export function placeOcrRow(container,row,previous,cursor) {
+  if(previous && previous!==row){
+    const preview=previous.querySelector('[data-original-preview]');
+    const replacement=row.querySelector('[data-original-preview]');
+    if(preview && replacement)replacement.replaceWith(preview);
+    previous.replaceWith(row);if(cursor===previous)cursor=row;
+  }
+  if(row.parentElement!==container || (row!==cursor && row.nextElementSibling!==cursor))container.insertBefore(row,cursor);
+  return row.nextElementSibling;
+}
 export function initializeOcr(root = document) {
 const document = { getElementById: (id) => root.getElementById(id), querySelectorAll: (selector) => root.querySelectorAll(selector), createElement: (tag) => root.ownerDocument ? root.ownerDocument.createElement(tag) : root.createElement(tag) };
 const API = 'https://api.kpirich.bid/api/telegram-ocr';
@@ -148,10 +158,19 @@ async function refresh() {
     previewObserver = typeof IntersectionObserver === 'function' ? new IntersectionObserver(entries=>{
       for(const entry of entries)if(entry.isIntersecting){previewObserver.unobserve(entry.target);previewLoads.get(entry.target)?.();}
     },{rootMargin:'300px'}) : null;
-    jobs.replaceChildren();
+    const previousRows = new Map([...jobs.children].map(row=>[row.dataset.id,row]));
+    let cursor = jobs.firstElementChild;
     jobs.oninput = (event) => { if(event.target instanceof HTMLInputElement) event.target.dataset.edited = 'true'; };
     for (const job of value.jobs) {
-      const row = el('tr');
+      const fingerprint=JSON.stringify(job);
+      const previous=previousRows.get(job.id);
+      if(previous && previous.dataset.fingerprint===fingerprint) {
+        const preview=previous.querySelector('[data-original-preview]');
+        if(preview && !preview.querySelector('img'))previewObserver?.observe(preview);
+        if(previous!==cursor)jobs.insertBefore(previous,cursor);
+        cursor=previous.nextElementSibling;previousRows.delete(job.id);continue;
+      }
+      const row = el('tr');row.dataset.fingerprint=fingerprint;
       row.dataset.id = job.id;
       row.job = job;
       const first = el(
@@ -167,7 +186,7 @@ async function refresh() {
       if(job.existing_case_id && /^[a-f0-9-]{36}$/.test(job.existing_case_id)) {
         const link=el('a','查看既有案件');link.href='/cases/'+job.existing_case_id;first.append(link);
       }
-      const preview=el('div','正在載入原圖…');first.append(preview);
+      const preview=el('div','正在載入原圖…');preview.setAttribute('data-original-preview','');first.append(preview);
       const load=async()=>{
         try{
           const url=await imageUrl(job);if(!url || disposed || !preview.isConnected)return;
@@ -267,9 +286,14 @@ async function refresh() {
         actions.append(details);
       }
       row.append(actions);
-      jobs.append(row);
+      cursor=placeOcrRow(jobs,row,previous,cursor);
+      const remainingPreview=row.querySelector('[data-original-preview]');if(remainingPreview && !remainingPreview.querySelector('img'))previewObserver?.observe(remainingPreview);
+      previousRows.delete(job.id);
+
     }
-    notice.textContent = `已載入 ${value.jobs.length} 筆。${automatic ? '核對一致的圖片將自動建檔；其他資料待處理。' : '未經人工確認不會建檔。'} 每 5 秒自動更新。`;
+    for(const row of previousRows.values())row.remove();
+    const statusText = `已載入 ${value.jobs.length} 筆。${automatic ? '核對一致的圖片將自動建檔；其他資料待處理。' : '未經人工確認不會建檔。'} 背景同步中。`;
+    if(notice.textContent!==statusText)notice.textContent=statusText;
     document.getElementById('content').hidden = false;
   } catch (error) {
     display(error);
